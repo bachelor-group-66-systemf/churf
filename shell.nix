@@ -6,9 +6,15 @@ pkgs.haskellPackages.developPackage {
   withHoogle = true;
   modifier = drv:
   pkgs.haskell.lib.addBuildTools drv (
-    (with pkgs; [ hlint haskell-language-server ghc ])
+    (with pkgs; [ hlint haskell-language-server ghc jasmin ])
     ++
-    (with pkgs.haskellPackages; [ cabal-install stylish-haskell ])
+    (with pkgs.haskellPackages; [ 
+      cabal-install
+      stylish-haskell 
+      BNFC 
+      alex
+      happy
+    ])
   );
 }
 
