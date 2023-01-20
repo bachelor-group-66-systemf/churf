@@ -1,0 +1,15 @@
+
+
+Program. Program ::= "main" "=" Exp ;
+
+EId.  Exp3 ::= Ident   ;
+EInt. Exp3 ::= Integer ;
+EApp. Exp2 ::= Exp2 Exp3 ;
+EAdd. Exp1 ::= Exp1 "+" Exp2 ;
+EAbs. Exp  ::= "\\" Ident "->" Exp ;
+
+coercions Exp 3 ;
+
+comment "--" ;
+comment "{-" "-}" ;
+
