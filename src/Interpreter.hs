@@ -62,7 +62,7 @@ eval cxt = \case
   --  γ ⊢ e  ⇓ v
   --  γ ⊢ e₁ ⇓ v₁
   --  ------------------
-  --  γ ⊢ e e₁ ⇓ v
+  --  γ ⊢ e e₁ ⇓ v + v₁
 
   EAdd e e1 -> do
     v <- eval cxt e
