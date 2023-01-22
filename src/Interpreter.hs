@@ -39,7 +39,7 @@ eval cxt = \case
 
   EInt i    -> pure $ VInt i
 
-  --  γ     ⊢ e  ⇓ let δ in λx → f
+  --  γ     ⊢ e  ⇓ let δ in λx. f
   --  γ     ⊢ e₁ ⇓ v
   --  δ,x=v ⊢ f  ⇓ v₁
   --  ------------------------------
@@ -54,7 +54,7 @@ eval cxt = \case
 
   --
   --  -----------------------------
-  --  γ ⊢ λx → f ⇓ let γ in λx → f
+  --  γ ⊢ λx. f ⇓ let γ in λx. f
 
   EAbs x e  -> pure $ VClosure cxt x e
 
