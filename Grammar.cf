@@ -1,15 +1,23 @@
+Program. Program ::= [Def] ;
 
+DExp.  Def ::= Ident ":" Type
+               Ident [Ident] "=" Exp ;
 
-Program. Program ::= "main" "=" Exp ;
+separator Def "";
+separator Ident "";
+separator Type "->";
 
 EId.  Exp3 ::= Ident   ;
 EInt. Exp3 ::= Integer ;
-EApp. Exp2 ::= Exp2 Exp3 ;
+-- EApp. Exp2 ::= Exp2 Exp3 ;
 EAdd. Exp1 ::= Exp1 "+" Exp2 ;
-EAbs. Exp  ::= "\\" Ident "->" Exp ;
-
+-- EAbs. Exp  ::= "\\" Ident ":" Type "." Exp ;
 coercions Exp 3 ;
+
+TInt. Type1 ::= "Int" ;
+TPol. Type1 ::= Ident ;
+TFun. Type  ::= [Type] ;
+coercions Type 1 ;
 
 comment "--" ;
 comment "{-" "-}" ;
-

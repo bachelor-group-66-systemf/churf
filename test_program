@@ -1,5 +1,2 @@
-
-
-
-
-main = (\x -> x + x + 3) ((\x -> x) 2)
+main : Int
+main = (\x : Int. x + x + 3) ((\x : Int. x) 2)

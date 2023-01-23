@@ -31,11 +31,12 @@ executable language
       Grammar.Print
       Grammar.Skel
       Interpreter
+      TypeChecker
 
     hs-source-dirs:   src
 
     build-depends:    
-        base ^>=4.16.3.0
+        base >= 4.16.3.0
       , mtl
       , containers
       , either
