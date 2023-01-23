@@ -1,4 +1,4 @@
-module Compiler where
+module Compiler.Compiler where
 
 import           Control.Applicative     (Applicative)
 import           Control.Monad.Except    (Except, MonadError (throwError),
@@ -23,10 +23,10 @@ compileFile file = do
             putStrLn $ printTree cor
             compile cor
 
-data Compiler = Compiler 
-    { data :: [LLVMIr] }
-
-data LLVMIr = 
+-- data Compiler = Compiler 
+--     { data :: [LLVMIr] }
+-- 
+-- data LLVMIr = LLVMIr
 
 
 

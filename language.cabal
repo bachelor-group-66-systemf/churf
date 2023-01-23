@@ -30,7 +30,8 @@ executable language
       Grammar.Par
       Grammar.Print
       Grammar.Skel
-      Compiler
+      Compiler.Compiler
+      Compiler.StandardLLVMLibrary
       Interpreter
 
     hs-source-dirs:   src
