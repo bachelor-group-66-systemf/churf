@@ -71,14 +71,55 @@ define [21 x i8] @i64ToString(i64 %val_org) {
     %noop = add i32 0, 0
 
     ; load the result and return it
+    call void @reverseI64String([21 x i8]* %string_ptr)
     %res = load [21 x i8],[21 x i8]* %string_ptr
     ret [21 x i8] %res
+}
+
+define void @reverseI64String(i8* %string, i64 %len) {
+    %new_string = alloca [21 x i8] 
+    store [21 x i8] c"\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00", ptr %new_string  
+    %reverse_index = alloca i32*
+    store i32 20, i32* %reverse_index
+
+    %new_index = alloca i32
+    store i32 0, i32* %new_index
+
+    br label %while_start
+    while_start:
+        %reverse_index.0 = load i32, i32* %reverse_index
+        %reverse_ptr = getelementptr [21 x i8], [21 x i8]* %string, i32 0, i32 %reverse_index.0
+        %reverse_index.1 = sub i32 %reverse_index.0, 1
+        store i32 %reverse_index.1, ptr %reverse_index
+
+        %new_index.0 = load i32, i32* %new_index
+        %new_ptr = getelementptr [21 x i8], [21 x i8]* %new_string, i32 0, i32 %new_index.0
+
+        %break_condition = icmp slt i32 %reverse_index.0, 0
+        br i1 %break_condition, label %break, label %ok
+        ok:
+        %value = load i8, i8* %reverse_ptr
+        %condition = icmp eq i8 %value, 0 
+        br i1 %condition, label %while_start, label %not_zero   
+        not_zero:
+            store i8 %value, ptr %new_ptr
+            %new_index.1 = add i32 %new_index.0, 1
+            store i32 %new_index.1, ptr %new_index
+            
+            br label %while_start
+    break:
+    %copy = load [21 x i8], [21 x i8]* %new_string
+    store [21 x i8] %copy, i8* %string
+    ; start iterating over the original string in reverse
+    ; if i == '\00' ignore
+    ; else put value into new_string at new i, then new i + 1
+    ret void
 }
 
 ; Definition of main function
 define i32 @main() { ; i32()*
     ; %val = add i64 -123456789, 0
-    %val = add i64 -1234, 0
+    %val = add i64 -133769420, 0
 
     %print_res = call [21 x i8] @i64ToString(i64 %val)
     %ptr = alloca [21 x i8]
