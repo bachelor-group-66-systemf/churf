@@ -32,6 +32,7 @@ executable language
       Grammar.Skel
       Compiler.Compiler
       Compiler.StandardLLVMLibrary
+      Compiler.TH
       Interpreter
 
     hs-source-dirs:   src
@@ -42,5 +43,6 @@ executable language
       , containers
       , either
       , array
+      , template-haskell
 
     default-language: GHC2021
