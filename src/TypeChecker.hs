@@ -1,76 +1,129 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE OverloadedRecordDot #-}
 
-module TypeChecker where
+module TypeChecker (typecheck) where
 
 import Grammar.Abs
-import Grammar.ErrM
-import Data.Kind qualified as T
-import Data.String qualified
+import Grammar.ErrM ( Err )
+import NewAbs
 import Data.Map (Map)
 import Data.Map qualified as Map
 import Control.Monad.Reader
 import Control.Monad.Except
+import Data.List (isPrefixOf)
+import Control.Applicative ((<|>))
 
-newtype Env = Env { signature :: Map Ident CType  }
+type Check a = ReaderT Context Err a
 
-type Check a = ReaderT Env Err a
+data Context = Ctx { sig :: Map Ident Type
+                   , env :: [Map Ident Type]
+                   }
 
-initEnv :: Env
-initEnv = Env { signature = mempty }
+initEnv :: Context
+initEnv = Ctx { sig = mempty
+              , env = mempty
+              }
 
 run :: Check a -> Either String a
 run = flip runReaderT initEnv
 
-checkProg :: Program -> Check Program
-checkProg (Program ds) = Program <$> mapM checkDef ds
+typecheck :: Program -> Err Program
+typecheck prg = case run $ checkProg prg of
+                  Left err -> fail err
+                  Right _ -> pure prg
+
+
+checkProg :: Program -> Check CProgram
+checkProg (Program ds) = undefined
     
-checkDef :: Def -> Check Def
-checkDef = \case
-    (DExp n1 TInt n2 params e) -> undefined
-    (DExp n1 (TPol (Ident t)) n2 params e) -> undefined
-    (DExp n1 ts n2 params e) -> undefined
+checkDef :: Def -> Check CDef
+checkDef (DExp i1 TInt i2 args e) = undefined
+checkDef (DExp i1 (TPol i) i2 args e) = undefined
+checkDef (DExp i1 (TFun xs) i2 args e) = do
+        when (i1 /= i2) (fail $ "Mismatched names: " <> show i1 <> " != " <> show i2)
+        case compare (length xs - 1) (length args) of
+          LT -> fail $ "Too many arguments, got " <> show (length args) <> " expected " <> show (length xs)
+          _ -> do
+              let vars = Map.fromList $ zip args xs
+              e' <- local (\r -> r { env =  [vars] }) (checkExp e)
+              return $ CDef i1 (TFun xs) i2 args e'
 
-class Typecheck a where
-    checkExp :: Exp -> Check (CExp a)
+checkExp :: Exp -> Check CExp
+checkExp = \case
 
-instance Typecheck Int where
-    checkExp = \case
-        EInt i -> pure $ CInt (fromIntegral i)
-        EAdd e1 e2 -> do
-            e1' <- checkExp @Int e1
-            e2' <- checkExp @Int e2
-            return $ CAdd e1' e2'
-        EId (Ident i) -> asks (lookupSig (Ident i)) >>= liftEither >>= \case
-            TCInt -> pure (CId (CIdent i))
-            _     -> throwError $ "Unbound variable " <> show i
+    EInt i -> pure $ CInt TInt (fromIntegral i)
 
-data CExp :: T.Type -> T.Type where
-    CId :: CIdent -> CExp a
-    CInt :: Int -> CExp Int
-    CAdd :: Num a => CExp a -> CExp a -> CExp a
+    EAdd e1 e2 -> do
+        e1' <- checkExp e1
+        e2' <- checkExp e2
+        let t1 = getType e1'
+        let t2 = getType e2'
+        when (t1 /= t2) (fail $ "Different types occured, got " <> show t1 <> " and " <> show t2)
+        return $ CAdd t1 e1' e2'
 
-instance Show (CExp a) where
-    show = \case
-        CId (CIdent a) -> show a
-        CInt i -> show i
-        CAdd e1 e2 -> show e1 <> " + " <> show e2
+    EId i -> do
+        asks (lookupEnv i) >>= \case
+            Right t -> return $ CId t i
+            Left _ -> asks (lookupSig i) >>= \case
+                Right t -> return $ CId t i
+                Left x -> fail x
 
-data CDef a = CDef CIdent CType CIdent [CIdent] (CExp a)
-    deriving Show
+    EAbs i t e -> do
+        e' <- local (\r -> r { env = Map.singleton i t : r.env }) (checkExp e)
+        return $ CAbs (TFun [t, getType e']) i t e'
 
-newtype CProgram = CProgram [Def]
+    EApp e1 e2 -> do
+        e1' <- checkExp e1
+        e2' <- checkExp e2
+        let retT = applyType (getType e1') (getType e2')
+        case retT of
+          Left x -> fail x
+          Right t -> return $ CApp t e1' e2'
 
-data CType = TCInt | TCPol Ident | TCFun Type Type
-  deriving (Eq, Ord, Show, Read)
+lookupSig :: Ident -> Context -> Err Type
+lookupSig i (Ctx s _) = case Map.lookup i s of
+                  Nothing -> throwError $ "Undefined function: " <> show i
+                  Just x -> pure x
 
-newtype CIdent = CIdent String
-  deriving (Eq, Ord, Show, Read, Data.String.IsString)
-
-lookupSig :: Ident -> Env -> Err CType
-lookupSig i (Env m) = case Map.lookup i m of
-                  Nothing -> throwError $ "Unbound variable: " <> show i
+lookupEnv :: Ident -> Context -> Err Type
+lookupEnv i (Ctx _ []) = throwError $ "Unbound variable: " <> show i
+lookupEnv i (Ctx s (e:es)) = case Map.lookup i e of
+                  Nothing -> lookupEnv i (Ctx s es)
                   Just x -> pure x
 
 
+applyType :: Type -> Type -> Err Type
+applyType (TFun (x:xs)) t = case t of
+    (TFun ys) -> if ys `isPrefixOf` (x:xs)
+                         then return . TFun $ drop (length ys) (x:xs)
+                         else fail $ "Mismatched types, expected " <> show x <> " got " <> show TInt
+applyType t1 t2 = fail $ "Can not apply " <> show t1 <> " to " <> show t2
+
+class ExtractType a where
+    getType :: a -> Type
+
+instance ExtractType CExp where
+    getType = \case
+        CId t _ -> t
+        CInt t _ -> t
+        CAdd t _ _ -> t
+        CAbs t _ _ _ -> t
+        CApp t _ _ -> t
+
+-- | λx : Int. x + 3 + 5
+customLambda1 :: Exp
+customLambda1 = EAbs (Ident "x") TInt (EAdd (EId (Ident "x")) (EAdd (EInt 3) (EInt 5)))
+
+customLambda2 :: Exp
+customLambda2 = EAbs (Ident "x") (TFun [TInt, TInt]) (EId (Ident "f"))
+
+-- | main : Int 
+--   main = λx : Int. x + 3 + 5
+customPrg1 :: Program
+customPrg1 = Program [DExp (Ident "main") TInt (Ident "main") [] customLambda1]
+
+-- | main : Int -> Int
+--   main = λx : Int. x + 3 + 5
+customPrg2 :: Program
+customPrg2 = Program [DExp (Ident "main") (TFun [TInt, TInt]) (Ident "main") [] customLambda2]

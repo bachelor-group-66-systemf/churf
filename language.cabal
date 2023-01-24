@@ -17,7 +17,7 @@ extra-source-fiels:
 
 
 common warnings
-    ghc-options: -Wall
+    ghc-options: -W
 
 executable language
     import:           warnings
@@ -30,8 +30,10 @@ executable language
       Grammar.Par
       Grammar.Print
       Grammar.Skel
+      Grammar.ErrM
       Interpreter
       TypeChecker
+      NewAbs
 
     hs-source-dirs:   src
 
