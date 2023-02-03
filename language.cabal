@@ -12,6 +12,7 @@ build-type:         Simple
 
 extra-doc-files:    CHANGELOG.md
 
+
 extra-source-files:
   Grammar.cf
 
@@ -38,11 +39,12 @@ executable language
     hs-source-dirs:   src
 
     build-depends:    
-        base ^>=4.17.0.0
-      , mtl
-      , containers
-      , either
-      , array
-      , template-haskell
+        base >=4.16.0.0
+        , mtl
+        , containers
+        , either
+        , array
+        , template-haskell
+        --, llvm-tf
 
     default-language: GHC2021

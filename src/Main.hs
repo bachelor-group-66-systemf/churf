@@ -1,6 +1,7 @@
 {-# LANGUAGE LambdaCase #-}
 module Main where
 
+import           Compiler.Compiler    (compile)
 import           Control.Monad.Except (runExcept)
 import           Grammar.Par          (myLexer, pProgram)
 import           Interpreter          (interpret)
@@ -17,14 +18,7 @@ main = getArgs >>= \case
        putStrLn "SYNTAX ERROR"
        putStrLn err
        exitFailure
-      Right prg -> case runExcept $ interpret prg of
-        Left err -> do
-          putStrLn "INTERPRETER ERROR"
-          putStrLn err
-          exitFailure
-        Right i -> do
-          print i
-          exitSuccess
+      Right prg -> compile prg
 
 
 

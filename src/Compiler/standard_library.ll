@@ -1,4 +1,5 @@
 declare i64 @llvm.abs.i64(i64, i1 immarg) 
+declare i32 @puts(i8* nocapture) nounwind
 
 
 define [21 x i8] @i64ToString(i64 %val_org) {
