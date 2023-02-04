@@ -211,6 +211,8 @@ compile (Program prgE) = do
         binExprToValues e1 e2 = case (e1, e2) of
                     -- instead of declaring variables for working on ints,
                     -- we can directly pass them to their functions.
+                    -- This optimization removes the need to declare
+                    -- roughly 50% of variables
                     (EInt i1, EInt i2) -> return (VInteger i1, VInteger i2)
                     (EInt i, e) -> do
                         go e
