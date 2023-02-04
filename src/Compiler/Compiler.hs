@@ -11,6 +11,7 @@ import           Data.Set                     (Set)
 import           Data.Set                     as Set
 import           Grammar.Abs
 import           Grammar.Par                  (myLexer, pProgram)
+import           Grammar.Print                (printTree)
 import           System.Exit                  (exitFailure)
 --import LLVM.AST
 
@@ -66,6 +67,7 @@ data LLVMIr = Define Type Ident Params
             | Bitcast Type Ident Type
             | Ret Type Value
             | UnsafeRaw String
+            | Comment String
     deriving (Show)
 
 printLLVMIr :: LLVMIr -> String
@@ -83,17 +85,21 @@ printLLVMIr (Store t1 (Ident id1) t2 (Ident id2)) = concat ["store ", show t1, "
 printLLVMIr (Bitcast t1 (Ident i) t2)             = concat ["bitcast ", show t1, " %", i, " to ", show t2, "\n"]
 printLLVMIr (Ret t v)                             = concat ["ret ", show t, " ", show v, "\n"]
 printLLVMIr (UnsafeRaw s)                         = s
+printLLVMIr (Comment s)                           = "; " <> s <> "\n"
 
-emit :: LLVMIr -> State CodeGenerator ()
+type CompilerState = State CodeGenerator ()
+
+emit :: LLVMIr -> CompilerState
 emit l = modify (\t -> t {instructions = instructions t ++ [l]})
 
-increaseVarCount :: State CodeGenerator ()
+increaseVarCount :: CompilerState
 increaseVarCount = modify (\t -> t {variableCount = variableCount t + 1})
 
 compile :: Program -> IO ()
 compile (Program e) = do
     --Asp
     let s = defaultCodeGenerator {instructions = [
+        Comment $ printTree (Program e),
         UnsafeRaw $ standardLLVMLibrary <> "\n",
         --UnsafeRaw "declare i32 @puts(i8* nocapture) nounwind\n",
         --UnsafeRaw "declare [21 x i8] @i64ToString(i64)\n",
@@ -113,7 +119,7 @@ compile (Program e) = do
         , DefineEnd
         ])
     where
-        go :: Exp -> State CodeGenerator ()
+        go :: Exp -> CompilerState
         go (EId  id)    = undefined
         go (EInt int)   = do
             increaseVarCount
@@ -122,5 +128,26 @@ compile (Program e) = do
             emit $ Add I64 (VInteger int) (VInteger 0)
 
         go (EApp e1 e2) = undefined
-        go (EAdd e1 e2) = undefined
+        go (EAdd e1 e2) = emitAdd e1 e2
         go (EAbs id e)  = undefined
+
+        --- aux functions ---
+        emitAdd :: Exp -> Exp -> CompilerState
+        emitAdd (EInt i1) (EInt i2) = do
+            -- instead of declaring two variables for this case,
+            -- we can directly pass them to add.
+            -- //TODO This should also be done with (EInt & Exp) and (Exp &EInt)
+            increaseVarCount
+            v1 <- gets variableCount
+            emit $ Variable $ Ident $ show v1
+            emit $ Add I64 (VInteger i1) (VInteger i2)
+        emitAdd e1 e2 = do
+            go e1
+            v1 <- gets variableCount
+            go e2
+            v2 <- gets variableCount
+            increaseVarCount
+            v3 <- gets variableCount
+            emit $ Variable $ Ident $ show v3
+            emit $ Add I64 (VIdent (Ident $ show v1)) (VIdent (Ident $ show v2))
+
