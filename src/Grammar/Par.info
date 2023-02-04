@@ -11,31 +11,39 @@ Grammar
 	%start_pExp2 -> Exp2                               (2)
 	%start_pExp1 -> Exp1                               (3)
 	%start_pExp -> Exp                                 (4)
-	Ident -> L_Ident                                   (5)
-	Integer -> L_integ                                 (6)
-	Program -> 'main' '=' Exp                          (7)
-	Exp3 -> Ident                                      (8)
-	Exp3 -> Integer                                    (9)
-	Exp3 -> '(' Exp ')'                                (10)
-	Exp2 -> Exp2 Exp3                                  (11)
-	Exp2 -> Exp3                                       (12)
-	Exp1 -> Exp1 '+' Exp2                              (13)
-	Exp1 -> Exp1 '-' Exp2                              (14)
-	Exp1 -> Exp2                                       (15)
-	Exp -> '\\' Ident '->' Exp                         (16)
-	Exp -> Exp1                                        (17)
+	%start_pExp4 -> Exp4                               (5)
+	Ident -> L_Ident                                   (6)
+	Integer -> L_integ                                 (7)
+	Program -> 'main' '=' Exp                          (8)
+	Exp3 -> Ident                                      (9)
+	Exp3 -> Integer                                    (10)
+	Exp3 -> Exp3 '%' Exp4                              (11)
+	Exp3 -> Exp4                                       (12)
+	Exp2 -> Exp2 Exp3                                  (13)
+	Exp2 -> Exp2 '*' Exp3                              (14)
+	Exp2 -> Exp2 '/' Exp3                              (15)
+	Exp2 -> Exp3                                       (16)
+	Exp1 -> Exp1 '+' Exp2                              (17)
+	Exp1 -> Exp1 '-' Exp2                              (18)
+	Exp1 -> Exp2                                       (19)
+	Exp -> '\\' Ident '->' Exp                         (20)
+	Exp -> Exp1                                        (21)
+	Exp4 -> '(' Exp ')'                                (22)
 
 -----------------------------------------------------------------------------
 Terminals
 -----------------------------------------------------------------------------
-	'('            { PT _ (TS _ 1) }
-	')'            { PT _ (TS _ 2) }
-	'+'            { PT _ (TS _ 3) }
-	'-'            { PT _ (TS _ 4) }
-	'->'           { PT _ (TS _ 5) }
-	'='            { PT _ (TS _ 6) }
-	'\\'           { PT _ (TS _ 7) }
-	'main'         { PT _ (TS _ 8) }
+	'%'            { PT _ (TS _ 1) }
+	'('            { PT _ (TS _ 2) }
+	')'            { PT _ (TS _ 3) }
+	'*'            { PT _ (TS _ 4) }
+	'+'            { PT _ (TS _ 5) }
+	'-'            { PT _ (TS _ 6) }
+	'->'           { PT _ (TS _ 7) }
+	'/'            { PT _ (TS _ 8) }
+	'='            { PT _ (TS _ 9) }
+	'\\'           { PT _ (TS _ 10) }
+	'main'         { PT _ (TS _ 11) }
 	L_Ident        { PT _ (TV $$) }
 	L_integ        { PT _ (TI $$) }
 
@@ -47,13 +55,15 @@ Non-terminals
 	%start_pExp2    rule  2
 	%start_pExp1    rule  3
 	%start_pExp     rule  4
-	Ident           rule  5
-	Integer         rule  6
-	Program         rule  7
-	Exp3            rules 8, 9, 10
-	Exp2            rules 11, 12
-	Exp1            rules 13, 14, 15
-	Exp             rules 16, 17
+	%start_pExp4    rule  5
+	Ident           rule  6
+	Integer         rule  7
+	Program         rule  8
+	Exp3            rules 9, 10, 11, 12
+	Exp2            rules 13, 14, 15, 16
+	Exp1            rules 17, 18, 19
+	Exp             rules 20, 21
+	Exp4            rule  22
 
 -----------------------------------------------------------------------------
 States
@@ -62,395 +72,564 @@ State 0
 
 	%start_pProgram -> . Program                        (rule 0)
 
-	'main'         shift, and enter state 20
+	'main'         shift, and enter state 23
 
-	Program        goto state 19
+	Program        goto state 22
 
 State 1
 
 	%start_pExp3 -> . Exp3                              (rule 1)
 
-	'('            shift, and enter state 13
-	L_Ident        shift, and enter state 6
-	L_integ        shift, and enter state 15
+	'('            shift, and enter state 9
+	L_Ident        shift, and enter state 7
+	L_integ        shift, and enter state 18
 
-	Ident          goto state 7
-	Integer        goto state 8
-	Exp3           goto state 18
+	Ident          goto state 10
+	Integer        goto state 11
+	Exp3           goto state 21
+	Exp4           goto state 16
 
 State 2
 
 	%start_pExp2 -> . Exp2                              (rule 2)
 
-	'('            shift, and enter state 13
-	L_Ident        shift, and enter state 6
-	L_integ        shift, and enter state 15
+	'('            shift, and enter state 9
+	L_Ident        shift, and enter state 7
+	L_integ        shift, and enter state 18
 
-	Ident          goto state 7
-	Integer        goto state 8
-	Exp3           goto state 9
-	Exp2           goto state 17
+	Ident          goto state 10
+	Integer        goto state 11
+	Exp3           goto state 12
+	Exp2           goto state 20
+	Exp4           goto state 16
 
 State 3
 
 	%start_pExp1 -> . Exp1                              (rule 3)
 
-	'('            shift, and enter state 13
-	L_Ident        shift, and enter state 6
-	L_integ        shift, and enter state 15
+	'('            shift, and enter state 9
+	L_Ident        shift, and enter state 7
+	L_integ        shift, and enter state 18
 
-	Ident          goto state 7
-	Integer        goto state 8
-	Exp3           goto state 9
-	Exp2           goto state 10
-	Exp1           goto state 16
+	Ident          goto state 10
+	Integer        goto state 11
+	Exp3           goto state 12
+	Exp2           goto state 13
+	Exp1           goto state 19
+	Exp4           goto state 16
 
 State 4
 
 	%start_pExp -> . Exp                                (rule 4)
 
-	'('            shift, and enter state 13
-	'\\'           shift, and enter state 14
-	L_Ident        shift, and enter state 6
-	L_integ        shift, and enter state 15
+	'('            shift, and enter state 9
+	'\\'           shift, and enter state 17
+	L_Ident        shift, and enter state 7
+	L_integ        shift, and enter state 18
 
-	Ident          goto state 7
-	Integer        goto state 8
-	Exp3           goto state 9
-	Exp2           goto state 10
-	Exp1           goto state 11
-	Exp            goto state 12
+	Ident          goto state 10
+	Integer        goto state 11
+	Exp3           goto state 12
+	Exp2           goto state 13
+	Exp1           goto state 14
+	Exp            goto state 15
+	Exp4           goto state 16
 
 State 5
 
-	Ident -> . L_Ident                                  (rule 5)
+	%start_pExp4 -> . Exp4                              (rule 5)
 
-	L_Ident        shift, and enter state 6
+	'('            shift, and enter state 9
 
+	Exp4           goto state 8
 
 State 6
 
-	Ident -> L_Ident .                                  (rule 5)
+	Ident -> . L_Ident                                  (rule 6)
 
-	'('            reduce using rule 5
-	')'            reduce using rule 5
-	'+'            reduce using rule 5
-	'-'            reduce using rule 5
-	'->'           reduce using rule 5
-	L_Ident        reduce using rule 5
-	L_integ        reduce using rule 5
-	%eof           reduce using rule 5
+	L_Ident        shift, and enter state 7
 
 
 State 7
 
-	Exp3 -> Ident .                                     (rule 8)
+	Ident -> L_Ident .                                  (rule 6)
 
-	'('            reduce using rule 8
-	')'            reduce using rule 8
-	'+'            reduce using rule 8
-	'-'            reduce using rule 8
-	L_Ident        reduce using rule 8
-	L_integ        reduce using rule 8
-	%eof           reduce using rule 8
+	'%'            reduce using rule 6
+	'('            reduce using rule 6
+	')'            reduce using rule 6
+	'*'            reduce using rule 6
+	'+'            reduce using rule 6
+	'-'            reduce using rule 6
+	'->'           reduce using rule 6
+	'/'            reduce using rule 6
+	L_Ident        reduce using rule 6
+	L_integ        reduce using rule 6
+	%eof           reduce using rule 6
 
 
 State 8
 
-	Exp3 -> Integer .                                   (rule 9)
+	%start_pExp4 -> Exp4 .                              (rule 5)
 
+	%eof           accept
+
+
+State 9
+
+	Exp4 -> '(' . Exp ')'                               (rule 22)
+
+	'('            shift, and enter state 9
+	'\\'           shift, and enter state 17
+	L_Ident        shift, and enter state 7
+	L_integ        shift, and enter state 18
+
+	Ident          goto state 10
+	Integer        goto state 11
+	Exp3           goto state 12
+	Exp2           goto state 13
+	Exp1           goto state 14
+	Exp            goto state 32
+	Exp4           goto state 16
+
+State 10
+
+	Exp3 -> Ident .                                     (rule 9)
+
+	'%'            reduce using rule 9
 	'('            reduce using rule 9
 	')'            reduce using rule 9
+	'*'            reduce using rule 9
 	'+'            reduce using rule 9
 	'-'            reduce using rule 9
+	'/'            reduce using rule 9
 	L_Ident        reduce using rule 9
 	L_integ        reduce using rule 9
 	%eof           reduce using rule 9
 
 
-State 9
-
-	Exp2 -> Exp3 .                                      (rule 12)
-
-	'('            reduce using rule 12
-	')'            reduce using rule 12
-	'+'            reduce using rule 12
-	'-'            reduce using rule 12
-	L_Ident        reduce using rule 12
-	L_integ        reduce using rule 12
-	%eof           reduce using rule 12
-
-
-State 10
-
-	Exp2 -> Exp2 . Exp3                                 (rule 11)
-	Exp1 -> Exp2 .                                      (rule 15)
-
-	'('            shift, and enter state 13
-	')'            reduce using rule 15
-	'+'            reduce using rule 15
-	'-'            reduce using rule 15
-	L_Ident        shift, and enter state 6
-	L_integ        shift, and enter state 15
-	%eof           reduce using rule 15
-
-	Ident          goto state 7
-	Integer        goto state 8
-	Exp3           goto state 22
-
 State 11
 
-	Exp1 -> Exp1 . '+' Exp2                             (rule 13)
-	Exp1 -> Exp1 . '-' Exp2                             (rule 14)
-	Exp -> Exp1 .                                       (rule 17)
+	Exp3 -> Integer .                                   (rule 10)
 
-	')'            reduce using rule 17
-	'+'            shift, and enter state 23
-	'-'            shift, and enter state 24
-	%eof           reduce using rule 17
+	'%'            reduce using rule 10
+	'('            reduce using rule 10
+	')'            reduce using rule 10
+	'*'            reduce using rule 10
+	'+'            reduce using rule 10
+	'-'            reduce using rule 10
+	'/'            reduce using rule 10
+	L_Ident        reduce using rule 10
+	L_integ        reduce using rule 10
+	%eof           reduce using rule 10
 
 
 State 12
+
+	Exp3 -> Exp3 . '%' Exp4                             (rule 11)
+	Exp2 -> Exp3 .                                      (rule 16)
+
+	'%'            shift, and enter state 25
+	'('            reduce using rule 16
+	')'            reduce using rule 16
+	'*'            reduce using rule 16
+	'+'            reduce using rule 16
+	'-'            reduce using rule 16
+	'/'            reduce using rule 16
+	L_Ident        reduce using rule 16
+	L_integ        reduce using rule 16
+	%eof           reduce using rule 16
+
+
+State 13
+
+	Exp2 -> Exp2 . Exp3                                 (rule 13)
+	Exp2 -> Exp2 . '*' Exp3                             (rule 14)
+	Exp2 -> Exp2 . '/' Exp3                             (rule 15)
+	Exp1 -> Exp2 .                                      (rule 19)
+
+	'('            shift, and enter state 9
+	')'            reduce using rule 19
+	'*'            shift, and enter state 27
+	'+'            reduce using rule 19
+	'-'            reduce using rule 19
+	'/'            shift, and enter state 28
+	L_Ident        shift, and enter state 7
+	L_integ        shift, and enter state 18
+	%eof           reduce using rule 19
+
+	Ident          goto state 10
+	Integer        goto state 11
+	Exp3           goto state 26
+	Exp4           goto state 16
+
+State 14
+
+	Exp1 -> Exp1 . '+' Exp2                             (rule 17)
+	Exp1 -> Exp1 . '-' Exp2                             (rule 18)
+	Exp -> Exp1 .                                       (rule 21)
+
+	')'            reduce using rule 21
+	'+'            shift, and enter state 29
+	'-'            shift, and enter state 30
+	%eof           reduce using rule 21
+
+
+State 15
 
 	%start_pExp -> Exp .                                (rule 4)
 
 	%eof           accept
 
 
-State 13
-
-	Exp3 -> '(' . Exp ')'                               (rule 10)
-
-	'('            shift, and enter state 13
-	'\\'           shift, and enter state 14
-	L_Ident        shift, and enter state 6
-	L_integ        shift, and enter state 15
-
-	Ident          goto state 7
-	Integer        goto state 8
-	Exp3           goto state 9
-	Exp2           goto state 10
-	Exp1           goto state 11
-	Exp            goto state 26
-
-State 14
-
-	Exp -> '\\' . Ident '->' Exp                        (rule 16)
-
-	L_Ident        shift, and enter state 6
-
-	Ident          goto state 25
-
-State 15
-
-	Integer -> L_integ .                                (rule 6)
-
-	'('            reduce using rule 6
-	')'            reduce using rule 6
-	'+'            reduce using rule 6
-	'-'            reduce using rule 6
-	L_Ident        reduce using rule 6
-	L_integ        reduce using rule 6
-	%eof           reduce using rule 6
-
-
 State 16
 
-	%start_pExp1 -> Exp1 .                              (rule 3)
-	Exp1 -> Exp1 . '+' Exp2                             (rule 13)
-	Exp1 -> Exp1 . '-' Exp2                             (rule 14)
+	Exp3 -> Exp4 .                                      (rule 12)
 
-	'+'            shift, and enter state 23
-	'-'            shift, and enter state 24
-	%eof           accept
+	'%'            reduce using rule 12
+	'('            reduce using rule 12
+	')'            reduce using rule 12
+	'*'            reduce using rule 12
+	'+'            reduce using rule 12
+	'-'            reduce using rule 12
+	'/'            reduce using rule 12
+	L_Ident        reduce using rule 12
+	L_integ        reduce using rule 12
+	%eof           reduce using rule 12
 
 
 State 17
 
-	%start_pExp2 -> Exp2 .                              (rule 2)
-	Exp2 -> Exp2 . Exp3                                 (rule 11)
+	Exp -> '\\' . Ident '->' Exp                        (rule 20)
 
-	'('            shift, and enter state 13
-	L_Ident        shift, and enter state 6
-	L_integ        shift, and enter state 15
-	%eof           accept
+	L_Ident        shift, and enter state 7
 
-	Ident          goto state 7
-	Integer        goto state 8
-	Exp3           goto state 22
+	Ident          goto state 31
 
 State 18
 
-	%start_pExp3 -> Exp3 .                              (rule 1)
+	Integer -> L_integ .                                (rule 7)
 
-	%eof           accept
+	'%'            reduce using rule 7
+	'('            reduce using rule 7
+	')'            reduce using rule 7
+	'*'            reduce using rule 7
+	'+'            reduce using rule 7
+	'-'            reduce using rule 7
+	'/'            reduce using rule 7
+	L_Ident        reduce using rule 7
+	L_integ        reduce using rule 7
+	%eof           reduce using rule 7
 
 
 State 19
+
+	%start_pExp1 -> Exp1 .                              (rule 3)
+	Exp1 -> Exp1 . '+' Exp2                             (rule 17)
+	Exp1 -> Exp1 . '-' Exp2                             (rule 18)
+
+	'+'            shift, and enter state 29
+	'-'            shift, and enter state 30
+	%eof           accept
+
+
+State 20
+
+	%start_pExp2 -> Exp2 .                              (rule 2)
+	Exp2 -> Exp2 . Exp3                                 (rule 13)
+	Exp2 -> Exp2 . '*' Exp3                             (rule 14)
+	Exp2 -> Exp2 . '/' Exp3                             (rule 15)
+
+	'('            shift, and enter state 9
+	'*'            shift, and enter state 27
+	'/'            shift, and enter state 28
+	L_Ident        shift, and enter state 7
+	L_integ        shift, and enter state 18
+	%eof           accept
+
+	Ident          goto state 10
+	Integer        goto state 11
+	Exp3           goto state 26
+	Exp4           goto state 16
+
+State 21
+
+	%start_pExp3 -> Exp3 .                              (rule 1)
+	Exp3 -> Exp3 . '%' Exp4                             (rule 11)
+
+	'%'            shift, and enter state 25
+	%eof           accept
+
+
+State 22
 
 	%start_pProgram -> Program .                        (rule 0)
 
 	%eof           accept
 
 
-State 20
+State 23
 
-	Program -> 'main' . '=' Exp                         (rule 7)
+	Program -> 'main' . '=' Exp                         (rule 8)
 
-	'='            shift, and enter state 21
+	'='            shift, and enter state 24
 
 
-State 21
+State 24
 
-	Program -> 'main' '=' . Exp                         (rule 7)
+	Program -> 'main' '=' . Exp                         (rule 8)
 
-	'('            shift, and enter state 13
-	'\\'           shift, and enter state 14
-	L_Ident        shift, and enter state 6
-	L_integ        shift, and enter state 15
+	'('            shift, and enter state 9
+	'\\'           shift, and enter state 17
+	L_Ident        shift, and enter state 7
+	L_integ        shift, and enter state 18
 
-	Ident          goto state 7
-	Integer        goto state 8
-	Exp3           goto state 9
-	Exp2           goto state 10
-	Exp1           goto state 11
-	Exp            goto state 31
+	Ident          goto state 10
+	Integer        goto state 11
+	Exp3           goto state 12
+	Exp2           goto state 13
+	Exp1           goto state 14
+	Exp            goto state 40
+	Exp4           goto state 16
 
-State 22
+State 25
 
-	Exp2 -> Exp2 Exp3 .                                 (rule 11)
+	Exp3 -> Exp3 '%' . Exp4                             (rule 11)
 
+	'('            shift, and enter state 9
+
+	Exp4           goto state 39
+
+State 26
+
+	Exp3 -> Exp3 . '%' Exp4                             (rule 11)
+	Exp2 -> Exp2 Exp3 .                                 (rule 13)
+
+	'%'            shift, and enter state 25
+	'('            reduce using rule 13
+	')'            reduce using rule 13
+	'*'            reduce using rule 13
+	'+'            reduce using rule 13
+	'-'            reduce using rule 13
+	'/'            reduce using rule 13
+	L_Ident        reduce using rule 13
+	L_integ        reduce using rule 13
+	%eof           reduce using rule 13
+
+
+State 27
+
+	Exp2 -> Exp2 '*' . Exp3                             (rule 14)
+
+	'('            shift, and enter state 9
+	L_Ident        shift, and enter state 7
+	L_integ        shift, and enter state 18
+
+	Ident          goto state 10
+	Integer        goto state 11
+	Exp3           goto state 38
+	Exp4           goto state 16
+
+State 28
+
+	Exp2 -> Exp2 '/' . Exp3                             (rule 15)
+
+	'('            shift, and enter state 9
+	L_Ident        shift, and enter state 7
+	L_integ        shift, and enter state 18
+
+	Ident          goto state 10
+	Integer        goto state 11
+	Exp3           goto state 37
+	Exp4           goto state 16
+
+State 29
+
+	Exp1 -> Exp1 '+' . Exp2                             (rule 17)
+
+	'('            shift, and enter state 9
+	L_Ident        shift, and enter state 7
+	L_integ        shift, and enter state 18
+
+	Ident          goto state 10
+	Integer        goto state 11
+	Exp3           goto state 12
+	Exp2           goto state 36
+	Exp4           goto state 16
+
+State 30
+
+	Exp1 -> Exp1 '-' . Exp2                             (rule 18)
+
+	'('            shift, and enter state 9
+	L_Ident        shift, and enter state 7
+	L_integ        shift, and enter state 18
+
+	Ident          goto state 10
+	Integer        goto state 11
+	Exp3           goto state 12
+	Exp2           goto state 35
+	Exp4           goto state 16
+
+State 31
+
+	Exp -> '\\' Ident . '->' Exp                        (rule 20)
+
+	'->'           shift, and enter state 34
+
+
+State 32
+
+	Exp4 -> '(' Exp . ')'                               (rule 22)
+
+	')'            shift, and enter state 33
+
+
+State 33
+
+	Exp4 -> '(' Exp ')' .                               (rule 22)
+
+	'%'            reduce using rule 22
+	'('            reduce using rule 22
+	')'            reduce using rule 22
+	'*'            reduce using rule 22
+	'+'            reduce using rule 22
+	'-'            reduce using rule 22
+	'/'            reduce using rule 22
+	L_Ident        reduce using rule 22
+	L_integ        reduce using rule 22
+	%eof           reduce using rule 22
+
+
+State 34
+
+	Exp -> '\\' Ident '->' . Exp                        (rule 20)
+
+	'('            shift, and enter state 9
+	'\\'           shift, and enter state 17
+	L_Ident        shift, and enter state 7
+	L_integ        shift, and enter state 18
+
+	Ident          goto state 10
+	Integer        goto state 11
+	Exp3           goto state 12
+	Exp2           goto state 13
+	Exp1           goto state 14
+	Exp            goto state 41
+	Exp4           goto state 16
+
+State 35
+
+	Exp2 -> Exp2 . Exp3                                 (rule 13)
+	Exp2 -> Exp2 . '*' Exp3                             (rule 14)
+	Exp2 -> Exp2 . '/' Exp3                             (rule 15)
+	Exp1 -> Exp1 '-' Exp2 .                             (rule 18)
+
+	'('            shift, and enter state 9
+	')'            reduce using rule 18
+	'*'            shift, and enter state 27
+	'+'            reduce using rule 18
+	'-'            reduce using rule 18
+	'/'            shift, and enter state 28
+	L_Ident        shift, and enter state 7
+	L_integ        shift, and enter state 18
+	%eof           reduce using rule 18
+
+	Ident          goto state 10
+	Integer        goto state 11
+	Exp3           goto state 26
+	Exp4           goto state 16
+
+State 36
+
+	Exp2 -> Exp2 . Exp3                                 (rule 13)
+	Exp2 -> Exp2 . '*' Exp3                             (rule 14)
+	Exp2 -> Exp2 . '/' Exp3                             (rule 15)
+	Exp1 -> Exp1 '+' Exp2 .                             (rule 17)
+
+	'('            shift, and enter state 9
+	')'            reduce using rule 17
+	'*'            shift, and enter state 27
+	'+'            reduce using rule 17
+	'-'            reduce using rule 17
+	'/'            shift, and enter state 28
+	L_Ident        shift, and enter state 7
+	L_integ        shift, and enter state 18
+	%eof           reduce using rule 17
+
+	Ident          goto state 10
+	Integer        goto state 11
+	Exp3           goto state 26
+	Exp4           goto state 16
+
+State 37
+
+	Exp3 -> Exp3 . '%' Exp4                             (rule 11)
+	Exp2 -> Exp2 '/' Exp3 .                             (rule 15)
+
+	'%'            shift, and enter state 25
+	'('            reduce using rule 15
+	')'            reduce using rule 15
+	'*'            reduce using rule 15
+	'+'            reduce using rule 15
+	'-'            reduce using rule 15
+	'/'            reduce using rule 15
+	L_Ident        reduce using rule 15
+	L_integ        reduce using rule 15
+	%eof           reduce using rule 15
+
+
+State 38
+
+	Exp3 -> Exp3 . '%' Exp4                             (rule 11)
+	Exp2 -> Exp2 '*' Exp3 .                             (rule 14)
+
+	'%'            shift, and enter state 25
+	'('            reduce using rule 14
+	')'            reduce using rule 14
+	'*'            reduce using rule 14
+	'+'            reduce using rule 14
+	'-'            reduce using rule 14
+	'/'            reduce using rule 14
+	L_Ident        reduce using rule 14
+	L_integ        reduce using rule 14
+	%eof           reduce using rule 14
+
+
+State 39
+
+	Exp3 -> Exp3 '%' Exp4 .                             (rule 11)
+
+	'%'            reduce using rule 11
 	'('            reduce using rule 11
 	')'            reduce using rule 11
+	'*'            reduce using rule 11
 	'+'            reduce using rule 11
 	'-'            reduce using rule 11
+	'/'            reduce using rule 11
 	L_Ident        reduce using rule 11
 	L_integ        reduce using rule 11
 	%eof           reduce using rule 11
 
 
-State 23
+State 40
 
-	Exp1 -> Exp1 '+' . Exp2                             (rule 13)
+	Program -> 'main' '=' Exp .                         (rule 8)
 
-	'('            shift, and enter state 13
-	L_Ident        shift, and enter state 6
-	L_integ        shift, and enter state 15
-
-	Ident          goto state 7
-	Integer        goto state 8
-	Exp3           goto state 9
-	Exp2           goto state 30
-
-State 24
-
-	Exp1 -> Exp1 '-' . Exp2                             (rule 14)
-
-	'('            shift, and enter state 13
-	L_Ident        shift, and enter state 6
-	L_integ        shift, and enter state 15
-
-	Ident          goto state 7
-	Integer        goto state 8
-	Exp3           goto state 9
-	Exp2           goto state 29
-
-State 25
-
-	Exp -> '\\' Ident . '->' Exp                        (rule 16)
-
-	'->'           shift, and enter state 28
+	%eof           reduce using rule 8
 
 
-State 26
+State 41
 
-	Exp3 -> '(' Exp . ')'                               (rule 10)
+	Exp -> '\\' Ident '->' Exp .                        (rule 20)
 
-	')'            shift, and enter state 27
-
-
-State 27
-
-	Exp3 -> '(' Exp ')' .                               (rule 10)
-
-	'('            reduce using rule 10
-	')'            reduce using rule 10
-	'+'            reduce using rule 10
-	'-'            reduce using rule 10
-	L_Ident        reduce using rule 10
-	L_integ        reduce using rule 10
-	%eof           reduce using rule 10
-
-
-State 28
-
-	Exp -> '\\' Ident '->' . Exp                        (rule 16)
-
-	'('            shift, and enter state 13
-	'\\'           shift, and enter state 14
-	L_Ident        shift, and enter state 6
-	L_integ        shift, and enter state 15
-
-	Ident          goto state 7
-	Integer        goto state 8
-	Exp3           goto state 9
-	Exp2           goto state 10
-	Exp1           goto state 11
-	Exp            goto state 32
-
-State 29
-
-	Exp2 -> Exp2 . Exp3                                 (rule 11)
-	Exp1 -> Exp1 '-' Exp2 .                             (rule 14)
-
-	'('            shift, and enter state 13
-	')'            reduce using rule 14
-	'+'            reduce using rule 14
-	'-'            reduce using rule 14
-	L_Ident        shift, and enter state 6
-	L_integ        shift, and enter state 15
-	%eof           reduce using rule 14
-
-	Ident          goto state 7
-	Integer        goto state 8
-	Exp3           goto state 22
-
-State 30
-
-	Exp2 -> Exp2 . Exp3                                 (rule 11)
-	Exp1 -> Exp1 '+' Exp2 .                             (rule 13)
-
-	'('            shift, and enter state 13
-	')'            reduce using rule 13
-	'+'            reduce using rule 13
-	'-'            reduce using rule 13
-	L_Ident        shift, and enter state 6
-	L_integ        shift, and enter state 15
-	%eof           reduce using rule 13
-
-	Ident          goto state 7
-	Integer        goto state 8
-	Exp3           goto state 22
-
-State 31
-
-	Program -> 'main' '=' Exp .                         (rule 7)
-
-	%eof           reduce using rule 7
-
-
-State 32
-
-	Exp -> '\\' Ident '->' Exp .                        (rule 16)
-
-	')'            reduce using rule 16
-	%eof           reduce using rule 16
+	')'            reduce using rule 20
+	%eof           reduce using rule 20
 
 
 -----------------------------------------------------------------------------
 Grammar Totals
 -----------------------------------------------------------------------------
-Number of rules: 18
-Number of terminals: 10
-Number of non-terminals: 12
-Number of states: 33
+Number of rules: 23
+Number of terminals: 13
+Number of non-terminals: 14
+Number of states: 42

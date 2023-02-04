@@ -1,4 +1,5 @@
 declare i64 @llvm.abs.i64(i64, i1 immarg) 
+declare i64 @llvm.powi.i64.i64(i64, i64) 
 declare i32 @puts(i8* nocapture) nounwind
 
 

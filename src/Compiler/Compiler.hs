@@ -25,10 +25,11 @@ compileFile file = do
             exitFailure
         Right cor -> compile cor
 
-data Type = I8 | I32 | I64 | Ptr | Ref Type | Array Integer Type
+data Type = I1 | I8 | I32 | I64 | Ptr | Ref Type | Array Integer Type
 instance Show Type where
     show :: Type -> String
     show t = case t of
+        I1         -> "i1"
         I8         -> "i8"
         I32        -> "i32"
         I64        -> "i64"
@@ -66,6 +67,9 @@ data LLVMIr = Define Type Ident Params
             | Variable Ident
             | Add Type Value Value
             | Sub Type Value Value
+            | Div Type Value Value
+            | Mul Type Value Value
+            | Srem Type Value Value
             | Call Type Ident Args
             | Alloca Type
             | Store Type Ident Type Ident
@@ -82,8 +86,11 @@ printLLVMIr (Declare t (Ident i) params)          = undefined
 printLLVMIr (Variable (Ident i))                  = concat ["%", i, " = "]
 printLLVMIr (Add t v1 v2)                         = concat ["add ", show t, " ", show v1, ", ", show v2, "\n"]
 printLLVMIr (Sub t v1 v2)                         = concat ["sub ", show t, " ", show v1, ", ", show v2, "\n"]
+printLLVMIr (Div t v1 v2)                         = concat ["sdiv ", show t, " ", show v1, ", ", show v2, "\n"]
+printLLVMIr (Mul t v1 v2)                         = concat ["mul ", show t, " ", show v1, ", ", show v2, "\n"]
+printLLVMIr (Srem t v1 v2)                         = concat ["srem ", show t, " ", show v1, ", ", show v2, "\n"]
 printLLVMIr (Call t (Ident i) arg)                = concat ["call ", show t, " @", i, "("
-                                                           , concatMap (\(x,y) -> show x <> " " <> show y) arg
+                                                           , intercalate ", " $ Prelude.map (\(x,y) -> show x <> " " <> show y) arg
                                                            , ")\n"]
 printLLVMIr (Alloca t)                            = unwords ["alloca", show t, "\n"]
 printLLVMIr (Store t1 (Ident id1) t2 (Ident id2)) = concat ["store ", show t1, " %", id1
@@ -129,6 +136,10 @@ compile (Program prgE) = do
         go (EInt int)   = emitInt int
         go (EAdd e1 e2) = emitAdd e1 e2
         go (ESub e1 e2) = emitSub e1 e2
+        go (EMul e1 e2) = emitMul e1 e2
+        go (EDiv e1 e2) = emitDiv e1 e2
+        go (EMod e1 e2) = emitMod e1 e2
+
         go (EId  id)    = undefined
         go (EApp e1 e2) = undefined
         go (EAbs id e)  = undefined
@@ -145,13 +156,48 @@ compile (Program prgE) = do
 
         emitAdd :: Exp -> Exp -> CompilerState
         emitAdd e1 e2 = do
-            -- instead of declaring variables for adding ints,
-            -- we can directly pass them to add.
             (v1,v2) <- evalToValues e1 e2
             increaseVarCount
             v <- gets variableCount
             emit $ Variable $ Ident $ show v
             emit $ Add I64 v1 v2
+
+        emitMul :: Exp -> Exp -> CompilerState
+        emitMul e1 e2 = do
+            (v1,v2) <- evalToValues e1 e2
+            increaseVarCount
+            v <- gets variableCount
+            emit $ Variable $ Ident $ show v
+            emit $ Mul I64 v1 v2
+
+        emitMod :: Exp -> Exp -> CompilerState
+        emitMod e1 e2 = do
+            -- //TODO Replace with `let m a b = rem (abs $ b + a) b`
+            (v1,v2) <- evalToValues e1 e2
+            increaseVarCount
+            vadd <- gets variableCount
+            emit $ Variable $ Ident $ show vadd
+            emit $ Add I64 v1 v2
+
+            increaseVarCount
+            vabs <- gets variableCount
+            emit $ Variable $ Ident $ show vabs
+            emit $ Call I64 (Ident "llvm.abs.i64")
+                [ (I64, VIdent (Ident $ show vadd))
+                , (I1, VInteger 1)
+                ]
+            increaseVarCount
+            v <- gets variableCount
+            emit $ Variable $ Ident $ show v
+            emit $ Srem I64 (VIdent (Ident $ show vabs)) v2
+
+        emitDiv :: Exp -> Exp -> CompilerState
+        emitDiv e1 e2 = do
+            (v1,v2) <- evalToValues e1 e2
+            increaseVarCount
+            v <- gets variableCount
+            emit $ Variable $ Ident $ show v
+            emit $ Div I64 v1 v2
 
         emitSub :: Exp -> Exp -> CompilerState
         emitSub e1 e2 = do
@@ -163,6 +209,8 @@ compile (Program prgE) = do
 
         evalToValues :: Exp -> Exp -> State CodeGenerator (Value, Value)
         evalToValues e1 e2 = case (e1, e2) of
+                    -- instead of declaring variables for working on ints,
+                    -- we can directly pass them to their functions.
                     (EInt i1, EInt i2) -> return (VInteger i1, VInteger i2)
                     (EInt i, e) -> do
                         go e

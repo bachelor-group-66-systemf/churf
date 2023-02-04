@@ -30,4 +30,7 @@ transExp x = case x of
   Grammar.Abs.EApp exp1 exp2 -> failure x
   Grammar.Abs.EAdd exp1 exp2 -> failure x
   Grammar.Abs.ESub exp1 exp2 -> failure x
+  Grammar.Abs.EMul exp1 exp2 -> failure x
+  Grammar.Abs.EDiv exp1 exp2 -> failure x
+  Grammar.Abs.EMod exp1 exp2 -> failure x
   Grammar.Abs.EAbs ident exp -> failure x

@@ -151,4 +151,7 @@ instance Print Grammar.Abs.Exp where
     Grammar.Abs.EApp exp1 exp2 -> prPrec i 2 (concatD [prt 2 exp1, prt 3 exp2])
     Grammar.Abs.EAdd exp1 exp2 -> prPrec i 1 (concatD [prt 1 exp1, doc (showString "+"), prt 2 exp2])
     Grammar.Abs.ESub exp1 exp2 -> prPrec i 1 (concatD [prt 1 exp1, doc (showString "-"), prt 2 exp2])
+    Grammar.Abs.EMul exp1 exp2 -> prPrec i 2 (concatD [prt 2 exp1, doc (showString "*"), prt 3 exp2])
+    Grammar.Abs.EDiv exp1 exp2 -> prPrec i 2 (concatD [prt 2 exp1, doc (showString "/"), prt 3 exp2])
+    Grammar.Abs.EMod exp1 exp2 -> prPrec i 3 (concatD [prt 3 exp1, doc (showString "%"), prt 4 exp2])
     Grammar.Abs.EAbs id_ exp -> prPrec i 0 (concatD [doc (showString "\\"), prt 0 id_, doc (showString "->"), prt 0 exp])
