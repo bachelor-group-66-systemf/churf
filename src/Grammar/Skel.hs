@@ -29,4 +29,5 @@ transExp x = case x of
   Grammar.Abs.EInt integer -> failure x
   Grammar.Abs.EApp exp1 exp2 -> failure x
   Grammar.Abs.EAdd exp1 exp2 -> failure x
+  Grammar.Abs.ESub exp1 exp2 -> failure x
   Grammar.Abs.EAbs ident exp -> failure x

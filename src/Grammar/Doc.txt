@@ -28,8 +28,8 @@ The reserved words used in Grammar are the following:
   | ``main`` |  |  |
 
 The symbols used in Grammar are the following:
-  | = | + | \ | ->
-  | ( | ) |  |
+  | = | + | - | \
+  | -> | ( | ) |
 
 ===Comments===
 Single-line comments begin with --.Multiple-line comments are  enclosed with {- and -}.
@@ -47,6 +47,7 @@ All other symbols are terminals.
   | //Exp2// | -> | //Exp2// //Exp3//
   |  |  **|**  | //Exp3//
   | //Exp1// | -> | //Exp1// ``+`` //Exp2//
+  |  |  **|**  | //Exp1// ``-`` //Exp2//
   |  |  **|**  | //Exp2//
   | //Exp// | -> | ``\`` //Ident// ``->`` //Exp//
   |  |  **|**  | //Exp1//

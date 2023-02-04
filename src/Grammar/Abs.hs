@@ -18,6 +18,7 @@ data Exp
     | EInt Integer
     | EApp Exp Exp
     | EAdd Exp Exp
+    | ESub Exp Exp
     | EAbs Ident Exp
   deriving (C.Eq, C.Ord, C.Show, C.Read)
 

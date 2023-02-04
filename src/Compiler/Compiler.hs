@@ -65,6 +65,7 @@ data LLVMIr = Define Type Ident Params
             | Declare Type Ident Params
             | Variable Ident
             | Add Type Value Value
+            | Sub Type Value Value
             | Call Type Ident Args
             | Alloca Type
             | Store Type Ident Type Ident
@@ -80,6 +81,7 @@ printLLVMIr DefineEnd                             = "}\n"
 printLLVMIr (Declare t (Ident i) params)          = undefined
 printLLVMIr (Variable (Ident i))                  = concat ["%", i, " = "]
 printLLVMIr (Add t v1 v2)                         = concat ["add ", show t, " ", show v1, ", ", show v2, "\n"]
+printLLVMIr (Sub t v1 v2)                         = concat ["sub ", show t, " ", show v1, ", ", show v2, "\n"]
 printLLVMIr (Call t (Ident i) arg)                = concat ["call ", show t, " @", i, "("
                                                            , concatMap (\(x,y) -> show x <> " " <> show y) arg
                                                            , ")\n"]
@@ -126,6 +128,7 @@ compile (Program prgE) = do
         go :: Exp -> CompilerState
         go (EInt int)   = emitInt int
         go (EAdd e1 e2) = emitAdd e1 e2
+        go (ESub e1 e2) = emitSub e1 e2
         go (EId  id)    = undefined
         go (EApp e1 e2) = undefined
         go (EAbs id e)  = undefined
@@ -144,7 +147,22 @@ compile (Program prgE) = do
         emitAdd e1 e2 = do
             -- instead of declaring variables for adding ints,
             -- we can directly pass them to add.
-            (v1,v2) <- case (e1, e2) of
+            (v1,v2) <- evalToValues e1 e2
+            increaseVarCount
+            v <- gets variableCount
+            emit $ Variable $ Ident $ show v
+            emit $ Add I64 v1 v2
+
+        emitSub :: Exp -> Exp -> CompilerState
+        emitSub e1 e2 = do
+            (v1,v2) <- evalToValues e1 e2
+            increaseVarCount
+            v <- gets variableCount
+            emit $ Variable $ Ident $ show v
+            emit $ Sub I64 v1 v2
+
+        evalToValues :: Exp -> Exp -> State CodeGenerator (Value, Value)
+        evalToValues e1 e2 = case (e1, e2) of
                     (EInt i1, EInt i2) -> return (VInteger i1, VInteger i2)
                     (EInt i, e) -> do
                         go e
@@ -160,8 +178,3 @@ compile (Program prgE) = do
                         go e2
                         v2 <- gets variableCount
                         return (VIdent (Ident $ show v1),VIdent (Ident $ show v2))
-            increaseVarCount
-            v <- gets variableCount
-            emit $ Variable $ Ident $ show v
-            emit $ Add I64 v1 v2
-
