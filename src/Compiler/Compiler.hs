@@ -156,7 +156,7 @@ compile (Program prgE) = do
 
         emitAdd :: Exp -> Exp -> CompilerState
         emitAdd e1 e2 = do
-            (v1,v2) <- evalToValues e1 e2
+            (v1,v2) <- binExprToValues e1 e2
             increaseVarCount
             v <- gets variableCount
             emit $ Variable $ Ident $ show v
@@ -164,7 +164,7 @@ compile (Program prgE) = do
 
         emitMul :: Exp -> Exp -> CompilerState
         emitMul e1 e2 = do
-            (v1,v2) <- evalToValues e1 e2
+            (v1,v2) <- binExprToValues e1 e2
             increaseVarCount
             v <- gets variableCount
             emit $ Variable $ Ident $ show v
@@ -173,7 +173,7 @@ compile (Program prgE) = do
         emitMod :: Exp -> Exp -> CompilerState
         emitMod e1 e2 = do
             -- //TODO Replace with `let m a b = rem (abs $ b + a) b`
-            (v1,v2) <- evalToValues e1 e2
+            (v1,v2) <- binExprToValues e1 e2
             increaseVarCount
             vadd <- gets variableCount
             emit $ Variable $ Ident $ show vadd
@@ -193,7 +193,7 @@ compile (Program prgE) = do
 
         emitDiv :: Exp -> Exp -> CompilerState
         emitDiv e1 e2 = do
-            (v1,v2) <- evalToValues e1 e2
+            (v1,v2) <- binExprToValues e1 e2
             increaseVarCount
             v <- gets variableCount
             emit $ Variable $ Ident $ show v
@@ -201,14 +201,14 @@ compile (Program prgE) = do
 
         emitSub :: Exp -> Exp -> CompilerState
         emitSub e1 e2 = do
-            (v1,v2) <- evalToValues e1 e2
+            (v1,v2) <- binExprToValues e1 e2
             increaseVarCount
             v <- gets variableCount
             emit $ Variable $ Ident $ show v
             emit $ Sub I64 v1 v2
 
-        evalToValues :: Exp -> Exp -> State CodeGenerator (Value, Value)
-        evalToValues e1 e2 = case (e1, e2) of
+        binExprToValues :: Exp -> Exp -> State CodeGenerator (Value, Value)
+        binExprToValues e1 e2 = case (e1, e2) of
                     -- instead of declaring variables for working on ints,
                     -- we can directly pass them to their functions.
                     (EInt i1, EInt i2) -> return (VInteger i1, VInteger i2)
