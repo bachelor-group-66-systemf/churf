@@ -54,7 +54,11 @@ data CodeGenerator = CodeGenerator
                    , variableCount :: Integer }
     deriving Show
 defaultCodeGenerator :: CodeGenerator
-defaultCodeGenerator = CodeGenerator {instructions=[], methods=[], blocks=[], variableCount=0}
+defaultCodeGenerator = CodeGenerator
+                    { instructions=[]
+                    , methods=[]
+                    , blocks=[]
+                    , variableCount=0}
 
 data LLVMIr = Define Type Ident Params
             | DefineEnd
@@ -96,16 +100,16 @@ increaseVarCount :: CompilerState
 increaseVarCount = modify (\t -> t {variableCount = variableCount t + 1})
 
 compile :: Program -> IO ()
-compile (Program e) = do
+compile (Program prgE) = do
     --Asp
     let s = defaultCodeGenerator {instructions = [
-        Comment $ printTree (Program e),
+        Comment $ printTree (Program prgE),
         UnsafeRaw $ standardLLVMLibrary <> "\n",
         --UnsafeRaw "declare i32 @puts(i8* nocapture) nounwind\n",
         --UnsafeRaw "declare [21 x i8] @i64ToString(i64)\n",
         Define I32 (Ident "main") []
     ]}
-    let fin = execState (go e) s
+    let fin = execState (go prgE) s
     let ins = instructions fin
     let var = variableCount fin
     putStrLn $ concatMap printLLVMIr (ins ++
@@ -120,47 +124,44 @@ compile (Program e) = do
         ])
     where
         go :: Exp -> CompilerState
-        go (EId  id)    = undefined
-        go (EInt int)   = do
-            increaseVarCount
-            varCount <- gets variableCount
-            emit $ Variable $ Ident (show varCount)
-            emit $ Add I64 (VInteger int) (VInteger 0)
-
-        go (EApp e1 e2) = undefined
+        go (EInt int)   = emitInt int
         go (EAdd e1 e2) = emitAdd e1 e2
+        go (EId  id)    = undefined
+        go (EApp e1 e2) = undefined
         go (EAbs id e)  = undefined
 
         --- aux functions ---
+        emitInt :: Integer -> CompilerState
+        emitInt i = do
+            -- ideally this case should not occur if the other
+            -- emit operations are optimized
+            increaseVarCount
+            varCount <- gets variableCount
+            emit $ Variable $ Ident (show varCount)
+            emit $ Add I64 (VInteger i) (VInteger 0)
+
         emitAdd :: Exp -> Exp -> CompilerState
-        -- instead of declaring two variables for this case,
-        -- we can directly pass them to add.
-        emitAdd (EInt i1) (EInt i2) = do
-            increaseVarCount
-            v1 <- gets variableCount
-            emit $ Variable $ Ident $ show v1
-            emit $ Add I64 (VInteger i1) (VInteger i2)
-        emitAdd (EInt i) e2 = do
-            go e2
-            v2 <- gets variableCount
-            increaseVarCount
-            v3 <- gets variableCount
-            emit $ Variable $ Ident $ show v3
-            emit $ Add I64 (VInteger i) (VIdent (Ident $ show v2))
-        emitAdd e1 (EInt i) = do
-            go e1
-            v2 <- gets variableCount
-            increaseVarCount
-            v3 <- gets variableCount
-            emit $ Variable $ Ident $ show v3
-            emit $ Add I64 (VIdent (Ident $ show v2)) (VInteger i)
         emitAdd e1 e2 = do
-            go e1
-            v1 <- gets variableCount
-            go e2
-            v2 <- gets variableCount
+            -- instead of declaring variables for adding ints,
+            -- we can directly pass them to add.
+            (v1,v2) <- case (e1, e2) of
+                    (EInt i1, EInt i2) -> return (VInteger i1, VInteger i2)
+                    (EInt i, e) -> do
+                        go e
+                        v2 <- gets variableCount
+                        return (VInteger i, VIdent (Ident $ show v2))
+                    (e, EInt i) -> do
+                        go e
+                        v2 <- gets variableCount
+                        return (VIdent (Ident $ show v2), VInteger i)
+                    (e1, e2) -> do
+                        go e1
+                        v1 <- gets variableCount
+                        go e2
+                        v2 <- gets variableCount
+                        return (VIdent (Ident $ show v1),VIdent (Ident $ show v2))
             increaseVarCount
-            v3 <- gets variableCount
-            emit $ Variable $ Ident $ show v3
-            emit $ Add I64 (VIdent (Ident $ show v1)) (VIdent (Ident $ show v2))
+            v <- gets variableCount
+            emit $ Variable $ Ident $ show v
+            emit $ Add I64 v1 v2
 
