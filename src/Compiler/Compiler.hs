@@ -133,14 +133,27 @@ compile (Program e) = do
 
         --- aux functions ---
         emitAdd :: Exp -> Exp -> CompilerState
+        -- instead of declaring two variables for this case,
+        -- we can directly pass them to add.
         emitAdd (EInt i1) (EInt i2) = do
-            -- instead of declaring two variables for this case,
-            -- we can directly pass them to add.
-            -- //TODO This should also be done with (EInt & Exp) and (Exp &EInt)
             increaseVarCount
             v1 <- gets variableCount
             emit $ Variable $ Ident $ show v1
             emit $ Add I64 (VInteger i1) (VInteger i2)
+        emitAdd (EInt i) e2 = do
+            go e2
+            v2 <- gets variableCount
+            increaseVarCount
+            v3 <- gets variableCount
+            emit $ Variable $ Ident $ show v3
+            emit $ Add I64 (VInteger i) (VIdent (Ident $ show v2))
+        emitAdd e1 (EInt i) = do
+            go e1
+            v2 <- gets variableCount
+            increaseVarCount
+            v3 <- gets variableCount
+            emit $ Variable $ Ident $ show v3
+            emit $ Add I64 (VIdent (Ident $ show v2)) (VInteger i)
         emitAdd e1 e2 = do
             go e1
             v1 <- gets variableCount
