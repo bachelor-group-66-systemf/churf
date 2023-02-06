@@ -1,11 +1,7 @@
 module Compiler.Compiler where
 
 import           Compiler.StandardLLVMLibrary (standardLLVMLibrary)
-import           Control.Applicative          (Applicative)
-import           Control.Monad.Except         (Except, MonadError (throwError),
-                                               liftEither)
 import           Control.Monad.State
-import           Data.Either.Combinators      (maybeToRight)
 import           Data.List                    (intercalate)
 import           Data.Set                     (Set)
 import           Data.Set                     as Set
@@ -53,20 +49,20 @@ instance Show Value where
 data CodeGenerator = CodeGenerator
                    { instructions  :: [LLVMIr]
                    , methods       :: [Ident]
-                   , blocks        :: [Set Ident]
+                   , block         :: Set Ident
                    , variableCount :: Integer }
     deriving Show
 defaultCodeGenerator :: CodeGenerator
 defaultCodeGenerator = CodeGenerator
                     { instructions = []
                     , methods = []
-                    , blocks = []
+                    , block = Set.empty
                     , variableCount = 0 }
 
 data LLVMIr = Define LLType Ident Params
             | DefineEnd
             | Declare LLType Ident Params
-            | Variable Ident
+            | SetVariable Ident
             | Add LLType Value Value
             | Sub LLType Value Value
             | Div LLType Value Value
@@ -85,7 +81,7 @@ printLLVMIr :: LLVMIr -> String
 printLLVMIr (Define t (Ident i) params)           = concat ["define ", show t, " @", i, "(", intercalate "," (fmap (\(x,Ident y) -> unwords [show x, "%"<>y]) params),") {\n"]
 printLLVMIr DefineEnd                             = "}\n"
 printLLVMIr (Declare t (Ident i) params)          = undefined
-printLLVMIr (Variable (Ident i))                  = concat ["%", i, " = "]
+printLLVMIr (SetVariable (Ident i))               = concat ["%", i, " = "]
 printLLVMIr (Add t v1 v2)                         = concat ["add ", show t, " ", show v1, ", ", show v2, "\n"]
 printLLVMIr (Sub t v1 v2)                         = concat ["sub ", show t, " ", show v1, ", ", show v2, "\n"]
 printLLVMIr (Div t v1 v2)                         = concat ["sdiv ", show t, " ", show v1, ", ", show v2, "\n"]
@@ -110,6 +106,9 @@ emit l = modify (\t -> t {instructions = instructions t ++ [l]})
 increaseVarCount :: CompilerState
 increaseVarCount = modify (\t -> t {variableCount = variableCount t + 1})
 
+setBlock :: [Ident] -> CompilerState
+setBlock xs = modify (\s -> s {block = Set.fromList xs})
+
 compile :: Program -> IO ()
 compile (Program prg) = do
     --Asp
@@ -125,20 +124,20 @@ compile (Program prg) = do
     putStrLn $ concatMap printLLVMIr ins
     where
         mainContent var =
-                [ Variable (Ident "print_res")
+                [ SetVariable (Ident "print_res")
                 , Call (Array 21 I8) (Ident "i64ToString") [(I64, VIdent $ Ident $ show var)]
-                , Variable (Ident "print_ptr"), Alloca (Array 21 I8)
+                , SetVariable (Ident "print_ptr"), Alloca (Array 21 I8)
                 , Store (Array 21 I8) (Ident "print_res") (Ref (Array 21 I8)) (Ident "print_ptr")
-                , Variable (Ident "printable"), Bitcast (Ref (Array 21 I8)) (Ident "print_ptr") (Ref I8)
+                , SetVariable (Ident "printable"), Bitcast (Ref (Array 21 I8)) (Ident "print_ptr") (Ref I8)
                 , Call I32 (Ident "puts") [(Ref I8, VIdent (Ident "printable"))]
                 , Ret I64 (VInteger 0)
                 ]
 
         goDef :: [Def] -> CompilerState
-        goDef []                               = return ()
+        goDef [] = return ()
         goDef (DExp id@(Ident str) t _id2 args exp : xs) = do
             let (rt, argTypes) = flattenFuncType t
-            emit $ Comment $ show (rt, argTypes)
+            emit $ Comment $ show str <> ": " <> show (rt, argTypes)
             emit $ Define rt id (zip argTypes args) -- //TODO parse args
             go exp
             varNum <- gets variableCount
@@ -155,19 +154,29 @@ compile (Program prg) = do
         go (EMul e1 e2)  = emitMul e1 e2
         go (EDiv e1 e2)  = emitDiv e1 e2
         go (EMod e1 e2)  = emitMod e1 e2
-
-        go (EId  id)     = emit $ Comment $ "EId (" <> show id <> ") is not implemented!"
-        go (EApp e1 e2)  = emit $ Comment $ "EApp (" <> show e1 <> ", " <> show e2 <> ") is not implemented!"
+        go (EId  id)     = emitArg id
+        go (EApp e1 e2)  = emitApp e1 e2
         go (EAbs id t e) = emit $ Comment $ "EAbs (" <> show id <> ", " <> show t <> ", " <> show e <> ") is not implemented!"
 
         --- aux functions ---
-        emitInt :: Integer -> CompilerState
-        emitInt i = do
-            -- ideally this case should not occur if the other
-            -- emit operations are optimized
+        emitApp :: Exp -> Exp -> CompilerState
+        emitApp e1 e2 = do
+            emit $ Comment $ "EApp (" <> show e1 <> ", " <> show e2 <> ") is not implemented!"
+
+        emitArg :: Ident -> CompilerState
+        emitArg id = do
+            -- !!this should never happen!!
             increaseVarCount
             varCount <- gets variableCount
-            emit $ Variable $ Ident (show varCount)
+            emit $ SetVariable (Ident $ show varCount)
+            emit $ Add I64 (VIdent id) (VInteger 0)
+
+        emitInt :: Integer -> CompilerState
+        emitInt i = do
+            -- !!this should never happen!!
+            increaseVarCount
+            varCount <- gets variableCount
+            emit $ SetVariable $ Ident (show varCount)
             emit $ Add I64 (VInteger i) (VInteger 0)
 
         emitAdd :: Exp -> Exp -> CompilerState
@@ -175,7 +184,7 @@ compile (Program prg) = do
             (v1,v2) <- binExprToValues e1 e2
             increaseVarCount
             v <- gets variableCount
-            emit $ Variable $ Ident $ show v
+            emit $ SetVariable $ Ident $ show v
             emit $ Add I64 v1 v2
 
         emitMul :: Exp -> Exp -> CompilerState
@@ -183,7 +192,7 @@ compile (Program prg) = do
             (v1,v2) <- binExprToValues e1 e2
             increaseVarCount
             v <- gets variableCount
-            emit $ Variable $ Ident $ show v
+            emit $ SetVariable $ Ident $ show v
             emit $ Mul I64 v1 v2
 
         emitMod :: Exp -> Exp -> CompilerState
@@ -192,19 +201,19 @@ compile (Program prg) = do
             (v1,v2) <- binExprToValues e1 e2
             increaseVarCount
             vadd <- gets variableCount
-            emit $ Variable $ Ident $ show vadd
+            emit $ SetVariable $ Ident $ show vadd
             emit $ Add I64 v1 v2
 
             increaseVarCount
             vabs <- gets variableCount
-            emit $ Variable $ Ident $ show vabs
+            emit $ SetVariable $ Ident $ show vabs
             emit $ Call I64 (Ident "llvm.abs.i64")
                 [ (I64, VIdent (Ident $ show vadd))
                 , (I1, VInteger 1)
                 ]
             increaseVarCount
             v <- gets variableCount
-            emit $ Variable $ Ident $ show v
+            emit $ SetVariable $ Ident $ show v
             emit $ Srem I64 (VIdent (Ident $ show vabs)) v2
 
         emitDiv :: Exp -> Exp -> CompilerState
@@ -212,7 +221,7 @@ compile (Program prg) = do
             (v1,v2) <- binExprToValues e1 e2
             increaseVarCount
             v <- gets variableCount
-            emit $ Variable $ Ident $ show v
+            emit $ SetVariable $ Ident $ show v
             emit $ Div I64 v1 v2
 
         emitSub :: Exp -> Exp -> CompilerState
@@ -220,30 +229,22 @@ compile (Program prg) = do
             (v1,v2) <- binExprToValues e1 e2
             increaseVarCount
             v <- gets variableCount
-            emit $ Variable $ Ident $ show v
+            emit $ SetVariable $ Ident $ show v
             emit $ Sub I64 v1 v2
 
+        exprToValue :: Exp -> State CodeGenerator Value
+        exprToValue (EInt i) = return $ VInteger i
+        exprToValue (EId i)  = return $ VIdent i
+        exprToValue e        = do
+            go e
+            v <- gets variableCount
+            return $ VIdent $ Ident $ show v
+
         binExprToValues :: Exp -> Exp -> State CodeGenerator (Value, Value)
-        binExprToValues e1 e2 = case (e1, e2) of
-                    -- instead of declaring variables for working on ints,
-                    -- we can directly pass them to their functions.
-                    -- This optimization removes the need to declare
-                    -- roughly 50% of variables
-                    (EInt i1, EInt i2) -> return (VInteger i1, VInteger i2)
-                    (EInt i, e) -> do
-                        go e
-                        v2 <- gets variableCount
-                        return (VInteger i, VIdent (Ident $ show v2))
-                    (e, EInt i) -> do
-                        go e
-                        v2 <- gets variableCount
-                        return (VIdent (Ident $ show v2), VInteger i)
-                    (e1, e2) -> do
-                        go e1
-                        v1 <- gets variableCount
-                        go e2
-                        v2 <- gets variableCount
-                        return (VIdent (Ident $ show v1),VIdent (Ident $ show v2))
+        binExprToValues e1 e2 = do
+            v1 <- exprToValue e1
+            v2 <- exprToValue e2
+            return (v1,v2)
 
 
 -- very nasty
