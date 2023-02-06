@@ -11,10 +11,10 @@ import           Grammar.Abs
 import           Grammar.Print           (printTree)
 
 interpret :: Program -> Except String Integer
-interpret (Program e) =
-  eval mempty e >>= \case
-    VClosure {} -> throwError "main evaluated to a function"
-    VInt i      -> pure i
+interpret (Program e) = undefined
+--  eval mempty e >>= \case
+--    VClosure {} -> throwError "main evaluated to a function"
+--    VInt i      -> pure i
 
 
 data Val = VInt Integer
@@ -56,7 +56,7 @@ eval cxt = \case
   --  -----------------------------
   --  γ ⊢ λx → f ⇓ let γ in λx → f
 
-  EAbs x e  -> pure $ VClosure cxt x e
+  EAbs x t e  -> pure $ VClosure cxt x e
 
 
   --  γ ⊢ e  ⇓ v

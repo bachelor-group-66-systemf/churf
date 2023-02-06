@@ -25,20 +25,22 @@ compileFile file = do
             exitFailure
         Right cor -> compile cor
 
-data Type = I1 | I8 | I32 | I64 | Ptr | Ref Type | Array Integer Type
-instance Show Type where
-    show :: Type -> String
+data LLType = I1 | I8 | I32 | I64 | Ptr
+            | Ref LLType | Array Integer LLType | CustomType Ident
+instance Show LLType where
+    show :: LLType -> String
     show t = case t of
-        I1         -> "i1"
-        I8         -> "i8"
-        I32        -> "i32"
-        I64        -> "i64"
-        Ptr        -> "ptr"
-        Ref ty     -> show ty <> "*"
-        Array n ty -> concat ["[", show n, " x ", show ty, "]"]
+        I1                    -> "i1"
+        I8                    -> "i8"
+        I32                   -> "i32"
+        I64                   -> "i64"
+        Ptr                   -> "ptr"
+        Ref ty                -> show ty <> "*"
+        Array n ty            -> concat ["[", show n, " x ", show ty, "]"]
+        CustomType (Ident ty) -> ty
 
-type Params = [Type]
-type Args = [(Type, Value)]
+type Params = [(LLType, Ident)]
+type Args = [(LLType, Value)]
 
 data Value = VInteger Integer | VIdent Ident | VConstant String
 instance Show Value where
@@ -56,31 +58,31 @@ data CodeGenerator = CodeGenerator
     deriving Show
 defaultCodeGenerator :: CodeGenerator
 defaultCodeGenerator = CodeGenerator
-                    { instructions=[]
-                    , methods=[]
-                    , blocks=[]
-                    , variableCount=0}
+                    { instructions = []
+                    , methods = []
+                    , blocks = []
+                    , variableCount = 0 }
 
-data LLVMIr = Define Type Ident Params
+data LLVMIr = Define LLType Ident Params
             | DefineEnd
-            | Declare Type Ident Params
+            | Declare LLType Ident Params
             | Variable Ident
-            | Add Type Value Value
-            | Sub Type Value Value
-            | Div Type Value Value
-            | Mul Type Value Value
-            | Srem Type Value Value
-            | Call Type Ident Args
-            | Alloca Type
-            | Store Type Ident Type Ident
-            | Bitcast Type Ident Type
-            | Ret Type Value
+            | Add LLType Value Value
+            | Sub LLType Value Value
+            | Div LLType Value Value
+            | Mul LLType Value Value
+            | Srem LLType Value Value
+            | Call LLType Ident Args
+            | Alloca LLType
+            | Store LLType Ident LLType Ident
+            | Bitcast LLType Ident LLType
+            | Ret LLType Value
             | UnsafeRaw String
             | Comment String
     deriving (Show)
 
 printLLVMIr :: LLVMIr -> String
-printLLVMIr (Define t (Ident i) params)           = concat ["define ", show t, " @", i, "(", intercalate "," (fmap show params),") {\n"]
+printLLVMIr (Define t (Ident i) params)           = concat ["define ", show t, " @", i, "(", intercalate "," (fmap (\(x,Ident y) -> unwords [show x, "%"<>y]) params),") {\n"]
 printLLVMIr DefineEnd                             = "}\n"
 printLLVMIr (Declare t (Ident i) params)          = undefined
 printLLVMIr (Variable (Ident i))                  = concat ["%", i, " = "]
@@ -109,40 +111,54 @@ increaseVarCount :: CompilerState
 increaseVarCount = modify (\t -> t {variableCount = variableCount t + 1})
 
 compile :: Program -> IO ()
-compile (Program prgE) = do
+compile (Program prg) = do
     --Asp
     let s = defaultCodeGenerator {instructions = [
-        Comment $ printTree (Program prgE),
-        UnsafeRaw $ standardLLVMLibrary <> "\n",
+        Comment (show $ printTree (Program prg)),
+        UnsafeRaw $ standardLLVMLibrary <> "\n"
         --UnsafeRaw "declare i32 @puts(i8* nocapture) nounwind\n",
         --UnsafeRaw "declare [21 x i8] @i64ToString(i64)\n",
-        Define I32 (Ident "main") []
+        --Define I32 (Ident "main") []
     ]}
-    let fin = execState (go prgE) s
+    let fin = execState (goDef prg) s
     let ins = instructions fin
-    let var = variableCount fin
-    putStrLn $ concatMap printLLVMIr (ins ++
-        [ Variable (Ident "print_res")
-        , Call (Array 21 I8) (Ident "i64ToString") [(I64, VIdent $ Ident $ show var)]
-        , Variable (Ident "print_ptr"), Alloca (Array 21 I8)
-        , Store (Array 21 I8) (Ident "print_res") (Ref (Array 21 I8)) (Ident "print_ptr")
-        , Variable (Ident "printable"), Bitcast (Ref (Array 21 I8)) (Ident "print_ptr") (Ref I8)
-        , Call I32 (Ident "puts") [(Ref I8, VIdent (Ident "printable"))]
-        , Ret I32 (VInteger 0)
-        , DefineEnd
-        ])
+    putStrLn $ concatMap printLLVMIr ins
     where
-        go :: Exp -> CompilerState
-        go (EInt int)   = emitInt int
-        go (EAdd e1 e2) = emitAdd e1 e2
-        go (ESub e1 e2) = emitSub e1 e2
-        go (EMul e1 e2) = emitMul e1 e2
-        go (EDiv e1 e2) = emitDiv e1 e2
-        go (EMod e1 e2) = emitMod e1 e2
+        mainContent var =
+                [ Variable (Ident "print_res")
+                , Call (Array 21 I8) (Ident "i64ToString") [(I64, VIdent $ Ident $ show var)]
+                , Variable (Ident "print_ptr"), Alloca (Array 21 I8)
+                , Store (Array 21 I8) (Ident "print_res") (Ref (Array 21 I8)) (Ident "print_ptr")
+                , Variable (Ident "printable"), Bitcast (Ref (Array 21 I8)) (Ident "print_ptr") (Ref I8)
+                , Call I32 (Ident "puts") [(Ref I8, VIdent (Ident "printable"))]
+                , Ret I64 (VInteger 0)
+                ]
 
-        go (EId  id)    = undefined
-        go (EApp e1 e2) = undefined
-        go (EAbs id e)  = undefined
+        goDef :: [Def] -> CompilerState
+        goDef []                               = return ()
+        goDef (DExp id@(Ident str) t _id2 args exp : xs) = do
+            let (rt, argTypes) = flattenFuncType t
+            emit $ Comment $ show (rt, argTypes)
+            emit $ Define rt id (zip argTypes args) -- //TODO parse args
+            go exp
+            varNum <- gets variableCount
+            if str == "main" then mapM_ emit (mainContent varNum)
+                             else emit $ Ret rt (VIdent (Ident (show varNum)))
+            emit DefineEnd
+            modify (\s -> s {variableCount = 0})
+            goDef xs
+
+        go :: Exp -> CompilerState
+        go (EInt int)    = emitInt int
+        go (EAdd e1 e2)  = emitAdd e1 e2
+        go (ESub e1 e2)  = emitSub e1 e2
+        go (EMul e1 e2)  = emitMul e1 e2
+        go (EDiv e1 e2)  = emitDiv e1 e2
+        go (EMod e1 e2)  = emitMod e1 e2
+
+        go (EId  id)     = emit $ Comment $ "EId (" <> show id <> ") is not implemented!"
+        go (EApp e1 e2)  = emit $ Comment $ "EApp (" <> show e1 <> ", " <> show e2 <> ") is not implemented!"
+        go (EAbs id t e) = emit $ Comment $ "EAbs (" <> show id <> ", " <> show t <> ", " <> show e <> ") is not implemented!"
 
         --- aux functions ---
         emitInt :: Integer -> CompilerState
@@ -172,7 +188,7 @@ compile (Program prgE) = do
 
         emitMod :: Exp -> Exp -> CompilerState
         emitMod e1 e2 = do
-            -- //TODO Replace with `let m a b = rem (abs $ b + a) b`
+            -- `let m a b = rem (abs $ b + a) b`
             (v1,v2) <- binExprToValues e1 e2
             increaseVarCount
             vadd <- gets variableCount
@@ -228,3 +244,14 @@ compile (Program prgE) = do
                         go e2
                         v2 <- gets variableCount
                         return (VIdent (Ident $ show v1),VIdent (Ident $ show v2))
+
+
+-- very nasty
+flattenFuncType :: Type -> (LLType, [LLType])
+flattenFuncType xs = do
+    let res = go xs
+    (last res, init res)
+    where
+        go TInt         = [I64]
+        go (TPol id)    = [CustomType id]
+        go (TFun t1 t2) = go t1 ++ go t2
