@@ -3,12 +3,12 @@
 {-# LANGUAGE PatternSynonyms   #-}
 
 
-module LambdaLifter (lambdaLift, freeVars, abstract) where
+module LambdaLifter (lambdaLift, freeVars, abstract, rename, collectScs) where
 
 import           Data.List        (mapAccumL)
 import           Data.Map         (Map)
 import qualified Data.Map         as Map
-import           Data.Maybe       (fromJust)
+import           Data.Maybe       (fromMaybe)
 import           Data.Set         (Set, (\\))
 import qualified Data.Set         as Set
 import           Data.Tuple.Extra (uncurry3)
@@ -21,7 +21,7 @@ pattern Sc n xs e = ScDef (Bind n xs e)
 
 
 lambdaLift :: Program -> Program
-lambdaLift = rename . abstract . freeVars
+lambdaLift = collectScs . rename . abstract . freeVars
 
 
 -- Annotate free variables
@@ -94,7 +94,7 @@ abstractExp (free, exp) = case exp of
       e' = foldr EAbs (abstractExp e) (fvList ++ [n])
       sc = ELet [bind] (EId (Ident "sc"))
 
--- rename pass
+-- Rename
 
 rename :: Program -> Program
 rename (Program ds) = Program $ map (uncurry3 Sc) tuples
@@ -108,9 +108,7 @@ rename (Program ds) = Program $ map (uncurry3 Sc) tuples
 renameExp :: Map Ident Ident -> Int -> Exp -> (Int, Exp)
 renameExp env i = \case
 
-
-  EId  n     -> (i, maybe (error "no") EId $ Map.lookup n env)
-
+  EId  n     -> (i, EId . fromMaybe n $ Map.lookup n env)
 
   EInt i1    -> (i, EInt i1)
 
@@ -156,6 +154,70 @@ getNames i ns = (i + length ss, zipWith makeName ss [i..])
 
 makeName :: String -> Int -> Ident
 makeName prefix i = Ident (prefix ++ "_" ++ show i)
+
+
+-- Collect supercombinators
+
+collectScs :: Program -> Program
+collectScs (Program ds) = Program $ concatMap collect_one_sc ds
+  where
+    collect_one_sc (Sc n xs e) = Sc n xs e' : scs
+      where (scs, e') = collectScsExp e
+
+
+
+collectScsExp :: Exp -> ([ScDef], Exp)
+collectScsExp = \case
+
+  EId  n     -> ([], EId n)
+
+  EInt i     -> ([], EInt i)
+
+  EApp e1 e2 -> (scs1 ++ scs2, EApp e1' e2')
+    where
+      (scs1, e1') = collectScsExp e1
+      (scs2, e2') = collectScsExp e2
+
+  EAdd e1 e2 -> (scs1 ++ scs2, EAdd e1' e2')
+    where
+      (scs1, e1') = collectScsExp e1
+      (scs2, e2') = collectScsExp e2
+
+  EAbs x  e  -> (scs, EAbs x e')
+    where
+      (scs, e') = collectScsExp e
+
+  ELet bs e  -> (rhss_scs ++ e_scs ++ local_scs, mkEAbs non_scs' e')
+    where
+      (rhss_scs, bs') = mapAccumL collectScs_d [] bs
+      scs'            = [ Sc n xs rhs | Sc n xs rhs <- bs', isEAbs rhs]
+      non_scs'        = [ Bind n xs rhs | Sc n xs rhs <- bs', not $ isEAbs rhs]
+      local_scs       = map peelLambda scs'
+      -- local_scs       = [ Sc n (xs ++ [x]) e1 | Sc n xs (EAbs x e1) <- scs']
+      (e_scs, e')     = collectScsExp e
+
+      collectScs_d scs (Bind n xs rhs) = (scs ++ rhs_scs1, Sc n xs rhs')
+        where
+          (rhs_scs1, rhs') = collectScsExp rhs
+
+
+
+peelLambda :: ScDef -> ScDef
+peelLambda sc@(Sc n xs e) = case e of
+                           EAbs x e1 -> peelLambda (Sc n (xs ++ [x]) e1)
+                           _         -> sc
+
+
+
+isEAbs :: Exp -> Bool
+isEAbs = \case
+  EAbs {} -> True
+  _       -> False
+
+mkEAbs :: [Bind] -> Exp -> Exp
+mkEAbs [] e = e
+mkEAbs bs e = ELet bs e
+
 
 -- Annotated AST
 
