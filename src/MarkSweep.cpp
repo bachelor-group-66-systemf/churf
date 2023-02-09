@@ -15,8 +15,11 @@ struct ObjectHeader {
 struct Object : ObjectHeader {
     char name; // should be something like id, but for testing sake its char
     Object* child;
-    //Object(char name) {}
-    //Object(char name, Object* child) {}
+    // Object(char name_) {}
+    Object(char name_, Object* child_) {
+        name = name_;
+        child = child_;
+    }
 };
 
 // Representing the heap as a simple struct for now
@@ -57,15 +60,15 @@ class MarkSweep {
 };
 
 int main() {
-    Object* b = new Object();
-    b->name = 'B';
-    b->child = nullptr;
-    Object* c = new Object();
-    c->name = 'C';
-    c->child = b; // c -> d
-    Object* d = new Object();
-    d->name = 'D';
-    d->child = nullptr;
+    Object* b = new Object('B', nullptr);
+    // b->name = 'B';
+    // b->child = nullptr;
+    Object* c = new Object('C', b);
+    // c->name = 'C';
+    // c->child = b; // c -> d
+    Object* d = new Object('D', nullptr);
+    // d->name = 'D';
+    // d->child = nullptr;
 
     //Heap* heap = new Heap{*c, *b, *d};
     vector<Object*> worklist = {c, b, d};
