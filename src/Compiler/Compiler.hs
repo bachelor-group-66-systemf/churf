@@ -1,28 +1,18 @@
+{-# LANGUAGE LambdaCase #-}
 module Compiler.Compiler where
 
 import           Compiler.StandardLLVMLibrary (standardLLVMLibrary)
-import           Control.Monad.State
+import           Control.Monad.State          (State, execState, gets, modify)
 import           Data.List                    (intercalate)
-import           Data.Set                     (Set)
 import           Data.Set                     as Set
-import           Grammar.Abs
-import           Grammar.Par                  (myLexer, pProgram)
+import           Grammar.Abs                  (Def (..), Exp (..), Ident (..),
+                                               Program (..), Type (..))
 import           Grammar.Print                (printTree)
-import           System.Exit                  (exitFailure)
---import LLVM.AST
 
-compileFile :: String -> IO ()
-compileFile file = do
-    input <- readFile file
-    case pProgram (myLexer input) of
-        Left err -> do
-            putStrLn "SYNTAX ERROR"
-            putStrLn err
-            exitFailure
-        Right cor -> compile cor
-
+-- | A datatype which represents some basic LLVM types
 data LLType = I1 | I8 | I32 | I64 | Ptr
             | Ref LLType | Array Integer LLType | CustomType Ident
+
 instance Show LLType where
     show :: LLType -> String
     show t = case t of
@@ -38,6 +28,8 @@ instance Show LLType where
 type Params = [(LLType, Ident)]
 type Args = [(LLType, Value)]
 
+-- | Represents a LLVM "value", as in an integer, a register variable,
+--   or a string contstant
 data Value = VInteger Integer | VIdent Ident | VConstant String
 instance Show Value where
     show :: Value -> String
@@ -46,12 +38,15 @@ instance Show Value where
         VIdent (Ident i) -> "%" <> i
         VConstant s      -> "c" <> show s
 
+-- | The record used as the code generator state
 data CodeGenerator = CodeGenerator
                    { instructions  :: [LLVMIr]
                    , methods       :: [Ident]
                    , block         :: Set Ident
                    , variableCount :: Integer }
-    deriving Show
+type CompilerState = State CodeGenerator ()
+
+-- | An empty instance of CodeGenerator
 defaultCodeGenerator :: CodeGenerator
 defaultCodeGenerator = CodeGenerator
                     { instructions = []
@@ -59,6 +54,7 @@ defaultCodeGenerator = CodeGenerator
                     , block = Set.empty
                     , variableCount = 0 }
 
+-- | A datatype which represents different instructions in LLVM
 data LLVMIr = Define LLType Ident Params
             | DefineEnd
             | Declare LLType Ident Params
@@ -73,51 +69,62 @@ data LLVMIr = Define LLType Ident Params
             | Store LLType Ident LLType Ident
             | Bitcast LLType Ident LLType
             | Ret LLType Value
-            | UnsafeRaw String
             | Comment String
+            | UnsafeRaw String -- This should generally be avoided, and proper
+                               -- instructions should be used in its place
     deriving (Show)
 
+-- | Converts a LLVM inststruction to a String, allowing for printing etc.
 printLLVMIr :: LLVMIr -> String
-printLLVMIr (Define t (Ident i) params)           = concat ["define ", show t, " @", i, "(", intercalate "," (fmap (\(x,Ident y) -> unwords [show x, "%"<>y]) params),") {\n"]
-printLLVMIr DefineEnd                             = "}\n"
-printLLVMIr (Declare t (Ident i) params)          = undefined
-printLLVMIr (SetVariable (Ident i))               = concat ["%", i, " = "]
-printLLVMIr (Add t v1 v2)                         = concat ["add ", show t, " ", show v1, ", ", show v2, "\n"]
-printLLVMIr (Sub t v1 v2)                         = concat ["sub ", show t, " ", show v1, ", ", show v2, "\n"]
-printLLVMIr (Div t v1 v2)                         = concat ["sdiv ", show t, " ", show v1, ", ", show v2, "\n"]
-printLLVMIr (Mul t v1 v2)                         = concat ["mul ", show t, " ", show v1, ", ", show v2, "\n"]
-printLLVMIr (Srem t v1 v2)                         = concat ["srem ", show t, " ", show v1, ", ", show v2, "\n"]
-printLLVMIr (Call t (Ident i) arg)                = concat ["call ", show t, " @", i, "("
-                                                           , intercalate ", " $ Prelude.map (\(x,y) -> show x <> " " <> show y) arg
-                                                           , ")\n"]
-printLLVMIr (Alloca t)                            = unwords ["alloca", show t, "\n"]
-printLLVMIr (Store t1 (Ident id1) t2 (Ident id2)) = concat ["store ", show t1, " %", id1
-                                                           , ", ", show t2, " %", id2, "\n"]
-printLLVMIr (Bitcast t1 (Ident i) t2)             = concat ["bitcast ", show t1, " %", i, " to ", show t2, "\n"]
-printLLVMIr (Ret t v)                             = concat ["ret ", show t, " ", show v, "\n"]
-printLLVMIr (UnsafeRaw s)                         = s
-printLLVMIr (Comment s)                           = "; " <> s <> "\n"
+printLLVMIr = \case
+    (Define t (Ident i) params)           -> concat ["define ", show t, " @", i, "("
+                                                    , intercalate "," (fmap (\(x,Ident y) -> unwords [show x, "%"<>y]) params)
+                                                    ,") {\n"]
+    DefineEnd                             -> "}\n"
+    (Declare _t (Ident _i) _params)       -> undefined
+    (SetVariable (Ident i))               -> concat ["%", i, " = "]
+    (Add t v1 v2)                         -> concat ["add ", show t, " "
+                                                    , show v1, ", ", show v2
+                                                    , "\n"]
+    (Sub t v1 v2)                         -> concat ["sub ", show t, " "
+                                                    , show v1, ", "
+                                                    , show v2, "\n"]
+    (Div t v1 v2)                         -> concat ["sdiv ", show t, " "
+                                                    , show v1, ", "
+                                                    , show v2, "\n"]
+    (Mul t v1 v2)                         -> concat ["mul ", show t, " "
+                                                    , show v1, ", "
+                                                    , show v2, "\n"]
+    (Srem t v1 v2)                        -> concat ["srem ", show t, " "
+                                                    , show v1, ", "
+                                                    , show v2, "\n"]
+    (Call t (Ident i) arg)                -> concat ["call ", show t, " @", i, "("
+                                                   , intercalate ", " $ Prelude.map (\(x,y) -> show x <> " " <> show y) arg
+                                                   , ")\n"]
+    (Alloca t)                            -> unwords ["alloca", show t, "\n"]
+    (Store t1 (Ident id1) t2 (Ident id2)) -> concat ["store ", show t1, " %"
+                                                    , id1, ", ", show t2, " %"
+                                                    , id2, "\n"]
+    (Bitcast t1 (Ident i) t2)             -> concat ["bitcast ", show t1, " %"
+                                                    , i, " to ", show t2, "\n"]
+    (Ret t v)                             -> concat ["ret ", show t
+                                                    , " ", show v, "\n"]
+    (UnsafeRaw s)                         -> s
+    (Comment s)                           -> "; " <> s <> "\n"
 
-type CompilerState = State CodeGenerator ()
-
+-- | Adds a instruction to the CodeGenerator state
 emit :: LLVMIr -> CompilerState
 emit l = modify (\t -> t {instructions = instructions t ++ [l]})
 
+-- | Increases the variable counter in the Codegenerator state
 increaseVarCount :: CompilerState
 increaseVarCount = modify (\t -> t {variableCount = variableCount t + 1})
 
-setBlock :: [Ident] -> CompilerState
-setBlock xs = modify (\s -> s {block = Set.fromList xs})
-
 compile :: Program -> IO ()
 compile (Program prg) = do
-    --Asp
     let s = defaultCodeGenerator {instructions = [
         Comment (show $ printTree (Program prg)),
         UnsafeRaw $ standardLLVMLibrary <> "\n"
-        --UnsafeRaw "declare i32 @puts(i8* nocapture) nounwind\n",
-        --UnsafeRaw "declare [21 x i8] @i64ToString(i64)\n",
-        --Define I32 (Ident "main") []
     ]}
     let fin = execState (goDef prg) s
     let ins = instructions fin
@@ -156,12 +163,18 @@ compile (Program prg) = do
         go (EMod e1 e2)  = emitMod e1 e2
         go (EId  id)     = emitArg id
         go (EApp e1 e2)  = emitApp e1 e2
-        go (EAbs id t e) = emit $ Comment $ "EAbs (" <> show id <> ", " <> show t <> ", " <> show e <> ") is not implemented!"
+        go (EAbs id t e) = emitAbs id t e
 
         --- aux functions ---
+        emitAbs :: Ident -> Type -> Exp -> CompilerState
+        emitAbs id t e = do
+            emit $ Comment $ concat [ "EAbs (", show id, ", ", show t, ", "
+                                    , show e, ") is not implemented!"]
+
         emitApp :: Exp -> Exp -> CompilerState
         emitApp e1 e2 = do
-            emit $ Comment $ "EApp (" <> show e1 <> ", " <> show e2 <> ") is not implemented!"
+            emit $ Comment $ concat [ "EApp (", show e1, ", ", show e2
+                                    , ") is not implemented!"]
 
         emitArg :: Ident -> CompilerState
         emitArg id = do
@@ -247,7 +260,8 @@ compile (Program prg) = do
             return (v1,v2)
 
 
--- very nasty
+-- | A pretty nasty function to flatten out function types,
+--   as they are currently represented by a recursive data type.
 flattenFuncType :: Type -> (LLType, [LLType])
 flattenFuncType xs = do
     let res = go xs
