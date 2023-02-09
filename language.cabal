@@ -30,7 +30,8 @@ executable language
       Grammar.Par
       Grammar.Print
       Grammar.Skel
-      Interpreter
+      LambdaLifter
+      -- Interpreter
 
     hs-source-dirs:   src
 
@@ -40,5 +41,6 @@ executable language
       , containers
       , either
       , array
+      , extra
 
     default-language: GHC2021

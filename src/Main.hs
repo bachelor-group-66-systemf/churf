@@ -1,11 +1,11 @@
 {-# LANGUAGE LambdaCase #-}
 module Main where
 
-import           Control.Monad.Except (runExcept)
-import           Grammar.Par          (myLexer, pProgram)
-import           Interpreter          (interpret)
-import           System.Environment   (getArgs)
-import           System.Exit          (exitFailure, exitSuccess)
+import           Grammar.Par        (myLexer, pProgram)
+import           Grammar.Print      (printTree)
+import           LambdaLifter       (abstract, freeVars, lambdaLift)
+import           System.Environment (getArgs)
+import           System.Exit        (exitFailure, exitSuccess)
 
 main :: IO ()
 main = getArgs >>= \case
@@ -17,14 +17,17 @@ main = getArgs >>= \case
        putStrLn "SYNTAX ERROR"
        putStrLn err
        exitFailure
-      Right prg -> case runExcept $ interpret prg of
-        Left err -> do
-          putStrLn "INTERPRETER ERROR"
-          putStrLn err
-          exitFailure
-        Right i -> do
-          print i
-          exitSuccess
+      Right prg -> do
+        putStrLn "-- Parser"
+        putStrLn $ printTree prg
+        putStrLn "\n--Lamda lifter"
+        putStrLn "\n--freevars"
+        print $ freeVars prg
+        putStrLn "\n--abstract"
+        putStrLn . printTree $ (abstract . freeVars) prg
+        putStrLn "\n--renamed"
+        putStrLn . printTree $ lambdaLift prg
+        exitSuccess
 
 
 
