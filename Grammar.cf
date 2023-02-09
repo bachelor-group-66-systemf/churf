@@ -1,12 +1,6 @@
 
 
-Program. Program ::= [ScDef];
-
-ScDef. ScDef ::= Bind; 
-separator ScDef ";";
-
-separator Ident " ";
-
+Program. Program ::= [Bind];
 
 EId.  Exp3 ::= Ident;
 EInt. Exp3 ::= Integer;
@@ -17,6 +11,7 @@ EAbs. Exp  ::= "\\" Ident "." Exp;
 
 Bind. Bind ::= Ident [Ident] "=" Exp;
 separator Bind ";";
+separator Ident " ";
 
 coercions Exp 3;
 

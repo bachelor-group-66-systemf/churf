@@ -18,9 +18,13 @@ main = getArgs >>= \case
        putStrLn err
        exitFailure
       Right prg -> do
-        putStrLn "-- Parser"
+        putStrLn "-- Parse"
         putStrLn $ printTree prg
-        putStrLn "\n--Lamda lifter"
+        putStrLn "\n-- Abstract"
+        putStrLn . printTree $ (abstract . freeVars) prg
+        putStrLn "\n-- Rename"
+        putStrLn . printTree $ (rename . abstract . freeVars) prg
+        putStrLn "\n-- Lamda lifter"
         putStrLn . printTree $ lambdaLift prg
         exitSuccess
 
