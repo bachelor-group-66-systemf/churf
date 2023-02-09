@@ -14,16 +14,18 @@ import           Data.Tuple.Extra (uncurry3)
 import           Grammar.Abs
 import           Prelude          hiding (exp)
 
+
+
+-- | Lift lambdas and let expression into supercombinators.
 lambdaLift :: Program -> Program
 lambdaLift = collectScs . rename . abstract . freeVars
 
--- Annotate free variables
 
+-- | Annotate free variables
 freeVars :: Program -> AnnProgram
 freeVars (Program ds) = [ (n, xs, freeVarsExp (Set.fromList xs) e)
                         | Bind n xs e <- ds
                         ]
-
 
 freeVarsExp :: Set Ident -> Exp -> AnnExp
 freeVarsExp lv = \case
@@ -63,8 +65,22 @@ freeVarsOf = fst
 fromBinders :: [Bind] -> ([Ident], [[Ident]], [Exp])
 fromBinders bs = unzip3 [ (n, xs, e) | Bind n xs e <- bs ]
 
--- Lift lambda expression into let with binder "sc"
+-- AST annotated with free variables
+type AnnProgram = [(Ident, [Ident], AnnExp)]
 
+type AnnExp = (Set Ident, AnnExp')
+
+data ABind = ABind Ident [Ident] AnnExp deriving Show
+
+data AnnExp' = AId Ident
+             | AInt Integer
+             | AApp AnnExp  AnnExp
+             | AAdd AnnExp  AnnExp
+             | AAbs Ident   AnnExp
+             | ALet [ABind] AnnExp
+             deriving Show
+
+-- | Lift lambdas to let expression of the form @let sc = \x -> rhs@
 abstract :: AnnProgram -> Program
 abstract prog = Program $ map f prog
   where
@@ -73,15 +89,6 @@ abstract prog = Program $ map f prog
     case e of
       AAbs par body -> Bind name (snoc par pars) $ abstractExp body
       _             -> Bind name pars            $ abstractExp rhs
-
-
-
--- [ case rhs of
---     EAbs par body -> Bind name (snoc par pars) body
---     _             -> Bind name pars rhs
---
--- | (name, pars, rhs) <- prog
-
 
 abstractExp :: AnnExp -> Exp
 abstractExp (free, exp) = case exp of
@@ -101,8 +108,7 @@ abstractExp (free, exp) = case exp of
 snoc :: a -> [a] -> [a]
 snoc x xs = xs ++ [x]
 
--- Rename
-
+-- | Rename all supercombinators and variables
 rename :: Program -> Program
 rename (Program ds) = Program $ map (uncurry3 Bind) tuples
   where
@@ -163,24 +169,12 @@ makeName :: String -> Int -> Ident
 makeName prefix i = Ident (prefix ++ "_" ++ show i)
 
 
--- Collect supercombinators
-
+-- | Collects supercombinators by lifting appropriate let expressions
 collectScs :: Program -> Program
 collectScs (Program ds) = Program $ concatMap collectOneSc ds
   where
     collectOneSc (Bind name args rhs) = Bind name args rhs' : scs
       where (scs, rhs') = collectScsExp rhs
-  {-
-
-
-
-Bind (Ident "f") []
-
-  (ELet [Bind (Ident "sc") [] (EAbs (Ident "x") (EAdd (EId (Ident "x")) (EInt 1)))] (EId (Ident "sc")))
-
-
-  -}
-
 
 collectScsExp :: Exp -> ([Bind], Exp)
 collectScsExp = \case
@@ -225,17 +219,3 @@ mkEAbs [] e = e
 mkEAbs bs e = ELet bs e
 
 
--- Annotated AST
-
-type AnnProgram = [(Ident, [Ident], AnnExp)]
-type AnnExp = (Set Ident, AnnExp')
-
-data ABind = ABind Ident [Ident] AnnExp deriving Show
-
-data AnnExp' = AId Ident
-             | AInt Integer
-             | AApp AnnExp  AnnExp
-             | AAdd AnnExp  AnnExp
-             | AAbs Ident   AnnExp
-             | ALet [ABind] AnnExp
-             deriving Show
