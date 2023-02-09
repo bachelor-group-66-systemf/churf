@@ -1,6 +1,5 @@
 {-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE PatternSynonyms   #-}
 
 
 module LambdaLifter (lambdaLift, freeVars, abstract, rename, collectScs) where
@@ -15,20 +14,14 @@ import           Data.Tuple.Extra (uncurry3)
 import           Grammar.Abs
 import           Prelude          hiding (exp)
 
-pattern Sc :: Ident -> [Ident] -> Exp -> ScDef
-pattern Sc n xs e = ScDef (Bind n xs e)
-
-
-
 lambdaLift :: Program -> Program
 lambdaLift = collectScs . rename . abstract . freeVars
-
 
 -- Annotate free variables
 
 freeVars :: Program -> AnnProgram
 freeVars (Program ds) = [ (n, xs, freeVarsExp (Set.fromList xs) e)
-                        | Sc n xs e <- ds
+                        | Bind n xs e <- ds
                         ]
 
 
@@ -64,7 +57,6 @@ freeVarsExp lv = \case
       freeInValues = foldr1 Set.union (map freeVarsOf es')
 
 
-
 freeVarsOf :: AnnExp -> Set Ident
 freeVarsOf = fst
 
@@ -74,10 +66,21 @@ fromBinders bs = unzip3 [ (n, xs, e) | Bind n xs e <- bs ]
 -- Lift lambda expression into let with binder "sc"
 
 abstract :: AnnProgram -> Program
-abstract p = Program
-  [ Sc sc_name xs $ abstractExp rhs
-  | (sc_name, xs, rhs) <- p
-  ]
+abstract prog = Program $ map f prog
+  where
+  f :: (Ident, [Ident], AnnExp) -> Bind
+  f (name, pars, rhs@(_, e)) =
+    case e of
+      AAbs par body -> Bind name (snoc par pars) $ abstractExp body
+      _             -> Bind name pars            $ abstractExp rhs
+
+
+
+-- [ case rhs of
+--     EAbs par body -> Bind name (snoc par pars) body
+--     _             -> Bind name pars rhs
+--
+-- | (name, pars, rhs) <- prog
 
 
 abstractExp :: AnnExp -> Exp
@@ -94,13 +97,17 @@ abstractExp (free, exp) = case exp of
       e' = foldr EAbs (abstractExp e) (fvList ++ [n])
       sc = ELet [bind] (EId (Ident "sc"))
 
+
+snoc :: a -> [a] -> [a]
+snoc x xs = xs ++ [x]
+
 -- Rename
 
 rename :: Program -> Program
-rename (Program ds) = Program $ map (uncurry3 Sc) tuples
+rename (Program ds) = Program $ map (uncurry3 Bind) tuples
   where
     tuples = snd (mapAccumL renameSc 0 ds)
-    renameSc i (Sc n xs e) = (i2, (n, xs', e'))
+    renameSc i (Bind n xs e) = (i2, (n, xs', e'))
       where
         (i1, xs', env) = newNames i xs
         (i2, e')       = renameExp env i1 e
@@ -159,14 +166,23 @@ makeName prefix i = Ident (prefix ++ "_" ++ show i)
 -- Collect supercombinators
 
 collectScs :: Program -> Program
-collectScs (Program ds) = Program $ concatMap collect_one_sc ds
+collectScs (Program ds) = Program $ concatMap collectOneSc ds
   where
-    collect_one_sc (Sc n xs e) = Sc n xs e' : scs
-      where (scs, e') = collectScsExp e
+    collectOneSc (Bind name args rhs) = Bind name args rhs' : scs
+      where (scs, rhs') = collectScsExp rhs
+  {-
 
 
 
-collectScsExp :: Exp -> ([ScDef], Exp)
+Bind (Ident "f") []
+
+  (ELet [Bind (Ident "sc") [] (EAbs (Ident "x") (EAdd (EId (Ident "x")) (EInt 1)))] (EId (Ident "sc")))
+
+
+  -}
+
+
+collectScsExp :: Exp -> ([Bind], Exp)
 collectScsExp = \case
 
   EId  n     -> ([], EId n)
@@ -190,24 +206,14 @@ collectScsExp = \case
   ELet bs e  -> (rhss_scs ++ e_scs ++ local_scs, mkEAbs non_scs' e')
     where
       (rhss_scs, bs') = mapAccumL collectScs_d [] bs
-      scs'            = [ Sc n xs rhs | Sc n xs rhs <- bs', isEAbs rhs]
-      non_scs'        = [ Bind n xs rhs | Sc n xs rhs <- bs', not $ isEAbs rhs]
-      local_scs       = map peelLambda scs'
-      -- local_scs       = [ Sc n (xs ++ [x]) e1 | Sc n xs (EAbs x e1) <- scs']
+      scs'            = [ Bind n xs rhs | Bind n xs rhs <- bs', isEAbs rhs]
+      non_scs'        = [ Bind n xs rhs | Bind n xs rhs <- bs', not $ isEAbs rhs]
+      local_scs       = [ Bind n (xs ++ [x]) e1 | Bind n xs (EAbs x e1) <- scs']
       (e_scs, e')     = collectScsExp e
 
-      collectScs_d scs (Bind n xs rhs) = (scs ++ rhs_scs1, Sc n xs rhs')
+      collectScs_d scs (Bind n xs rhs) = (scs ++ rhs_scs1, Bind n xs rhs')
         where
           (rhs_scs1, rhs') = collectScsExp rhs
-
-
-
-peelLambda :: ScDef -> ScDef
-peelLambda sc@(Sc n xs e) = case e of
-                           EAbs x e1 -> peelLambda (Sc n (xs ++ [x]) e1)
-                           _         -> sc
-
-
 
 isEAbs :: Exp -> Bool
 isEAbs = \case
