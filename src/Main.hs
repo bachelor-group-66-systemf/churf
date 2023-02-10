@@ -3,7 +3,7 @@ module Main where
 
 import           Grammar.Par        (myLexer, pProgram)
 import           Grammar.Print      (printTree)
-import           LambdaLifter       (abstract, freeVars, lambdaLift, rename)
+import           LambdaLifter       (lambdaLift)
 import           System.Environment (getArgs)
 import           System.Exit        (exitFailure, exitSuccess)
 
@@ -20,10 +20,6 @@ main = getArgs >>= \case
       Right prg -> do
         putStrLn "-- Parse"
         putStrLn $ printTree prg
-        -- putStrLn "\n-- Abstract"
-        -- putStrLn . printTree $ (abstract . freeVars) prg
-        -- putStrLn "\n-- Rename"
-        -- putStrLn . printTree $ (rename . abstract . freeVars) prg
         putStrLn "\n-- Lamda lifter"
         putStrLn . printTree $ lambdaLift prg
         putStrLn ""
