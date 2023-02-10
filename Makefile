@@ -1,7 +1,7 @@
 .PHONY : sdist clean
 
 language : src/Grammar/Test
-	cabal install --installdir=. --overwrite-policy=always
+	cabal install --installdir=.
 
 src/Grammar/Test.hs src/Grammar/Lex.x src/Grammar/Par.y : Grammar.cf
 	bnfc -o src -d $<

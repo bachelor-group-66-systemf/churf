@@ -1,10 +1,14 @@
 {-# LANGUAGE LambdaCase #-}
-
 module Interpreter where
 
-import           Control.Monad.Except    (Except, MonadError (throwError))
-
+import           Control.Applicative     (Applicative)
+import           Control.Monad.Except    (Except, MonadError (throwError),
+                                          liftEither)
+import           Data.Either.Combinators (maybeToRight)
+import           Data.Map                (Map)
+import qualified Data.Map                as Map
 import           Grammar.Abs
+import           Grammar.Print           (printTree)
 
 interpret :: Program -> Except String Integer
 interpret (Program e) =
