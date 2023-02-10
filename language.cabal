@@ -12,7 +12,7 @@ build-type:         Simple
 
 extra-doc-files:    CHANGELOG.md
 
-extra-source-fiels:
+extra-source-files:
   Grammar.cf
 
 
@@ -30,18 +30,18 @@ executable language
       Grammar.Par
       Grammar.Print
       Grammar.Skel
-      Grammar.ErrM
-      Interpreter
-      TypeChecker
-      NewAbs
+      LambdaLifter
+      Auxiliary
+      -- Interpreter
 
     hs-source-dirs:   src
 
     build-depends:    
-        base >= 4.16.3.0
+        base >=4.16
       , mtl
       , containers
       , either
       , array
+      , extra
 
     default-language: GHC2021

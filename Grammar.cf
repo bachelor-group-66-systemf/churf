@@ -3,21 +3,21 @@ Program. Program ::= [Def] ;
 DExp.  Def ::= Ident ":" Type
                Ident [Ident] "=" Exp ;
 
-separator Def "";
-separator Ident "";
-separator Type "->";
+Program. Program ::= [Bind];
 
-EId.  Exp3 ::= Ident   ;
-EInt. Exp3 ::= Integer ;
-EApp. Exp2 ::= Exp2 Exp3 ;
-EAdd. Exp1 ::= Exp1 "+" Exp2 ;
-EAbs. Exp  ::= "\\" Ident ":" Type "." Exp ;
-coercions Exp 3 ;
+EId.  Exp3 ::= Ident;
+EInt. Exp3 ::= Integer;
+ELet. Exp3 ::= "let" [Bind] "in" Exp; 
+EApp. Exp2 ::= Exp2 Exp3;
+EAdd. Exp1 ::= Exp1 "+" Exp2;
+EAbs. Exp  ::= "\\" Ident "." Exp;
 
-TInt. Type1 ::= "Int" ;
-TPol. Type1 ::= Ident ;
-TFun. Type  ::= [Type] ;
-coercions Type 1 ;
+Bind. Bind ::= Ident [Ident] "=" Exp;
+separator Bind ";";
+separator Ident " ";
 
-comment "--" ;
-comment "{-" "-}" ;
+coercions Exp 3;
+
+comment "--";
+comment "{-" "-}";
+
