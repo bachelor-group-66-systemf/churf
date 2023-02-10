@@ -34,6 +34,7 @@ executable language
       Compiler.Compiler
       Compiler.StandardLLVMLibrary
       Compiler.TH
+      Compiler.LLVMIr
       Interpreter
 
     hs-source-dirs:   src
