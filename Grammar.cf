@@ -1,4 +1,7 @@
+Program. Program ::= [Def] ;
 
+DExp.  Def ::= Ident ":" Type
+               Ident [Ident] "=" Exp ;
 
 Program. Program ::= [Bind];
 
