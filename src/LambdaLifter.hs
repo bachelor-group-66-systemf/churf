@@ -15,7 +15,6 @@ import           Grammar.Abs
 import           Prelude          hiding (exp)
 
 
-
 -- | Lift lambdas and let expression into supercombinators.
 lambdaLift :: Program -> Program
 lambdaLift = collectScs . rename . abstract . freeVars
@@ -28,42 +27,49 @@ freeVars (Program ds) = [ (n, xs, freeVarsExp (Set.fromList xs) e)
                         ]
 
 freeVarsExp :: Set Ident -> Exp -> AnnExp
-freeVarsExp lv = \case
+freeVarsExp localVars = \case
 
-  EId n | Set.member n lv -> (Set.singleton n, AId n)
+  EId n | Set.member n localVars -> (Set.singleton n, AId n)
         | otherwise       -> (mempty, AId n)
 
   EInt i -> (mempty, AInt i)
 
   EApp e1 e2 -> (Set.union (freeVarsOf e1') (freeVarsOf e2'), AApp e1' e2')
-    where e1' = freeVarsExp lv e1
-          e2' = freeVarsExp lv e2
+    where
+      e1' = freeVarsExp localVars e1
+      e2' = freeVarsExp localVars e2
 
   EAdd e1 e2 -> (Set.union (freeVarsOf e1') (freeVarsOf e2'), AAdd e1' e2')
-    where e1' = freeVarsExp lv e1
-          e2' = freeVarsExp lv e2
+    where
+      e1' = freeVarsExp localVars e1
+      e2' = freeVarsExp localVars e2
 
   EAbs parms e -> (freeVarsOf e' \\ Set.fromList parms, AAbs parms e')
-    where e'  = freeVarsExp (foldr Set.insert lv parms) e
-
-  ELet bs e  -> (Set.union bsFree eFree, ALet bs' e')
     where
-      bsFree       = freeInValues \\ nsSet
-      eFree        = freeVarsOf e' \\ nsSet
-      bs'          = zipWith3 ABind ns xs es'
-      e'           = freeVarsExp e_lv e
-      (ns, xs, es) = fromBinders bs
-      nsSet        = Set.fromList ns
-      e_lv         = Set.union lv nsSet
-      es'          = map (freeVarsExp e_lv) es
-      freeInValues = foldr1 Set.union (map freeVarsOf es')
+      e' = freeVarsExp (foldr Set.insert localVars parms) e
+
+  -- Sum free variables present in binders and the expression
+  ELet binders e  -> (Set.union binders_frees e_free, ALet binders' e')
+    where
+      binders_frees = rhss_frees \\ names_set
+      e_free        = freeVarsOf e' \\ names_set
+
+      rhss_frees = foldr1 Set.union (map freeVarsOf rhss')
+      names_set  = Set.fromList names
+
+      (names, parms, rhss) = fromBinders binders
+      rhss'                = map (freeVarsExp e_localVars) rhss
+      e_localVars          = Set.union localVars names_set
+
+      binders' = zipWith3 ABind names parms rhss'
+      e'       = freeVarsExp e_localVars e
 
 
 freeVarsOf :: AnnExp -> Set Ident
 freeVarsOf = fst
 
 fromBinders :: [Bind] -> ([Ident], [[Ident]], [Exp])
-fromBinders bs = unzip3 [ (n, xs, e) | Bind n xs e <- bs ]
+fromBinders bs = unzip3 [ (name, parms, rhs) | Bind name parms rhs <- bs ]
 
 -- AST annotated with free variables
 type AnnProgram = [(Ident, [Ident], AnnExp)]
@@ -221,8 +227,6 @@ collectScsExp = \case
         where
           (rhs_scs, rhs') = collectScsExp rhs
 
-
-
 isEAbs :: Exp -> Bool
 isEAbs = \case
   EAbs {} -> True
@@ -231,5 +235,3 @@ isEAbs = \case
 mkEAbs :: [Bind] -> Exp -> Exp
 mkEAbs [] e = e
 mkEAbs bs e = ELet bs e
-
-
