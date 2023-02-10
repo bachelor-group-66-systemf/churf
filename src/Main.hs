@@ -3,7 +3,7 @@ module Main where
 
 import           Grammar.Par        (myLexer, pProgram)
 import           Grammar.Print      (printTree)
-import           LambdaLifter       (abstract, freeVars, lambdaLift, rename)
+import           LambdaLifter       (lambdaLift)
 import           System.Environment (getArgs)
 import           System.Exit        (exitFailure, exitSuccess)
 

@@ -1,5 +1,4 @@
-{-# LANGUAGE LambdaCase        #-}
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase, OverloadedStrings, TypeFamilies, PatternSynonyms #-}
 
 
 module LambdaLifter (lambdaLift, freeVars, abstract, rename, collectScs) where
@@ -13,6 +12,8 @@ import qualified Data.Set         as Set
 import           Data.Tuple.Extra (uncurry3)
 import           Grammar.Abs
 import           Prelude          hiding (exp)
+import qualified Abs              as A
+import           Data.Void
 
 
 
@@ -74,10 +75,10 @@ data ABind = ABind Ident [Ident] AnnExp deriving Show
 
 data AnnExp' = AId Ident
              | AInt Integer
-             | AApp AnnExp  AnnExp
-             | AAdd AnnExp  AnnExp
-             | AAbs Ident   AnnExp
-             | ALet [ABind] AnnExp
+             | AApp (Set Ident, AnnExp') (Set Ident, AnnExp')
+             | AAdd (Set Ident, AnnExp') (Set Ident, AnnExp') 
+             | AAbs Ident   (Set Ident, AnnExp') 
+             | ALet [ABind] (Set Ident, AnnExp') 
              deriving Show
 
 -- | Lift lambdas to let expression of the form @let sc = \x -> rhs@
@@ -219,3 +220,34 @@ mkEAbs [] e = e
 mkEAbs bs e = ELet bs e
 
 
+{----------- BOILERPLATE -----------}
+
+data LL 
+
+type instance A.IdFamily  LL = ()
+type instance A.IntFamily LL = ()
+type instance A.AddFamily LL = (Set Ident, Set Ident)
+type instance A.AppFamily LL = (Set Ident, Set Ident)
+type instance A.AbsFamily LL = Set Ident
+type instance A.LetFamily LL = Set Ident
+type instance A.ExpFamily LL = Void
+
+pattern LLId ident = A.EId () ident
+pattern LLInt int = A.EInt () int
+pattern LLAdd s1 s2 e1 e2 = A.EAdd (s1,s2) e1 e2
+pattern LLApp s1 s2 e1 e2 = A.EApp (s1,s2) e1 e2
+pattern LLAbs s i e = A.EAbs s i e
+pattern LLLet s binds e = A.ELet s binds e
+pattern LLExp v e = A.EExp v e
+
+{-
+
+data AnnExp' = AId Ident
+             | AInt Integer
+             | AApp (Set Ident, AnnExp') (Set Ident, AnnExp')
+             | AAdd (Set Ident, AnnExp') (Set Ident, AnnExp') 
+             | AAbs Ident   (Set Ident, AnnExp') 
+             | ALet [ABind] (Set Ident, AnnExp') 
+             deriving Show
+
+-}

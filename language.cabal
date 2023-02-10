@@ -31,7 +31,6 @@ executable language
       Grammar.Print
       Grammar.Skel
       LambdaLifter
-      Auxiliary
       -- Interpreter
 
     hs-source-dirs:   src
