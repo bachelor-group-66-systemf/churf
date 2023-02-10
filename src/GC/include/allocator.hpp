@@ -4,6 +4,8 @@
 #include <memory>
 #include <stdlib.h>
 
+#include "include/heap.hpp"
+
 namespace GC {
 
 class Allocator {
@@ -12,11 +14,18 @@ public:
         alloc_size = size;
     }
 
+    ~Allocator() { }
+
     size_t getSize() {
         return alloc_size;
     }
 
-    void *alloc();
+    void *alloc() {
+        auto heap = Heap::the();
+
+        assert(heap.getHeapSize() + alloc_size <= HEAP_SIZE);
+
+    }
 
 private:
     size_t alloc_size;
