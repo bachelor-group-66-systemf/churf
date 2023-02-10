@@ -199,8 +199,7 @@ collectScsExp = \case
     where
       (scs, e') = collectScsExp e
 
-  -- Collect supercombinators from binds, the rhss, and the expression,
-  -- and the rhss.
+  -- Collect supercombinators from binds, the rhss, and the expression.
   --
   -- > f = let
   -- >       sc  = rhs
