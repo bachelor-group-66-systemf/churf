@@ -23,20 +23,27 @@ public:
     }
 
     ~Heap() {
-
+        for (auto *alloc : h_allocs)
+            delete alloc;
     }
 
     size_t getHeapSize() {
-        return heap_size;
+        return size;
     }
 
+    // helt onödig
     Allocator *getAllocator(size_t size) {
         for (auto *alloc : h_allocs) {
             if (alloc->getSize() >= size)
                 return alloc;
         }
-        std::cout << "Object too big" << std::endl;
-        assert(false);
+        // std::cout << "Object too big" << std::endl;
+        assert(false && "TODO: Object too big");
+    }
+
+    void *alloc(size_t size) {
+        auto allocator = getAllocator(size);
+        return allocator->alloc();
     }
 
     void collect();
@@ -55,7 +62,7 @@ private:
     }
 
     char _heap[HEAP_SIZE] = {0};
-    size_t heap_size = 0;
+    size_t size = 0;
     std::vector<Allocator *> h_allocs;
 };
 

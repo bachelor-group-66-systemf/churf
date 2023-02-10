@@ -1,5 +1,14 @@
 # Garbage collection
 
+## Project
+
+Goal for next week (17/2):
+- Functioning garbage collector
+- Test it with valgrind
+
+TODO:
+- Merge to main branch
+
 ## Algorithm
 
 Potential algorithms:
@@ -20,15 +29,9 @@ Potential algorithms:
     - Holds all memory
         - Resizeable array?
     - Singleton instance
+    - exposes alloc
 
-- Allocator class
-    - Allocates chunks of memory
-    - keeps track of chunks that are available and their sizes
-    - Several instances of allocator class with different sizes?
-
-- HeapObj class
-    - parent of all heap objects
-    - contains metadata
-        - size
-        - location
-        - marked bit
+- Heap chunks
+    - size
+    - addr
+    - marked bit
