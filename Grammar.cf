@@ -7,7 +7,7 @@ EInt. Exp3 ::= Integer;
 ELet. Exp3 ::= "let" [Bind] "in" Exp; 
 EApp. Exp2 ::= Exp2 Exp3;
 EAdd. Exp1 ::= Exp1 "+" Exp2;
-EAbs. Exp  ::= "\\" [Ident] "." Exp;
+EAbs. Exp  ::= "\\" Ident "." Exp;
 
 Bind. Bind ::= Ident [Ident] "=" Exp;
 separator Bind ";";
