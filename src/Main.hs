@@ -18,7 +18,9 @@ main = getArgs >>= \case
        putStrLn "SYNTAX ERROR"
        putStrLn err
        exitFailure
-      Right prg -> compile prg
+      Right prg -> case compile prg of
+        Left err  -> putStrLn err
+        Right res -> putStrLn res
 
 
 
