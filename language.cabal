@@ -30,9 +30,10 @@ executable language
       Grammar.Par
       Grammar.Print
       Grammar.Skel
+      Grammar.ErrM
       LambdaLifter
       Auxiliary
-      -- Interpreter
+      Interpreter
 
     hs-source-dirs:   src
 
