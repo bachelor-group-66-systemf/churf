@@ -1,7 +1,7 @@
 {-# LANGUAGE LambdaCase #-}
 module Compiler.LLVMIr where
-import Grammar.Abs (Ident (Ident))
-import Data.List (intercalate)
+import           Data.List   (intercalate)
+import           Grammar.Abs (Ident (Ident))
 
 -- | A datatype which represents some basic LLVM types
 data LLVMType = I1 | I8 | I32 | I64 | Ptr
@@ -53,8 +53,8 @@ data LLVMIr = Define LLVMType Ident Params
     deriving (Show)
 
 -- | Converts a LLVM inststruction to a String, allowing for printing etc.
-printLLVMIr :: LLVMIr -> String
-printLLVMIr = \case
+llvmIrToString :: LLVMIr -> String
+llvmIrToString = \case
     (Define t (Ident i) params)           -> concat ["define ", show t, " @", i, "("
                                                     , intercalate "," (fmap (\(x,Ident y) -> unwords [show x, "%"<>y]) params)
                                                     ,") {\n"]

@@ -31,6 +31,7 @@ executable language
       Grammar.Par
       Grammar.Print
       Grammar.Skel
+      Grammar.ErrM
       Compiler.Compiler
       Compiler.StandardLLVMLibrary
       Compiler.TH
