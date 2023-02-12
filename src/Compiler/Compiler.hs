@@ -4,8 +4,8 @@ import           Compiler.LLVMIr              (LLVMIr (..), LLVMType (..),
                                                Value (..), llvmIrToString)
 import           Compiler.StandardLLVMLibrary (standardLLVMLibrary)
 import           Control.Monad.State          (StateT, execStateT, gets, modify)
-import           Grammar.Abs                  (Def (..), Exp (..), Ident (..),
-                                               Program (..), Type (..))
+import           Grammar.Abs                  (Bind (..), Exp (..), Ident (..),
+                                               Program (..))
 import           Grammar.ErrM                 (Err)
 import           Grammar.Print                (printTree)
 
@@ -51,16 +51,15 @@ compile (Program prg) = do
                 , Ret I64 (VInteger 0)
                 ]
 
-        goDef :: [Def] -> CompilerState ()
+        goDef :: [Bind] -> CompilerState ()
         goDef [] = return ()
-        goDef (DExp id@(Ident str) t _id2 args exp : xs) = do
-            let (rt, argTypes) = flattenFuncType t
-            emit $ Comment $ show str <> ": " <> show (rt, argTypes)
-            emit $ Define rt id (zip argTypes args) -- //TODO parse args
+        goDef (Bind id@(Ident str) args exp : xs) = do
+            emit $ Comment $ show str <> ": " -- <> show (rt, argTypes)
+            emit $ Define I64 id (map (I64,) args) -- //TODO parse args
             go exp
             varNum <- gets variableCount
             if str == "main" then mapM_ emit (mainContent varNum)
-                             else emit $ Ret rt (VIdent (Ident (show varNum)))
+                             else emit $ Ret I64 (VIdent (Ident (show varNum)))
             emit DefineEnd
             modify (\s -> s {variableCount = 0})
             goDef xs
@@ -68,32 +67,61 @@ compile (Program prg) = do
         go :: Exp -> CompilerState ()
         go (EInt int)    = emitInt int
         go (EAdd e1 e2)  = emitAdd e1 e2
-        go (ESub e1 e2)  = emitSub e1 e2
-        go (EMul e1 e2)  = emitMul e1 e2
-        go (EDiv e1 e2)  = emitDiv e1 e2
-        go (EMod e1 e2)  = emitMod e1 e2
-        go (EId  id)     = emitArg id
+        --go (ESub e1 e2)  = emitSub e1 e2
+        --go (EMul e1 e2)  = emitMul e1 e2
+        --go (EDiv e1 e2)  = emitDiv e1 e2
+        --go (EMod e1 e2)  = emitMod e1 e2
+        go (EId  id)     = emitIdent id
         go (EApp e1 e2)  = emitApp e1 e2
-        go (EAbs id t e) = emitAbs id t e
+        go (EAbs id e) = emitAbs id e
+        go (ELet xs e) = emitLet xs e
 
         --- aux functions ---
-        emitAbs :: Ident -> Type -> Exp -> CompilerState ()
-        emitAbs id t e = do
-            emit $ Comment $ concat [ "EAbs (", show id, ", ", show t, ", "
+        emitAbs :: Ident -> Exp -> CompilerState ()
+        emitAbs id e = do
+            emit $ Comment $ concat [ "EAbs (", show id, ", ", show I64, ", "
+                                    , show e, ") is not implemented!"]
+        emitLet :: [Bind] -> Exp -> CompilerState ()
+        emitLet xs e = do
+            emit $ Comment $ concat [ "ELet (", show xs, " = " 
                                     , show e, ") is not implemented!"]
 
         emitApp :: Exp -> Exp -> CompilerState ()
         emitApp e1 e2 = do
-            emit $ Comment $ concat [ "EApp (", show e1, ", ", show e2
-                                    , ") is not implemented!"]
+            let flat = flattenEApp $ EApp e1 e2
+            emit $ Comment $ show e1 <> " " <> show e2  
+            -- emit $ Comment $ show $ apply flat []
+            emit $ Comment $ show flat
+            where
+                flattenEApp :: Exp -> [Exp]
+                flattenEApp (EApp e1 e2) = flattenEApp e1 ++ flattenEApp e2  
+                flattenEApp e = [e]
 
-        emitArg :: Ident -> CompilerState ()
-        emitArg id = do
+                apply :: [Exp]  -> [Exp] -> (Ident, [Exp], [Exp])
+                apply (EId id:xs) s = (id, s, xs) 
+                apply (x:xs) s = apply xs (x : s)
+                apply _ _ = error "Should not happen hehe"
+            
+        --emitApp (EId id) e2 = do
+        --    go e2
+        --    vc <- gets variableCount
+        --    increaseVarCount
+        --    vc' <- gets variableCount
+        --    emit $ SetVariable (Ident $ show vc')
+        --    emit $ Call I64 id [(I64, VIdent (Ident $ show vc))] 
+        --emitApp e1 e2 = do
+        --    go e2
+        --    go e1
+
+        emitIdent :: Ident -> CompilerState ()
+        emitIdent id = do
             -- !!this should never happen!!
-            increaseVarCount
-            varCount <- gets variableCount
-            emit $ SetVariable (Ident $ show varCount)
-            emit $ Add I64 (VIdent id) (VInteger 0)
+            -- increaseVarCount
+            -- varCount <- gets variableCount
+            -- emit $ SetVariable (Ident $ show varCount)
+            -- emit $ Add I64 (VIdent id) (VInteger 0)
+            emit $ Variable id
+            emit $ UnsafeRaw "\n"
 
         emitInt :: Integer -> CompilerState ()
         emitInt i = do
@@ -111,50 +139,50 @@ compile (Program prg) = do
             emit $ SetVariable $ Ident $ show v
             emit $ Add I64 v1 v2
 
-        emitMul :: Exp -> Exp -> CompilerState ()
-        emitMul e1 e2 = do
-            (v1,v2) <- binExprToValues e1 e2
-            increaseVarCount
-            v <- gets variableCount
-            emit $ SetVariable $ Ident $ show v
-            emit $ Mul I64 v1 v2
+        -- emitMul :: Exp -> Exp -> CompilerState ()
+        -- emitMul e1 e2 = do
+        --     (v1,v2) <- binExprToValues e1 e2
+        --     increaseVarCount
+        --     v <- gets variableCount
+        --     emit $ SetVariable $ Ident $ show v
+        --     emit $ Mul I64 v1 v2
 
-        emitMod :: Exp -> Exp -> CompilerState ()
-        emitMod e1 e2 = do
-            -- `let m a b = rem (abs $ b + a) b`
-            (v1,v2) <- binExprToValues e1 e2
-            increaseVarCount
-            vadd <- gets variableCount
-            emit $ SetVariable $ Ident $ show vadd
-            emit $ Add I64 v1 v2
+        -- emitMod :: Exp -> Exp -> CompilerState ()
+        -- emitMod e1 e2 = do
+        --     -- `let m a b = rem (abs $ b + a) b`
+        --     (v1,v2) <- binExprToValues e1 e2
+        --     increaseVarCount
+        --     vadd <- gets variableCount
+        --     emit $ SetVariable $ Ident $ show vadd
+        --     emit $ Add I64 v1 v2
+        -- 
+        --     increaseVarCount
+        --     vabs <- gets variableCount
+        --     emit $ SetVariable $ Ident $ show vabs
+        --     emit $ Call I64 (Ident "llvm.abs.i64")
+        --         [ (I64, VIdent (Ident $ show vadd))
+        --         , (I1, VInteger 1)
+        --         ]
+        --     increaseVarCount
+        --     v <- gets variableCount
+        --     emit $ SetVariable $ Ident $ show v
+        --     emit $ Srem I64 (VIdent (Ident $ show vabs)) v2
 
-            increaseVarCount
-            vabs <- gets variableCount
-            emit $ SetVariable $ Ident $ show vabs
-            emit $ Call I64 (Ident "llvm.abs.i64")
-                [ (I64, VIdent (Ident $ show vadd))
-                , (I1, VInteger 1)
-                ]
-            increaseVarCount
-            v <- gets variableCount
-            emit $ SetVariable $ Ident $ show v
-            emit $ Srem I64 (VIdent (Ident $ show vabs)) v2
+        -- emitDiv :: Exp -> Exp -> CompilerState ()
+        -- emitDiv e1 e2 = do
+        --     (v1,v2) <- binExprToValues e1 e2
+        --     increaseVarCount
+        --     v <- gets variableCount
+        --     emit $ SetVariable $ Ident $ show v
+        --     emit $ Div I64 v1 v2
 
-        emitDiv :: Exp -> Exp -> CompilerState ()
-        emitDiv e1 e2 = do
-            (v1,v2) <- binExprToValues e1 e2
-            increaseVarCount
-            v <- gets variableCount
-            emit $ SetVariable $ Ident $ show v
-            emit $ Div I64 v1 v2
-
-        emitSub :: Exp -> Exp -> CompilerState ()
-        emitSub e1 e2 = do
-            (v1,v2) <- binExprToValues e1 e2
-            increaseVarCount
-            v <- gets variableCount
-            emit $ SetVariable $ Ident $ show v
-            emit $ Sub I64 v1 v2
+        -- emitSub :: Exp -> Exp -> CompilerState ()
+        -- emitSub e1 e2 = do
+        --     (v1,v2) <- binExprToValues e1 e2
+        --     increaseVarCount
+        --     v <- gets variableCount
+        --     emit $ SetVariable $ Ident $ show v
+        --     emit $ Sub I64 v1 v2
 
         exprToValue :: Exp -> CompilerState Value
         exprToValue (EInt i) = return $ VInteger i
@@ -170,14 +198,13 @@ compile (Program prg) = do
             v2 <- exprToValue e2
             return (v1,v2)
 
-
 -- | A pretty nasty function to flatten out function types,
 --   as they are currently represented by a recursive data type.
-flattenFuncType :: Type -> (LLVMType, [LLVMType])
-flattenFuncType xs = do
-    let res = go xs
-    (last res, init res)
-    where
-        go TInt         = [I64]
-        go (TPol id)    = [CustomType id]
-        go (TFun t1 t2) = go t1 ++ go t2
+-- flattenFuncType :: Type -> (LLVMType, [LLVMType])
+-- flattenFuncType xs = do
+--     let res = go xs
+--     (last res, init res)
+--     where
+--         go TInt         = [I64]
+--         go (TPol id)    = [CustomType id]
+--         go (TFun t1 t2) = go t1 ++ go t2

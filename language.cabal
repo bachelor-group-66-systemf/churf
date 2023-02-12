@@ -35,10 +35,10 @@ executable language
       LambdaLifter
       Auxiliary
       Interpreter
-      -- Compiler.Compiler
-      -- Compiler.LLVMIr
-      -- Compiler.StandardLLVMLibrary
-      -- Compiler.TH
+      Compiler.Compiler
+      Compiler.LLVMIr
+      Compiler.StandardLLVMLibrary
+      Compiler.TH
     hs-source-dirs:   src
 
     build-depends:    

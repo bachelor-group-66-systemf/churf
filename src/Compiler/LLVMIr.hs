@@ -37,6 +37,7 @@ data LLVMIr = Define LLVMType Ident Params
             | DefineEnd
             | Declare LLVMType Ident Params
             | SetVariable Ident
+            | Variable Ident
             | Add LLVMType Value Value
             | Sub LLVMType Value Value
             | Div LLVMType Value Value
@@ -89,3 +90,5 @@ llvmIrToString = \case
                                                     , " ", show v, "\n"]
     (UnsafeRaw s)                         -> s
     (Comment s)                           -> "; " <> s <> "\n"
+    (Variable (Ident id))                 -> "%" <> id
+        

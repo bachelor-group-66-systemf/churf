@@ -8,6 +8,7 @@ import           Interpreter        (interpret)
 import           LambdaLifter       (abstract, freeVars, lambdaLift)
 import           System.Environment (getArgs)
 import           System.Exit        (exitFailure, exitSuccess)
+import Compiler.Compiler (compile)
 
 main :: IO ()
 main = getArgs >>= \case
@@ -18,13 +19,17 @@ main' :: String -> IO ()
 main' s = do
   file   <- readFile s
 
-  putStrLn "\n-- parse"
+  --putStrLn "\n-- parse"
   parsed    <- fromSyntaxErr . pProgram $ myLexer file
-  putStrLn $ printTree parsed
-
-  putStrLn "\n-- Lambda Lifter"
+  --putStrLn $ printTree parsed
+  
+  --putStrLn "\n-- Lambda Lifter"
   let lifted = lambdaLift parsed
   putStrLn $ printTree lifted
+
+  --putStrLn "\n-- Compiler"
+  compiled  <- fromCompilerErr $ compile lifted
+  putStrLn compiled
 
   -- interpred <- fromInterpreterErr $ interpret lifted
   -- putStrLn "\n-- interpret"
@@ -32,6 +37,13 @@ main' s = do
 
   exitSuccess
 
+fromCompilerErr :: Err a -> IO a
+fromCompilerErr = either
+  (\err -> do
+    putStrLn "\nCOMPILER ERROR"
+    putStrLn err
+    exitFailure)
+ pure
 
 fromSyntaxErr :: Err a -> IO a
 fromSyntaxErr = either
