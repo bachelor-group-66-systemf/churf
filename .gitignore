@@ -2,4 +2,5 @@ dist-newstyle
 *.y
 *.x
 *.bak
-src/Grammar/*
+src/Grammar
+/language

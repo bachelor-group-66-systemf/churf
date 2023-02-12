@@ -31,22 +31,16 @@ executable language
       Grammar.Par
       Grammar.Print
       Grammar.Skel
-      Grammar.ErrM
-      Compiler.Compiler
-      Compiler.StandardLLVMLibrary
-      Compiler.TH
-      Compiler.LLVMIr
       Interpreter
 
     hs-source-dirs:   src
 
     build-depends:    
-        base >=4.16.0.0
-        , mtl
-        , containers
-        , either
-        , array
-        , template-haskell
-        --, llvm-tf
+        base >=4.16
+      , mtl
+      , containers
+      , either
+      , array
+      , extra
 
     default-language: GHC2021
