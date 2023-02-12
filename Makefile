@@ -22,4 +22,16 @@ clean :
 	rm -r src/Grammar
 	rm language
 
+test :
+	./language ./sample-programs/basic-1
+	./language ./sample-programs/basic-2
+	./language ./sample-programs/basic-3
+	./language ./sample-programs/basic-4
+	./language ./sample-programs/basic-5
+	./language ./sample-programs/basic-5
+	./language ./sample-programs/basic-6
+	./language ./sample-programs/basic-7
+	./language ./sample-programs/basic-8
+	./language ./sample-programs/basic-9
+
 # EOF

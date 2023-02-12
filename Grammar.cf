@@ -1,15 +1,20 @@
 
 
-Program. Program ::= "main" "=" Exp ;
+Program. Program ::= [Bind];
 
-EId.  Exp3 ::= Ident   ;
-EInt. Exp3 ::= Integer ;
-EApp. Exp2 ::= Exp2 Exp3 ;
-EAdd. Exp1 ::= Exp1 "+" Exp2 ;
-EAbs. Exp  ::= "\\" Ident "->" Exp ;
+EId.  Exp3 ::= Ident;
+EInt. Exp3 ::= Integer;
+ELet. Exp3 ::= "let" [Bind] "in" Exp; 
+EApp. Exp2 ::= Exp2 Exp3;
+EAdd. Exp1 ::= Exp1 "+" Exp2;
+EAbs. Exp  ::= "\\" Ident "." Exp;
 
-coercions Exp 3 ;
+Bind. Bind ::= Ident [Ident] "=" Exp;
+separator Bind ";";
+separator Ident " ";
 
-comment "--" ;
-comment "{-" "-}" ;
+coercions Exp 3;
+
+comment "--";
+comment "{-" "-}";
 
