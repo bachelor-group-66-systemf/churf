@@ -26,9 +26,9 @@ main' s = do
   let lifted = lambdaLift parsed
   putStrLn $ printTree lifted
 
-  interpred <- fromInterpreterErr $ interpret lifted
-  putStrLn "\n-- interpret"
-  print interpred
+  -- interpred <- fromInterpreterErr $ interpret lifted
+  -- putStrLn "\n-- interpret"
+  -- print interpred
 
   exitSuccess
 
