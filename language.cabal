@@ -1,4 +1,4 @@
-cabal-version:      3.0
+cabal-version:      3.4
 
 name:               language
 
@@ -20,19 +20,52 @@ extra-source-files:
 common warnings
     ghc-options: -W
 
-executable language
-    import:           warnings
-
-    main-is:          Main.hs
-
+Test-Suite sample-programs
+    Type:                 exitcode-stdio-1.0
+    main-is:              Main.hs
+    Build-depends:        
+        base >=4.16
+      , QuickCheck
+      , hspec
+      , directory
+      , process
+      , mtl
+      , containers
+      , either
+      , array
+      , extra
+    hs-source-dirs:       src, sample-programs
+    default-language:     GHC2021
     other-modules:
       Grammar.Abs
       Grammar.Lex
       Grammar.Par
       Grammar.Print
       Grammar.Skel
+      Grammar.ErrM
+      LambdaLifter
+      Auxiliary
       Interpreter
+      Compiler.Compiler
+      Compiler.LLVMIr
 
+executable language
+    import:           warnings
+
+    main-is:          Main.hs
+    
+    other-modules:
+      Grammar.Abs
+      Grammar.Lex
+      Grammar.Par
+      Grammar.Print
+      Grammar.Skel
+      Grammar.ErrM
+      LambdaLifter
+      Auxiliary
+      Interpreter
+      Compiler.Compiler
+      Compiler.LLVMIr
     hs-source-dirs:   src
 
     build-depends:    
@@ -42,5 +75,4 @@ executable language
       , either
       , array
       , extra
-
     default-language: GHC2021

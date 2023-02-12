@@ -1,5 +1,0 @@
-tripplet : Int -> (Int -> (Int -> Int))
-tripplet x y z = x + y + z;
-
-main : Int
-main = {-(((2 * (123 + 4214 % (1230)) - 1231) / 2) * 412412) +-} tripplet 5 1 2;
