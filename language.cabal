@@ -37,8 +37,6 @@ executable language
       Interpreter
       Compiler.Compiler
       Compiler.LLVMIr
-      Compiler.StandardLLVMLibrary
-      Compiler.TH
     hs-source-dirs:   src
 
     build-depends:    
@@ -48,5 +46,4 @@ executable language
       , either
       , array
       , extra
-      , template-haskell
     default-language: GHC2021

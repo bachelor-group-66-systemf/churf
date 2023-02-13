@@ -1,17 +1,13 @@
 module Compiler.Compiler where
 
-import           Compiler.LLVMIr              (LLVMIr (..), LLVMType (..),
-                                               Value (..), llvmIrToString)
-import           Compiler.StandardLLVMLibrary (standardLLVMLibrary)
-import           Control.Monad                (when)
-import           Control.Monad.State          (StateT, execStateT, gets, modify)
-import           Debug.Trace                  (trace)
-import           GHC.IO                       (unsafePerformIO)
-import           Grammar.Abs                  (Bind (..), Exp (..), Ident (..),
-                                               Program (..))
-import           Grammar.ErrM                 (Err)
-import           Grammar.Print                (printTree)
-import           System.Exit                  (exitFailure)
+import           Compiler.LLVMIr     (LLVMIr (..), LLVMType (..), Value (..),
+                                      llvmIrToString)
+import           Control.Monad.State (StateT, execStateT, gets, modify)
+import           Debug.Trace         (trace)
+import           Grammar.Abs         (Bind (..), Exp (..), Ident (..),
+                                      Program (..))
+import           Grammar.ErrM        (Err)
+import           Grammar.Print       (printTree)
 
 -- | The record used as the code generator state
 data CodeGenerator = CodeGenerator
@@ -37,21 +33,23 @@ increaseVarCount = modify (\t -> t {variableCount = variableCount t + 1})
 
 compile :: Program -> Err String
 compile (Program prg) = do
-    let s = defaultCodeGenerator {instructions = [
-        Comment (show $ printTree (Program prg)),
-        UnsafeRaw $ standardLLVMLibrary <> "\n"
-    ]}
+    let s = defaultCodeGenerator {instructions =
+        [ Comment (show $ printTree (Program prg))
+        , UnsafeRaw "@.str = private unnamed_addr constant [3 x i8] c\"%i\n\", align 1"
+        , UnsafeRaw "declare i32 @printf(ptr noalias nocapture, ...)\n"
+        -- , UnsafeRaw $ standardLLVMLibrary <> "\n"
+        ]}
     fin <- execStateT (goDef prg) s
     let ins = instructions fin
     pure $ concatMap llvmIrToString ins
     where
+        mainContent :: Integer -> [LLVMIr]
         mainContent var =
-                [ SetVariable (Ident "print_res")
-                , Call (Array 21 I8) (Ident "i64ToString") [(I64, VIdent $ Ident $ show var)]
-                , SetVariable (Ident "print_ptr"), Alloca (Array 21 I8)
-                , Store (Array 21 I8) (Ident "print_res") (Ref (Array 21 I8)) (Ident "print_ptr")
-                , SetVariable (Ident "printable"), Bitcast (Ref (Array 21 I8)) (Ident "print_ptr") (Ref I8)
-                , Call I32 (Ident "puts") [(Ref I8, VIdent (Ident "printable"))]
+                [ SetVariable (Ident . show $ var + 1)
+                , Alloca I64
+                , Store I64 (Ident . show $ var) (Ref I64) (Ident . show $ var + 1)
+                , UnsafeRaw $
+                    "call i32 (ptr, ...) @printf(ptr noundef @.str, i64 noundef %" <> show var <> ")"
                 , Ret I64 (VInteger 0)
                 ]
 
