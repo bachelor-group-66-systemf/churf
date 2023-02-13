@@ -5,6 +5,7 @@ import           Grammar.Par        (myLexer, pProgram)
 import           Grammar.Print      (printTree)
 import           System.Environment (getArgs)
 import           System.Exit        (exitFailure, exitSuccess)
+import TypeChecker.TypeChecker (typecheck)
 
 main :: IO ()
 main = getArgs >>= \case
@@ -16,4 +17,12 @@ main = getArgs >>= \case
        putStrLn "SYNTAX ERROR"
        putStrLn err
        exitFailure
-      Right prg -> putStrLn "NO SYNTAX ERROR"
+      Right prg -> case typecheck prg of
+        Right prg -> do
+            putStrLn "TYPE CHECK SUCCESSFUL"
+            putStrLn . show $ prg
+        Left err -> do
+            putStrLn "TYPE CHECK ERROR"
+            putStrLn . show $ err
+            exitFailure
+

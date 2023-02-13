@@ -1,16 +1,8 @@
 {-# LANGUAGE LambdaCase #-}
 
-module TypeChecker.TypeCheckerIr
-    ( Program(..)
-    , Bind(..)
-    , Ident
-    , Type(..)
-    , Const(..)
-    , Exp(..)
-    )
-        where
+module TypeChecker.TypeCheckerIr (module Grammar.Abs, Exp) where
 
-import Grammar.Abs (Program(..), Bind(..), Ident, Type(..), Const(..))
+import Grammar.Abs (Program(..), Ident(..), Bind(..), Const(..), Type(..), UIdent(..), LIdent(..))
 
 data Exp
     = EAnn Exp Type

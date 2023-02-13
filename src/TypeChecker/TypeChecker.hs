@@ -1,13 +1,17 @@
-{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE LambdaCase, OverloadedStrings #-}
 
-module TypeChecker.TypeChecker where
+module TypeChecker.TypeChecker (typecheck) where
 
-import Control.Monad (when)
-import Control.Monad.Except (throwError)
+import Control.Monad (when, void)
+import Control.Monad.Except (ExceptT, throwError, runExceptT)
+
 import Control.Monad.Reader (ReaderT)
 import qualified Control.Monad.Reader as R
+
 import Control.Monad.Writer (WriterT)
 import qualified Control.Monad.Writer as W
+
+import Data.Functor.Identity (Identity, runIdentity)
 
 import Data.Map (Map)
 import qualified Data.Map as M
@@ -24,66 +28,88 @@ data Ctx = Ctx
     , sig :: Map Ident Bind
     , typs :: Set Ident
     }
+    deriving Show
 
-type Check a = WriterT String (ReaderT Ctx Err) a
+type Check = ReaderT Ctx (ExceptT Error Identity)
+
+initEnv :: Ctx
+initEnv =
+    Ctx { env = mempty
+        , sig = mempty
+        , typs = mempty
+        }
+
+run :: Check Type -> Either Error Type
+run = runIdentity . runExceptT . flip R.runReaderT initEnv
+
+typecheck :: Old.Program -> Either Error ()
+typecheck = runIdentity . runExceptT . flip R.runReaderT initEnv . inferPrg
+
+inferPrg :: Old.Program -> Check ()
+inferPrg (Program [x]) = void $ inferBind x
+
+inferBind :: Old.Bind -> Check ()
+inferBind (Bind _ _ e) = void $ inferExp e
 
 inferExp :: Old.Exp -> Check Type
 inferExp = \case
+
+    Old.EId i -> undefined
+
     Old.EAnn e t -> do
         infT <- inferExp e
-        when (t /= infT) (throwError $ show (AnnotatedMismatch (show e) (show t) (show infT)))
+        when (t /= infT) (throwError AnnotatedMismatch)
         return infT
+
     Old.EConst c -> case c of
-        (CInt i) -> return (TMono $ Old.Ident "Int")
-        (CStr s) -> return (TMono $ Old.Ident "String")
-    Old.EId i -> lookupEnv i
+        (Old.CInt i) -> return (TMono $ UIdent "Int")
+        (Old.CStr s) -> return (TMono $ UIdent "String")
+
     Old.EAdd e1 e2 -> do
         t1 <- inferExp e1
         t2 <- inferExp e2
         case (t1, t2) of
-            (TMono (Old.Ident "Int"), TMono (Old.Ident "Int")) -> return t1
-            _ -> throwError $ show (NotNumber (show t1))
+            (TMono (UIdent "Int"), TMono (UIdent "Int")) -> return t1
+            _ -> throwError NotNumber
         return t1
 
-    -- This is wrong currently. (a -> b) should be able to take String
     Old.EApp e1 e2 -> do
         inferExp e1 >>= \case
-            TFun mono@(TMono i) t2 -> do
+            TArrow mono@(TMono i) t2 -> do
                 t <- inferExp e2
-                when (t /= mono) (throwError $ show $ TypeMismatch (show t) (show mono))
-                return t
+                when (t /= mono) (throwError TypeMismatch)
+                return t2
 
-            -- Not entirely correct. Should sometimes be able to provide mono types where poly expected.
-            -- i.e id : a -> a; id "string"
-            TFun poly@(TPoly f) t2 -> do
-                t <- inferExp e2
-                when (t /= poly) (throwError $ show (TypeMismatch (show t) (show poly)))
-                return t
-            t -> throwError $ show (NotFunction "Expected a function, but got:" (show t))
+            TArrow poly@(TPoly f) t2 -> do
+                t <- inferExp e2 
+                when (not $ t `subtype` t) (throwError TypeMismatch)
+                return t2
 
-    Old.EAbs i e -> undefined
+-- This is not entirely correct. The assumed type can change.
+    Old.EAbs i e -> do
+        let assume = (TPoly "a")
+        infT <- R.local (insertEnv i assume) (inferExp e)
+        return (TArrow assume infT)
 
-    Old.ELet b e -> undefined
+    Old.ELet i e1 e2 -> undefined
 
 -- Aux
 
-lookupEnv :: Ident -> Check Type
-lookupEnv i =
-    R.asks env >>= \case
-        [] -> throwError $ show (UnboundVar "Variable not found" (show i))
-        xs -> lookupEnv' i xs
-  where
-    lookupEnv' :: Ident -> [Map Ident Type] -> Check Type
-    lookupEnv' i [] = throwError $ show (UnboundVar "Variable not found" (show i))
-    lookupEnv' i (x : xs) = case M.lookup i x of
-        Just t -> return t
-        Nothing -> lookupEnv' i xs
+subtype :: Type -> Type -> Bool
+subtype (TMono t1) (TMono t2) = t1 == t2
+subtype (TMono t1) (TPoly t2) = True
+subtype (TPoly t2) (TMono t1) = False
+subtype (TArrow t1 t2) (TArrow t3 t4) = t1 `subtype` t3 && t2 `subtype` t4
 
-lookupSig :: Ident -> Check Bind
-lookupSig b =
-    R.asks sig >>= \m -> case M.lookup b m of
-        Nothing -> undefined
-        Just b -> return b
+lookupEnv :: Ident -> Ctx -> Maybe Type
+lookupEnv i c = case env c of
+    [] -> Nothing
+    x : xs -> case M.lookup i x of
+            Nothing -> lookupEnv i (Ctx { env = xs })
+            Just x -> Just x
+
+lookupSig :: Ident -> Ctx -> Maybe Bind
+lookupSig i = M.lookup i . sig
 
 insertEnv :: Ident -> Type -> Ctx -> Ctx
 insertEnv i t c =
@@ -92,31 +118,45 @@ insertEnv i t c =
         (x : xs) -> Ctx{env = M.insert i t x : xs}
 
 data Error
-    = TypeMismatch String String
-    | NotNumber String
-    | FunctionTypeMismatch String String String
-    | NotFunction String String
-    | UnboundVar String String
-    | AnnotatedMismatch String String String
-    | Default String
+    = TypeMismatch
+    | NotNumber
+    | FunctionTypeMismatch
+    | NotFunction
+    | UnboundVar
+    | AnnotatedMismatch
+    | Default
+    deriving Show
 
-showErr :: Error -> String
-showErr = \case
-    TypeMismatch expected found -> unwords ["Expected type:", show expected, "but got", show found]
-    NotNumber mess -> "Expected a number, but got: " <> mess
-    NotFunction mess func -> mess <> ": " <> func
-    FunctionTypeMismatch func expected found -> unwords ["Function:", show func, "expected:", show expected, "but got:", show found]
-    UnboundVar mess var -> mess <> ": " <> var
-    AnnotatedMismatch expression expected found ->
-        unwords
-            [ "Expression"
-            , expression
-            , "expected type"
-            , expected
-            , "but was inferred as type"
-            , found
-            ]
-    Default mess -> mess
+-- showErr :: Error -> String
+-- showErr = \case
+--     TypeMismatch expected found -> unwords ["Expected type:", show expected, "but got", show found]
+--     NotNumber mess -> "Expected a number, but got: " <> mess
+--     NotFunction mess func -> mess <> ": " <> func
+--     FunctionTypeMismatch func expected found -> unwords ["Function:", show func, "expected:", show expected, "but got:", show found]
+--     UnboundVar mess var -> mess <> ": " <> var
+--     AnnotatedMismatch expression expected found ->
+--         unwords
+--             [ "Expression"
+--             , expression
+--             , "expected type"
+--             , expected
+--             , "but was inferred as type"
+--             , found
+--             ]
+--     Default mess -> mess
 
-instance Show Error where
-    show = showErr
+
+-- Tests
+
+number :: Old.Exp
+number = Old.EConst (CInt 3)
+
+lambda :: Old.Exp
+lambda = Old.EAbs (Old.Ident "x") (Old.EAdd (Old.EConst (Old.CInt 3)) (Old.EConst (Old.CInt 3)))
+
+apply :: Old.Exp
+apply = Old.EApp lambda (Old.EConst (Old.CInt 3))
+
+{-# WARNING todo "TODO IN CODE" #-}
+todo :: a
+todo = error "TODO in code"
