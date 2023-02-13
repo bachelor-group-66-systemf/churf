@@ -1,20 +1,28 @@
 
-
 Program. Program ::= [Bind];
 
-EId.  Exp3 ::= Ident;
-EInt. Exp3 ::= Integer;
-ELet. Exp3 ::= "let" [Bind] "in" Exp; 
-EApp. Exp2 ::= Exp2 Exp3;
-EAdd. Exp1 ::= Exp1 "+" Exp2;
-EAbs. Exp  ::= "\\" Ident "." Exp;
-
 Bind. Bind ::= Ident [Ident] "=" Exp;
+
+EAnn.   Exp5 ::= Exp5 ":" Type ;
+EId.    Exp4 ::= Ident;
+EConst. Exp4 ::= Const;
+EApp.   Exp3 ::= Exp3 Exp4;
+ELet.   Exp2 ::= "let" Bind "in" Exp; 
+EAdd.   Exp1 ::= Exp1 "+" Exp2;
+EAbs.   Exp  ::= "\\" Ident "." Exp;
+
+CInt. Const ::= Integer ;
+CStr. Const ::= String ;
+
+TMono. Type1 ::= Ident ;
+TPoly. Type1 ::= Ident ;
+TFun. Type  ::= Type1 "->" Type ;
+
 separator Bind ";";
 separator Ident " ";
 
-coercions Exp 3;
+coercions Type 1 ;
+coercions Exp 5;
 
 comment "--";
 comment "{-" "-}";
-

@@ -17,7 +17,7 @@ extra-source-files:
 
 
 common warnings
-    ghc-options: -Wall
+    ghc-options: -W
 
 executable language
     import:           warnings
@@ -30,7 +30,12 @@ executable language
       Grammar.Par
       Grammar.Print
       Grammar.Skel
-      LambdaLifter
+      Grammar.ErrM
+      -- LambdaLifter
+      TypeChecker.TypeChecker
+      TypeChecker.TypeCheckerIr
+      -- Renamer.Renamer
+      -- Renamer.RenamerIr
       -- Interpreter
 
     hs-source-dirs:   src
@@ -40,7 +45,7 @@ executable language
       , mtl
       , containers
       , either
-      , array
       , extra
+      , array
 
     default-language: GHC2021
