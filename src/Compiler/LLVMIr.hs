@@ -91,4 +91,4 @@ llvmIrToString = \case
     (UnsafeRaw s)                         -> s
     (Comment s)                           -> "; " <> s <> "\n"
     (Variable (Ident id))                 -> "%" <> id
-        
+

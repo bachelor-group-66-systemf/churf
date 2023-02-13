@@ -35,7 +35,7 @@ compile :: Program -> Err String
 compile (Program prg) = do
     let s = defaultCodeGenerator {instructions =
         [ Comment (show $ printTree (Program prg))
-        , UnsafeRaw "@.str = private unnamed_addr constant [3 x i8] c\"%i\n\", align 1"
+        , UnsafeRaw "@.str = private unnamed_addr constant [3 x i8] c\"%i\n\", align 1\n"
         , UnsafeRaw "declare i32 @printf(ptr noalias nocapture, ...)\n"
         -- , UnsafeRaw $ standardLLVMLibrary <> "\n"
         ]}
@@ -89,50 +89,22 @@ compile (Program prg) = do
                                     , show e, ") is not implemented!"]
 
         emitApp :: Exp -> Exp -> CompilerState ()
+        emitApp (EApp (EId id) e2) e3 = do
+            v2 <- exprToValue e2
+            v3 <- exprToValue e3
+            increaseVarCount
+            vs <- gets variableCount
+            emit $ SetVariable (Ident $ show vs)
+            emit $ Call I64 id [(I64, v2), (I64, v3)]
+        emitApp (EId id) e1 = do
+            v1 <- exprToValue e1
+            increaseVarCount
+            vs <- gets variableCount
+            emit $ SetVariable (Ident $ show vs)
+            emit $ Call I64 id [(I64, v1)]
         emitApp e1 e2 = do
-            let flat = reverse . flattenEApp $ EApp e1 e2
-            --emit $ Comment $ show e1 <> " " <> show e2
-            stackRunners flat
-            --let (fun, args, rest) = apply flat []
-            --args' <- traverse exprToValue args
-            --increaseVarCount
-            --vc <- gets variableCount
-            --let rest' = (EId . Ident $ show vc) : rest
-            --emit $ Comment $ show rest'
-            --emit $ SetVariable (Ident $ show vc )
-            --emit $ Call I64 fun (map (I64,) args')
-            where
-                stackRunners :: [Exp] -> CompilerState ()
-                stackRunners flat = do
-                    rest <- stackSmasher (trace (show flat) flat)
-                    if null rest then return ()
-                                 else stackRunners rest
-
-                stackSmasher :: [Exp] -> CompilerState [Exp]
-                stackSmasher [_] = do
-                    --go exp
-                    return []
-                stackSmasher flat = do
-                    let (fun, args'', rest') = apply flat []
-                    let (args,rest) = case (trace (show fun) fun, args'') of
-                                (Ident _, []) -> ([head rest'], tail rest')
-                                _             -> (args'', rest')
-                    args' <- traverse exprToValue args
-                    increaseVarCount
-                    vc <- gets variableCount
-                    emit $ SetVariable (Ident $ show vc )
-                    emit $ Call I64 fun (map (I64,) args')
-                    --when (vc >= 2) (unsafePerformIO exitFailure)
-                    return $ (EId . Ident $ show vc) : rest
-
-                flattenEApp :: Exp -> [Exp]
-                flattenEApp (EApp e1 e2) = flattenEApp e1 ++ flattenEApp e2
-                flattenEApp e            = [e]
-
-                apply :: [Exp]  -> [Exp] -> (Ident, [Exp], [Exp])
-                apply (EId id:xs) s = (id, s, xs)
-                apply (x:xs) s      = apply xs (x : s)
-                apply _ _           = error "Should not happen hehe"
+            emit . Comment $
+                "The unspeakable happened: " <> show e1 <> "," <> show e2
 
         --emitApp (EId id) e2 = do
         --    go e2
@@ -152,6 +124,7 @@ compile (Program prg) = do
             -- varCount <- gets variableCount
             -- emit $ SetVariable (Ident $ show varCount)
             -- emit $ Add I64 (VIdent id) (VInteger 0)
+            emit $ Comment "This should not have happened!"
             emit $ Variable id
             emit $ UnsafeRaw "\n"
 
@@ -160,6 +133,7 @@ compile (Program prg) = do
             -- !!this should never happen!!
             increaseVarCount
             varCount <- gets variableCount
+            emit $ Comment "This should not have happened!"
             emit $ SetVariable $ Ident (show varCount)
             emit $ Add I64 (VInteger i) (VInteger 0)
 
@@ -240,3 +214,6 @@ compile (Program prg) = do
 --         go TInt         = [I64]
 --         go (TPol id)    = [CustomType id]
 --         go (TFun t1 t2) = go t1 ++ go t2
+
+cTrace :: Show a => a -> a
+cTrace a = trace (show a) a
