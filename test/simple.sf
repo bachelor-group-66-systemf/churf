@@ -1,5 +1,9 @@
-tripplet : Int -> (Int -> (Int -> Int))
-tripplet x y z = x + y + z;
+add x = \y. x+y;
 
-main : Int
-main = {-(((2 * (123 + 4214 % (1230)) - 1231) / 2) * 412412) +-} tripplet 5 1 2;
+main =  (add 2 3);
+
+{-
+add x_0 y_1 = x_0 + y_1;
+main = sc_2 (add 2 3);
+sc_2 y_3 = y_3 + y_3
+-}

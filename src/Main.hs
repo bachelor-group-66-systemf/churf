@@ -1,6 +1,7 @@
 {-# LANGUAGE LambdaCase #-}
 module Main where
 
+import           Compiler.Compiler  (compile)
 import           Grammar.ErrM       (Err)
 import           Grammar.Par        (myLexer, pProgram)
 import           Grammar.Print      (printTree)
@@ -8,7 +9,6 @@ import           Interpreter        (interpret)
 import           LambdaLifter       (abstract, freeVars, lambdaLift)
 import           System.Environment (getArgs)
 import           System.Exit        (exitFailure, exitSuccess)
-import Compiler.Compiler (compile)
 
 main :: IO ()
 main = getArgs >>= \case
@@ -22,10 +22,10 @@ main' s = do
   --putStrLn "\n-- parse"
   parsed    <- fromSyntaxErr . pProgram $ myLexer file
   --putStrLn $ printTree parsed
-  
+
   --putStrLn "\n-- Lambda Lifter"
   let lifted = lambdaLift parsed
-  putStrLn $ printTree lifted
+  -- putStrLn $ printTree lifted
 
   --putStrLn "\n-- Compiler"
   compiled  <- fromCompilerErr $ compile lifted

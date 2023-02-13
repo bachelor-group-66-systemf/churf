@@ -3,11 +3,15 @@ module Compiler.Compiler where
 import           Compiler.LLVMIr              (LLVMIr (..), LLVMType (..),
                                                Value (..), llvmIrToString)
 import           Compiler.StandardLLVMLibrary (standardLLVMLibrary)
+import           Control.Monad                (when)
 import           Control.Monad.State          (StateT, execStateT, gets, modify)
+import           Debug.Trace                  (trace)
+import           GHC.IO                       (unsafePerformIO)
 import           Grammar.Abs                  (Bind (..), Exp (..), Ident (..),
                                                Program (..))
 import           Grammar.ErrM                 (Err)
 import           Grammar.Print                (printTree)
+import           System.Exit                  (exitFailure)
 
 -- | The record used as the code generator state
 data CodeGenerator = CodeGenerator
@@ -65,16 +69,16 @@ compile (Program prg) = do
             goDef xs
 
         go :: Exp -> CompilerState ()
-        go (EInt int)    = emitInt int
-        go (EAdd e1 e2)  = emitAdd e1 e2
+        go (EInt int)   = emitInt int
+        go (EAdd e1 e2) = emitAdd e1 e2
         --go (ESub e1 e2)  = emitSub e1 e2
         --go (EMul e1 e2)  = emitMul e1 e2
         --go (EDiv e1 e2)  = emitDiv e1 e2
         --go (EMod e1 e2)  = emitMod e1 e2
-        go (EId  id)     = emitIdent id
-        go (EApp e1 e2)  = emitApp e1 e2
-        go (EAbs id e) = emitAbs id e
-        go (ELet xs e) = emitLet xs e
+        go (EId  id)    = emitIdent id
+        go (EApp e1 e2) = emitApp e1 e2
+        go (EAbs id e)  = emitAbs id e
+        go (ELet xs e)  = emitLet xs e
 
         --- aux functions ---
         emitAbs :: Ident -> Exp -> CompilerState ()
@@ -83,32 +87,62 @@ compile (Program prg) = do
                                     , show e, ") is not implemented!"]
         emitLet :: [Bind] -> Exp -> CompilerState ()
         emitLet xs e = do
-            emit $ Comment $ concat [ "ELet (", show xs, " = " 
+            emit $ Comment $ concat [ "ELet (", show xs, " = "
                                     , show e, ") is not implemented!"]
 
         emitApp :: Exp -> Exp -> CompilerState ()
         emitApp e1 e2 = do
-            let flat = flattenEApp $ EApp e1 e2
-            emit $ Comment $ show e1 <> " " <> show e2  
-            -- emit $ Comment $ show $ apply flat []
-            emit $ Comment $ show flat
+            let flat = reverse . flattenEApp $ EApp e1 e2
+            --emit $ Comment $ show e1 <> " " <> show e2
+            stackRunners flat
+            --let (fun, args, rest) = apply flat []
+            --args' <- traverse exprToValue args
+            --increaseVarCount
+            --vc <- gets variableCount
+            --let rest' = (EId . Ident $ show vc) : rest
+            --emit $ Comment $ show rest'
+            --emit $ SetVariable (Ident $ show vc )
+            --emit $ Call I64 fun (map (I64,) args')
             where
+                stackRunners :: [Exp] -> CompilerState ()
+                stackRunners flat = do
+                    rest <- stackSmasher (trace (show flat) flat)
+                    if null rest then return ()
+                                 else stackRunners rest
+
+                stackSmasher :: [Exp] -> CompilerState [Exp]
+                stackSmasher [_] = do
+                    --go exp
+                    return []
+                stackSmasher flat = do
+                    let (fun, args'', rest') = apply flat []
+                    let (args,rest) = case (trace (show fun) fun, args'') of
+                                (Ident _, []) -> ([head rest'], tail rest')
+                                _             -> (args'', rest')
+                    args' <- traverse exprToValue args
+                    increaseVarCount
+                    vc <- gets variableCount
+                    emit $ SetVariable (Ident $ show vc )
+                    emit $ Call I64 fun (map (I64,) args')
+                    --when (vc >= 2) (unsafePerformIO exitFailure)
+                    return $ (EId . Ident $ show vc) : rest
+
                 flattenEApp :: Exp -> [Exp]
-                flattenEApp (EApp e1 e2) = flattenEApp e1 ++ flattenEApp e2  
-                flattenEApp e = [e]
+                flattenEApp (EApp e1 e2) = flattenEApp e1 ++ flattenEApp e2
+                flattenEApp e            = [e]
 
                 apply :: [Exp]  -> [Exp] -> (Ident, [Exp], [Exp])
-                apply (EId id:xs) s = (id, s, xs) 
-                apply (x:xs) s = apply xs (x : s)
-                apply _ _ = error "Should not happen hehe"
-            
+                apply (EId id:xs) s = (id, s, xs)
+                apply (x:xs) s      = apply xs (x : s)
+                apply _ _           = error "Should not happen hehe"
+
         --emitApp (EId id) e2 = do
         --    go e2
         --    vc <- gets variableCount
         --    increaseVarCount
         --    vc' <- gets variableCount
         --    emit $ SetVariable (Ident $ show vc')
-        --    emit $ Call I64 id [(I64, VIdent (Ident $ show vc))] 
+        --    emit $ Call I64 id [(I64, VIdent (Ident $ show vc))]
         --emitApp e1 e2 = do
         --    go e2
         --    go e1
@@ -155,7 +189,7 @@ compile (Program prg) = do
         --     vadd <- gets variableCount
         --     emit $ SetVariable $ Ident $ show vadd
         --     emit $ Add I64 v1 v2
-        -- 
+        --
         --     increaseVarCount
         --     vabs <- gets variableCount
         --     emit $ SetVariable $ Ident $ show vabs
