@@ -45,10 +45,7 @@ compile (Program prg) = do
     where
         mainContent :: Integer -> [LLVMIr]
         mainContent var =
-                [ SetVariable (Ident . show $ var + 1)
-                , Alloca I64
-                , Store I64 (Ident . show $ var) (Ref I64) (Ident . show $ var + 1)
-                , UnsafeRaw $
+                [ UnsafeRaw $
                     "call i32 (ptr, ...) @printf(ptr noundef @.str, i64 noundef %" <> show var <> ")"
                 , Ret I64 (VInteger 0)
                 ]
