@@ -44,7 +44,7 @@ namespace GC {
       else if (cp->size == size)
       {
         // sno hela chunken
-        m_freed_chunks.erase(m_freed_chunks.begin()+i);
+        m_freed_chunks.erase(m_freed_chunks.begin() + i);
         m_allocated_chunks.push_back(cp);
         return cp->start;
       }
@@ -67,14 +67,15 @@ namespace GC {
   }
 
   void Heap::collect() {
-    // mark all objs
-    // compact();
-    // free all unmarked (m_freed_chunks.add(jalkdsj))
 
-    // get the frame adress, whwere local variables and saved registers are located    
-    auto stack_start = reinterpret_cast<const uintptr_t *>(__builtin_frame_address(0));
-    auto stack_end = reinterpret_cast<const uintptr_t *>(0ul);
-    
+    // get the frame adress, whwere local variables and saved registers are located
+    auto stack_start = reinterpret_cast<uintptr_t *>(__builtin_frame_address(0));
+    // looking at 10 stack frames back
+    auto stack_end = reinterpret_cast<const uintptr_t *>(__builtin_frame_address(10));
+    auto work_list = m_allocated_chunks;
+    mark(stack_start, stack_end, work_list);
+
+    compact();
 
     //release free chunks
     while (m_freed_chunks.size()) {
@@ -102,14 +103,16 @@ namespace GC {
     }
   }
 
-  void Heap::mark(uintptr_t *start, uintptr_t *end) {
-    for (; start < end; start += 1) { // start < end???
-      for (auto chunk : m_allocated_chunks) {
+  void Heap::mark(uintptr_t *start, const uintptr_t *end, std::vector<Chunk*> work_list) {
+    for (; start < end; start++) { // to find adresses thats in the worklist
+      for (size_t i = 0; i < work_list.size(); i++) { // fix this
+      auto chunk = work_list.at(i);
         if (chunk->start <= start && start < chunk->start + chunk->size) {
           if (!chunk->marked) {
             chunk->marked = true;
-            //mark(chunk) //
-            //TODO
+            work_list.erase(work_list.begin() + i);
+            mark(reinterpret_cast<uintptr_t *>(chunk->start + chunk->size), end, work_list); //
+            return;
           }
         }
       }

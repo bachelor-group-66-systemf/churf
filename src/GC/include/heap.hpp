@@ -40,7 +40,7 @@ namespace GC {
 
     void collect();
     void compact();
-    void mark(uintptr_t *start, uintptr_t *end);
+    void mark(uintptr_t *start, const uintptr_t *end, std::vector<Chunk *> worklist);
 
     bool compareChunks(Chunk *c1, Chunk *c2);
       
@@ -49,8 +49,8 @@ namespace GC {
     size_t m_size;
     size_t m_allocated_size;
 
-    std::vector<Chunk*> m_allocated_chunks;
-    std::vector<Chunk*> m_freed_chunks;
+    std::vector<Chunk *> m_allocated_chunks;
+    std::vector<Chunk *> m_freed_chunks;
 
   };
 }
