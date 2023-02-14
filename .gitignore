@@ -4,3 +4,5 @@ dist-newstyle
 *.bak
 src/Grammar
 /language
+
+src/GC/tests/*.out
