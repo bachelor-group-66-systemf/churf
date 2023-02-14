@@ -5,6 +5,9 @@
 #include <setjmp.h>
 #include <stdlib.h>
 #include <vector>
+using namespace std;
+
+#include "include/chunk.hpp"
 
 #define HEAP_SIZE   65536
 
@@ -21,7 +24,10 @@ namespace GC {
       return *m_instance;
     }
 
-    size_t getSize();
+    ~Heap() {
+      free((char *)m_heap);
+    }
+
     void *alloc(size_t size);
 
   private:
@@ -33,10 +39,18 @@ namespace GC {
     }
 
     void collect();
+    void compact();
+    void mark(uintptr_t *start, uintptr_t *end);
+
+    bool compareChunks(Chunk *c1, Chunk *c2);
       
     inline static Heap *m_instance = nullptr;
-    char *m_heap;
+    const char *m_heap;
     size_t m_size;
     size_t m_allocated_size;
-  }
+
+    std::vector<Chunk*> m_allocated_chunks;
+    std::vector<Chunk*> m_freed_chunks;
+
+  };
 }
