@@ -56,12 +56,16 @@ compile (Program prg) = do
         goDef :: [Bind] -> CompilerState ()
         goDef [] = return ()
         goDef (Bind id@(Ident str) args exp : xs) = do
-            emit $ Comment $ show str <> ": " -- <> show (rt, argTypes)
+            emit $ UnsafeRaw "\n"
+            emit $ Comment $ show str <> ": " <> show exp
             emit $ Define I64 id (map (I64,) args) -- //TODO parse args
-            go exp
-            varNum <- gets variableCount
-            if str == "main" then mapM_ emit (mainContent varNum)
-                             else emit $ Ret I64 (VIdent (Ident (show varNum)))
+            case exp of
+                EId id -> emit $ Ret  I64 (VIdent id)
+                _      -> do
+                    go exp
+                    varNum <- gets variableCount
+                    if str == "main" then mapM_ emit (mainContent varNum)
+                                     else emit $ Ret I64 (VIdent (Ident (show varNum)))
             emit DefineEnd
             modify (\s -> s {variableCount = 0})
             goDef xs
@@ -93,7 +97,7 @@ compile (Program prg) = do
             where
                 appEmitter :: Exp -> Exp -> [Exp] -> CompilerState ()
                 appEmitter e1 e2 stack = do
-                    let newStack =  stack ++ [e2]
+                    let newStack =  e2 : stack
                     case e1 of
                         EApp e1' e2' -> appEmitter e1' e2' newStack
                         EId id  -> do
