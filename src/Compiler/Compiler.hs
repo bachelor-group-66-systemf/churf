@@ -209,11 +209,19 @@ compile (Program prg) = do
 
         exprToValue :: Exp -> CompilerState Value
         exprToValue (EInt i) = return $ VInteger i
-        exprToValue (EId i)  = return $ VIdent i
+        exprToValue (EId id)  = do
+            funcs <- gets functions
+            case Map.lookup id funcs of
+                Just _  -> do
+                    vc <- getNewVar
+                    emit $ SetVariable (Ident $ show vc)
+                    emit $ Call I64 id []
+                    return $ VIdent (Ident $ show vc)
+                Nothing -> return $ VIdent id
         exprToValue e        = do
             go e
             v <- getVarCount
-            return $ VIdent $ Ident $ show v
+            return . VIdent . Ident $ show v
 
         binExprToValues :: Exp -> Exp -> CompilerState (Value, Value)
         binExprToValues e1 e2 = do
