@@ -5,8 +5,9 @@ import           Grammar.Par        (myLexer, pProgram)
 import           Grammar.Print      (printTree)
 import           System.Environment (getArgs)
 import           System.Exit        (exitFailure, exitSuccess)
-import TypeChecker.TypeChecker (typecheck)
-import Renamer.Renamer (rename)
+import           TypeChecker.TypeChecker (typecheck)
+import           Renamer.Renamer (rename)
+import           Grammar.Print (prt)
 
 main :: IO ()
 main = getArgs >>= \case
@@ -19,10 +20,14 @@ main = getArgs >>= \case
        putStrLn err
        exitFailure
       Right prg -> case rename prg of
-        Right prg -> do
-            putStrLn "RENAME SUCCESSFUL"
-            putStrLn $ printTree prg
         Left err -> do
-            putStrLn "FAILED RENAMING"
-            putStrLn . show $ err
-            exitFailure
+          putStrLn "FAILED RENAMING"
+          putStrLn . show $ err
+          exitFailure
+        Right prg -> case typecheck prg of
+            Left err -> do
+                putStrLn "TYPECHECK ERROR"
+                putStrLn . show $ err
+                exitFailure
+            Right prg -> do
+                putStrLn . printTree $ prg

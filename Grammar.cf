@@ -3,7 +3,7 @@ Program. Program ::= [Bind] ;
 
 Bind. Bind ::= Ident [Ident] "=" Exp ;
 
-EAnn.   Exp5 ::= Exp5 ":" Type ;
+EAnn.   Exp5 ::= "(" Exp ":" Type ")" ;
 EId.    Exp4 ::= Ident ;
 EConst. Exp4 ::= Const ;
 EApp.   Exp3 ::= Exp3 Exp4 ;
@@ -16,8 +16,9 @@ CStr. Const ::= String ;
 
 TMono. Type ::= "Mono" Ident ;
 TPoly. Type ::= "Poly" Ident ;
-TArrow. Type ::= Type "->" Type1 ;
+TArrow. Type ::= Type1 "->" Type ;
 
+-- This doesn't seem to work so we'll have to live with ugly keywords for now
 -- token Upper (upper (letter | digit | '_')*) ;
 -- token Lower (lower (letter | digit | '_')*) ;
 

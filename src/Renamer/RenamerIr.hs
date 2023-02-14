@@ -1,6 +1,12 @@
 {-# LANGUAGE LambdaCase #-}
 
-module Renamer.RenamerIr (module Grammar.Abs, RExp (..), RBind (..), RProgram (..)) where
+module Renamer.RenamerIr ( RExp (..)
+                         , RBind (..)
+                         , RProgram (..)
+                         , Const (..)
+                         , Ident (..)
+                         , Type (..)
+                         ) where
 
 import Grammar.Abs (
     Bind (..),
@@ -43,6 +49,7 @@ instance Print RBind where
 
 instance Print RExp where
     prt i = \case
+        RAnn e t -> prPrec i 2 (concatD [prt 0 e, doc (showString ":"), prt 1 t])
         RBound n _ -> prPrec i 3 (concatD [prt 0 ("var" ++ show n)])
         RFree id -> prPrec i 3 (concatD [prt 0 id])
         RConst n -> prPrec i 3 (concatD [prt 0 n])

@@ -1,6 +1,6 @@
 {-# LANGUAGE LambdaCase, OverloadedStrings, OverloadedRecordDot #-}
 
-module TypeChecker.TypeChecker (typecheck) where
+module TypeChecker.TypeChecker where
 
 import Control.Monad (when, void)
 import Control.Monad.Except (ExceptT, throwError, runExceptT)
@@ -13,15 +13,11 @@ import qualified Control.Monad.State as St
 import Data.Functor.Identity (Identity, runIdentity)
 import Data.Map (Map)
 import qualified Data.Map as M
-import Data.Set (Set)
-import qualified Data.Set as S
-import Data.Bool (bool)
-import qualified Grammar.Abs as Old
 import Grammar.ErrM (Err)
 
 import TypeChecker.TypeCheckerIr
 
-data Ctx = Ctx { env :: Map Ident Type
+data Ctx = Ctx { vars :: Map Integer Type
                , sigs :: Map Ident Type
                }
     deriving Show
@@ -34,120 +30,164 @@ programmer.
 
 -}
 
-type Check = StateT (Map Ident Type) (ReaderT Ctx (ExceptT Error Identity))
+type Infer = StateT Ctx (ExceptT Error Identity)
 
 initEnv :: Ctx
-initEnv =
-    Ctx { env = mempty
-        , sigs = mempty
-        }
+initEnv = Ctx mempty mempty
 
-run :: Check Type -> Either Error Type
-run = runIdentity . runExceptT . flip R.runReaderT initEnv . flip St.evalStateT mempty
+run :: Infer a -> Either Error a
+run = runIdentity . runExceptT . flip St.evalStateT initEnv
 
-typecheck :: Old.Program -> Either Error ()
-typecheck = todo
+typecheck :: RProgram -> Either Error TProgram
+typecheck = run . inferPrg 
 
-inferPrg :: Old.Program -> Check ()
-inferPrg (Program [x]) = void $ inferBind x
+inferPrg :: RProgram -> Infer TProgram
+inferPrg (RProgram xs) = do
+    xs' <- mapM inferBind xs
+    return $ TProgram xs'
 
-inferBind :: Old.Bind -> Check ()
-inferBind (Bind _ _ e) = void $ inferExp e
+inferBind :: RBind -> Infer TBind
+inferBind (RBind name e) = do
+    t <- inferExp e
+    e' <- toTExpr e
+    return $ TBind name t e'
 
-inferExp :: Old.Exp -> Check Type
+toTExpr :: RExp -> Infer TExp
+toTExpr = \case
+
+    re@(RAnn e t) -> do
+        t <- inferExp re
+        e' <- toTExpr e
+        return $ TAnn e' t
+
+    re@(RBound num name) -> do
+        t <- inferExp re
+        return $ TBound num name t
+
+    re@(RFree name) -> do
+        t <- inferExp re
+        return $ TFree name t
+
+    re@(RConst con)-> do
+        t <- inferExp re
+        return $ TConst con t
+
+    re@(RApp e1 e2) -> do
+        t <- inferExp re
+        e1' <- toTExpr e1
+        e2' <- toTExpr e2
+        return $ TApp e1' e2' t
+
+    re@(RAdd e1 e2)-> do
+        t <- inferExp re
+        e1' <- toTExpr e1
+        e2' <- toTExpr e2
+        return $ TAdd e1' e2' t
+
+    re@(RAbs num name e) -> do
+        t <- inferExp re
+        e' <- toTExpr e
+        return $ TAbs num name e' t
+
+
+inferExp :: RExp -> Infer Type
 inferExp = \case
 
-    -- TODO: Fix bound variable lookup
-    Old.EId i -> do
-        st <- St.get 
-        case lookupBound i st of
-          Just t -> return t
-          Nothing -> do
-            ctx <- R.ask
-            case lookupEnv i ctx of
-              Just t -> return t
-              Nothing -> case lookupSigs i ctx of
-                           Just t -> return t
-                           Nothing -> throwError UnboundVar
-        
-    Old.EAnn e t -> do
-        infT <- inferExp e
-        when (t /= infT) (throwError AnnotatedMismatch)
-        return infT
+    RAnn expr typ -> do
+        exprT <- inferExp expr
+        when (not (exprT == typ || isPoly exprT)) (throwError AnnotatedMismatch)
+        return typ
 
-    Old.EConst c -> case c of
-        (Old.CInt i) -> return (TMono "Int")
-        (Old.CStr s) -> return (TMono "String")
+    -- Name is only here for proper error messages
+    RBound num name ->
+        M.lookup num <$> St.gets vars >>= \case
+            Nothing -> throwError UnboundVar
+            Just t -> return t
 
-    Old.EAdd e1 e2 -> do
-        let int = TMono "Int"
-        updateBound e1 int
-        updateBound e2 int
-        inf1 <- inferExp e1
-        inf2 <- inferExp e2
-        when (not $ isInt inf1 && isInt inf2) (throwError TypeMismatch)
-        return int
+    RFree name -> do
+        M.lookup name <$> St.gets sigs >>= \case
+            Nothing -> throwError UnboundVar
+            Just t -> return t
 
-    -- Incomplete and probably wrong
-    Old.EApp e1 e2 -> do
-        inferExp e1 >>= \case
-            TArrow mono@(TMono i) t2 -> do
-                t <- inferExp e2
-                when (t /= mono) (throwError TypeMismatch)
-                return t2
+    RConst (CInt _) -> return $ TMono "Int"
+    RConst (CStr _) -> return $ TMono "Str"
 
-            TArrow poly@(TPoly f) t2 -> do
-                t <- inferExp e2 
-                when (not $ t `subtype` t) (throwError TypeMismatch)
-                return t2
+    -- Currently does not accept using a polymorphic type as the function.
+    RApp expr1 expr2 -> do
+        typ1 <- inferExp expr1
+        typ2 <- inferExp expr2
+        fit typ2 typ1
 
-    -- This is not entirely correct. The assumed type can change.
-    Old.EAbs i e -> do
-        let assume = (TPoly "a")
-        St.modify (M.insert i assume)
-        infT <- R.local (insertEnv i assume) (inferExp e)
-        St.gets (M.lookup i) >>= \case
-            Nothing -> todo
-            Just x -> return (TArrow x infT)
+    RAdd expr1 expr2 -> do
+        typ1 <- inferExp expr1
+        typ2 <- inferExp expr2
+        when (not $ (isInt typ1 || isPoly typ1) && (isInt typ2 || isPoly typ2)) (throwError TypeMismatch)
+        specifyType expr1 (TMono "Int")
+        specifyType expr2 (TMono "Int")
+        return (TMono "Int")
 
-    Old.ELet i e1 e2 -> todo
+    RAbs num name expr -> do
+        insertVars num (TPoly "a")
+        typ <- inferExp expr
+        newTyp <- lookupVars num
+        return $ TArrow newTyp typ
 
 -- Aux
-
--- Double check this function. It's bad and maybe wrong
-subtype :: Type -> Type -> Bool
-subtype (TMono t1) (TMono t2) = t1 == t2
-subtype (TMono t1) (TPoly t2) = True
-subtype (TPoly t2) (TMono t1) = False
-subtype (TArrow t1 t2) (TArrow t3 t4) = t1 `subtype` t3 && t2 `subtype` t4
-subtype _ _                   = False
-
-lookupEnv :: Ident -> Ctx -> Maybe Type
-lookupEnv i = M.lookup i . env
-
-lookupSigs :: Ident -> Ctx -> Maybe Type
-lookupSigs i = M.lookup i . sigs
-
-insertEnv :: Ident -> Type -> Ctx -> Ctx
-insertEnv i t c = Ctx { env = M.insert i t c.env
-                      , sigs = c.sigs
-                      }
-
-updateBound :: Old.Exp -> Type -> Check ()
-updateBound (Old.EId i) t = St.modify (M.insert i t)
-updateBound _ _           = return ()
-
-isBound :: Old.Exp -> Check Bool
-isBound (Old.EId i) = (M.member i) <$> St.get
-isBound _           = return False
-
-lookupBound :: Ident -> Map Ident Type -> Maybe Type
-lookupBound = M.lookup
-
 isInt :: Type -> Bool
 isInt (TMono "Int") = True
-isInt (TPoly _)     = True
 isInt _             = False
+
+isArrow :: Type -> Bool
+isArrow (TArrow _ _) = True
+isArrow _            = False
+
+isPoly :: Type -> Bool
+isPoly (TPoly _) = True
+isPoly _         = False
+
+fit :: Type -> Type -> Infer Type
+fit (TArrow t1 (TArrow t2 t3)) t4
+  | t1 == t4 = return $ TArrow t2 t3
+  | otherwise = fit (TArrow (TArrow t1 t2) t3) t4
+fit (TArrow t1 t2) t3
+  | t1 == t3 = return t2
+  | otherwise = throwError TypeMismatch
+fit _ _ = throwError TypeMismatch
+
+-- a -> (b -> (c -> d))
+-- a -> b
+
+-- | Specify the type of a bound variable
+-- Because in lambdas we have to assume a general type and update it
+specifyType :: RExp -> Type -> Infer ()
+specifyType (RBound num name) typ = do
+    insertVars num typ
+    return ()
+specifyType _ _ = return ()
+
+lookupVars :: Integer -> Infer Type
+lookupVars i = do
+    st <- St.gets vars
+    case M.lookup i st of
+      Just t -> return t
+      Nothing -> throwError UnboundVar
+
+lookupSigs :: Ident -> Infer Type
+lookupSigs i = do
+    st <- St.gets sigs
+    case M.lookup i st of
+      Just t -> return t
+      Nothing -> throwError UnboundVar
+
+
+insertVars :: Integer -> Type -> Infer ()
+insertVars i t = do
+    st <- St.get
+    St.put ( Ctx { vars = M.insert i t st.vars, sigs = st.sigs } )
+
+{-# WARNING todo "TODO IN CODE" #-}
+todo :: a
+todo = error "TODO in code"
 
 data Error
     = TypeMismatch
@@ -161,18 +201,17 @@ data Error
 
 -- Tests
 
-number :: Old.Exp
-number = Old.EConst (CInt 3)
+lambda = RAbs 0 "x" (RAdd (RBound 0 "x") (RBound 0 "x"))
+lambda2 = RAbs 0 "x" (RAnn (RBound 0 "x") (TArrow (TMono "Int") (TMono "String")))
 
-aToInt :: Old.Exp
-aToInt = Old.EAbs (Old.Ident "x") (Old.EAdd (Old.EConst (Old.CInt 3)) (Old.EConst (Old.CInt 3)))
+pp :: Type -> String
+pp (TMono (Ident x)) = x
+pp (TPoly (Ident x)) = x
+pp (TArrow t1 t2) = pp t1 <> " -> " <> pp t2
 
-intToInt :: Old.Exp
-intToInt = Old.EAbs (Old.Ident "x") (Old.EAdd (Old.EId $ Ident "x") (Old.EConst (Old.CInt 3)))
+int,str :: Type
+int = TMono "Int"
+str = TMono "Str"
 
-addLambda :: Old.Exp
-addLambda = Old.EAbs (Old.Ident "x") (Old.EAdd (Old.EId $ Ident "x") (Old.EId $ Ident "x"))
-
-{-# WARNING todo "TODO IN CODE" #-}
-todo :: a
-todo = error "TODO in code"
+arrow :: Type -> Type -> Type
+arrow = TArrow
