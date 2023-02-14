@@ -1,15 +1,15 @@
 
-Program. Program ::= [Bind];
+Program. Program ::= [Bind] ;
 
-Bind. Bind ::= Ident [Ident] "=" Exp;
+Bind. Bind ::= Ident [Ident] "=" Exp ;
 
 EAnn.   Exp5 ::= Exp5 ":" Type ;
-EId.    Exp4 ::= Ident;
-EConst. Exp4 ::= Const;
-EApp.   Exp3 ::= Exp3 Exp4;
-EAdd.   Exp1 ::= Exp1 "+" Exp2;
-ELet.   Exp ::= "let" Ident "=" Exp "in" Exp; 
-EAbs.   Exp  ::= "\\" Ident "." Exp;
+EId.    Exp4 ::= Ident ;
+EConst. Exp4 ::= Const ;
+EApp.   Exp3 ::= Exp3 Exp4 ;
+EAdd.   Exp1 ::= Exp1 "+" Exp2 ;
+ELet.   Exp ::= "let" Ident "=" Exp "in" Exp ; 
+EAbs.   Exp  ::= "\\" Ident "." Exp ;
 
 CInt. Const ::= Integer ;
 CStr. Const ::= String ;
@@ -21,11 +21,11 @@ TArrow. Type ::= Type "->" Type1 ;
 token UIdent (upper (letter | digit | '_')*) ;
 token LIdent (lower (letter | digit | '_')*) ;
 
-separator Bind ";";
+separator Bind ";" ;
 separator Ident " ";
 
 coercions Type 1 ;
-coercions Exp 5;
+coercions Exp 5 ;
 
-comment "--";
-comment "{-" "-}";
+comment "--" ;
+comment "{-" "-}" ;
