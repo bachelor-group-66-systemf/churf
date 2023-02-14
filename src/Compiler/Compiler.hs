@@ -89,22 +89,22 @@ compile (Program prg) = do
                                     , show e, ") is not implemented!"]
 
         emitApp :: Exp -> Exp -> CompilerState ()
-        emitApp (EApp (EId id) e2) e3 = do
-            v2 <- exprToValue e2
-            v3 <- exprToValue e3
-            increaseVarCount
-            vs <- gets variableCount
-            emit $ SetVariable (Ident $ show vs)
-            emit $ Call I64 id [(I64, v2), (I64, v3)]
-        emitApp (EId id) e1 = do
-            v1 <- exprToValue e1
-            increaseVarCount
-            vs <- gets variableCount
-            emit $ SetVariable (Ident $ show vs)
-            emit $ Call I64 id [(I64, v1)]
-        emitApp e1 e2 = do
-            emit . Comment $
-                "The unspeakable happened: " <> show e1 <> "," <> show e2
+        emitApp e1 e2 = appEmitter e1 e2 []
+            where
+                appEmitter :: Exp -> Exp -> [Exp] -> CompilerState ()
+                appEmitter e1 e2 stack = do
+                    let newStack =  stack ++ [e2]
+                    case e1 of
+                        EApp e1' e2' -> appEmitter e1' e2' newStack
+                        EId id  -> do
+                            args <- traverse exprToValue newStack
+                            increaseVarCount
+                            vs <- gets variableCount
+                            emit $ SetVariable (Ident $ show vs)
+                            emit $ Call I64 id (map (I64,) args)
+                        x -> do
+                            emit . Comment $ "The unspeakable happened: "
+                            emit . Comment $ show x
 
         --emitApp (EId id) e2 = do
         --    go e2

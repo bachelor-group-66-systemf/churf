@@ -1,18 +1,2 @@
-add x = \y. x+y;
 
-tripplet = \x . \y . \z . x + y + z;
-
-main = add (add 1 (add 2 3)) 4;
-
-{-
-add x_0 y_1 = x_0 + y_1;
-main = sc_2 (add 2 3);
-sc_2 y_3 = y_3 + y_3
--}
-{-
-add x_0 y_1 = x_0 + y_1;
-tripplet x_2 y_3 z_4 = x_2 y_3 z_4;
-main = add 1 (add 2 3)
-
-tripplet x_2 y_3 z_4 = x_2 + y_3 + z_4;
--}
+main = (\x. x+x+3) ((\x. x) 2)
