@@ -1,2 +1,3 @@
-trippletmagic x y z = ((\x. x + x) x) + y + z;
-main = trippletmagic ((\x. x+x+3) ((\x. x) 2)) 5 3
+b = 5;
+f = b;
+main = f;

@@ -3,6 +3,8 @@ module Compiler.Compiler where
 import           Compiler.LLVMIr     (LLVMIr (..), LLVMType (..), Value (..),
                                       llvmIrToString)
 import           Control.Monad.State (StateT, execStateT, gets, modify)
+import           Data.Map            (Map)
+import qualified Data.Map            as Map
 import           Debug.Trace         (trace)
 import           Grammar.Abs         (Bind (..), Exp (..), Ident (..),
                                       Program (..))
@@ -12,57 +14,85 @@ import           Grammar.Print       (printTree)
 -- | The record used as the code generator state
 data CodeGenerator = CodeGenerator
                    { instructions  :: [LLVMIr]
-                   , methods       :: [Ident]
+                   , functions     :: Map Ident FunctionInfo
                    , variableCount :: Integer }
 type CompilerState a = StateT CodeGenerator Err a
+
+data FunctionInfo = FunctionInfo
+                  { numArgs   :: Int
+                  , arguments :: [Ident] }
 
 -- | An empty instance of CodeGenerator
 defaultCodeGenerator :: CodeGenerator
 defaultCodeGenerator = CodeGenerator
                     { instructions = []
-                    , methods = []
+                    , functions = mempty
                     , variableCount = 0 }
 
 -- | Adds a instruction to the CodeGenerator state
 emit :: LLVMIr -> CompilerState ()
-emit l = modify (\t -> t {instructions = instructions t ++ [l]})
+emit l = modify (\t -> t { instructions = instructions t ++ [l] })
 
 -- | Increases the variable counter in the Codegenerator state
 increaseVarCount :: CompilerState ()
 increaseVarCount = modify (\t -> t {variableCount = variableCount t + 1})
 
+getVarCount :: CompilerState Integer
+getVarCount = gets variableCount
+
+getNewVar :: CompilerState Integer
+getNewVar = increaseVarCount >> getVarCount
+
+getFunctions :: [Bind] -> Map Ident FunctionInfo
+getFunctions xs = Map.fromList $
+    map (\(Bind id args _) -> (id, FunctionInfo
+                              { numArgs = length args
+                              , arguments = args
+                              })) xs
+
 compile :: Program -> Err String
 compile (Program prg) = do
-    let s = defaultCodeGenerator {instructions =
-        [ Comment (show $ printTree (Program prg))
-        , UnsafeRaw "@.str = private unnamed_addr constant [3 x i8] c\"%i\n\", align 1\n"
-        , UnsafeRaw "declare i32 @printf(ptr noalias nocapture, ...)\n"
-        -- , UnsafeRaw $ standardLLVMLibrary <> "\n"
-        ]}
-    fin <- execStateT (goDef prg) s
-    let ins = instructions fin
+    let s = defaultCodeGenerator {
+            instructions = defaultStart,
+            functions = getFunctions prg
+        }
+    ins <- instructions <$> execStateT (goDef prg) s
     pure $ concatMap llvmIrToString ins
     where
         mainContent :: Integer -> [LLVMIr]
         mainContent var =
                 [ UnsafeRaw $
-                    "call i32 (ptr, ...) @printf(ptr noundef @.str, i64 noundef %" <> show var <> ")"
+                    "call i32 (ptr, ...) @printf(ptr noundef @.str, i64 noundef %" <> show var <> ")\n"
                 , Ret I64 (VInteger 0)
                 ]
+
+        defaultStart :: [LLVMIr]
+        defaultStart =
+            [ Comment (show $ printTree (Program prg))
+            , UnsafeRaw "@.str = private unnamed_addr constant [3 x i8] c\"%i\n\", align 1\n"
+            , UnsafeRaw "declare i32 @printf(ptr noalias nocapture, ...)\n"
+            ]
 
         goDef :: [Bind] -> CompilerState ()
         goDef [] = return ()
         goDef (Bind id@(Ident str) args exp : xs) = do
             emit $ UnsafeRaw "\n"
             emit $ Comment $ show str <> ": " <> show exp
-            emit $ Define I64 id (map (I64,) args) -- //TODO parse args
+            emit $ Define I64 id (map (I64,) args)
             case exp of
-                EId id -> emit $ Ret  I64 (VIdent id)
+                EId id -> do
+                    funcs <- gets functions
+                    case Map.lookup id funcs of
+                        Nothing -> emit $ Ret I64 (VIdent id)
+                        Just _  -> do
+                            vc <- getNewVar
+                            emit $ SetVariable (Ident $ show vc)
+                            emit $ Call I64 id []
                 _      -> do
                     go exp
-                    varNum <- gets variableCount
-                    if str == "main" then mapM_ emit (mainContent varNum)
-                                     else emit $ Ret I64 (VIdent (Ident (show varNum)))
+            varNum <- getVarCount
+            if str == "main" then mapM_ emit (mainContent varNum)
+                             else emit $ Ret I64 (VIdent (Ident (show varNum)))
             emit DefineEnd
             modify (\s -> s {variableCount = 0})
             goDef xs
@@ -99,24 +129,12 @@ compile (Program prg) = do
                         EApp e1' e2' -> appEmitter e1' e2' newStack
                         EId id  -> do
                             args <- traverse exprToValue newStack
-                            increaseVarCount
-                            vs <- gets variableCount
+                            vs <- getNewVar
                             emit $ SetVariable (Ident $ show vs)
                             emit $ Call I64 id (map (I64,) args)
                         x -> do
                             emit . Comment $ "The unspeakable happened: "
                             emit . Comment $ show x
-
-        --emitApp (EId id) e2 = do
-        --    go e2
-        --    vc <- gets variableCount
-        --    increaseVarCount
-        --    vc' <- gets variableCount
-        --    emit $ SetVariable (Ident $ show vc')
-        --    emit $ Call I64 id [(I64, VIdent (Ident $ show vc))]
-        --emitApp e1 e2 = do
-        --    go e2
-        --    go e1
 
         emitIdent :: Ident -> CompilerState ()
         emitIdent id = do
@@ -132,8 +150,7 @@ compile (Program prg) = do
         emitInt :: Integer -> CompilerState ()
         emitInt i = do
             -- !!this should never happen!!
-            increaseVarCount
-            varCount <- gets variableCount
+            varCount <- getNewVar
             emit $ Comment "This should not have happened!"
             emit $ SetVariable $ Ident (show varCount)
             emit $ Add I64 (VInteger i) (VInteger 0)
@@ -141,8 +158,7 @@ compile (Program prg) = do
         emitAdd :: Exp -> Exp -> CompilerState ()
         emitAdd e1 e2 = do
             (v1,v2) <- binExprToValues e1 e2
-            increaseVarCount
-            v <- gets variableCount
+            v <- getNewVar
             emit $ SetVariable $ Ident $ show v
             emit $ Add I64 v1 v2
 
@@ -196,7 +212,7 @@ compile (Program prg) = do
         exprToValue (EId i)  = return $ VIdent i
         exprToValue e        = do
             go e
-            v <- gets variableCount
+            v <- getVarCount
             return $ VIdent $ Ident $ show v
 
         binExprToValues :: Exp -> Exp -> CompilerState (Value, Value)
