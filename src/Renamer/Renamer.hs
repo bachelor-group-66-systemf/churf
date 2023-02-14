@@ -1,90 +1,101 @@
-{-# LANGUAGE LambdaCase          #-}
-{-# LANGUAGE OverloadedRecordDot #-}
+{-# LANGUAGE LambdaCase, OverloadedRecordDot, OverloadedStrings #-}
 
 module Renamer.Renamer (rename) where
 
-import           Control.Applicative  (Applicative (liftA2))
-import           Control.Monad.Except (MonadError (throwError))
-import           Control.Monad.RWS    (MonadState, gets, modify)
-import           Control.Monad.State  (StateT, evalStateT)
-import           Data.Set             (Set)
-import qualified Data.Set             as Set
-import           Grammar.Abs
-import           Grammar.ErrM         (Err)
-import           Grammar.Print        (printTree)
-import qualified Renamer.RenamerIr            as R
+import Renamer.RenamerIr
+import Control.Monad.State
+import Control.Monad.Except
+import Control.Monad.Reader
+import Data.Functor.Identity (Identity, runIdentity)
+import Data.Set (Set)
+import qualified Data.Set as S
+import Data.Map (Map)
+import qualified Data.Map as M
 
+import Renamer.RenamerIr
+import qualified Grammar.Abs as Old
 
-data Cxt = Cxt
-  { uniques    :: [(Ident, R.Unique)]
-  , nextUnique :: R.Unique
-  , sig        :: Set Ident
-  }
+type Rename = StateT Ctx (ExceptT Error Identity)
 
-initCxt :: Cxt
-initCxt = Cxt
-  { uniques    = []
-  , nextUnique = R.Unique 0
-  , sig        = mempty
-  }
+data Ctx = Ctx { count :: Integer
+               , sig :: Set Ident
+               , env :: Map Ident Integer}
 
-newtype Rn a = Rn { runRn :: StateT Cxt Err a }
-  deriving (Functor, Applicative, Monad, MonadState Cxt, MonadError String)
+run :: Rename a -> Either Error a
+run = runIdentity . runExceptT . flip evalStateT initCtx
 
-rename :: Program -> Err R.Program
-rename p = evalStateT (runRn $ renameProgram p) initCxt
+initCtx :: Ctx
+initCtx = Ctx { count = 0
+              , sig = mempty
+              , env = mempty }
 
-renameProgram :: Program -> Rn R.Program
-renameProgram (Program ds (Main e)) = do
-  ds' <- mapM renameDef ds
-  e'  <- renameExp e
-  pure $ R.Program ds' (R.Main e')
+rename :: Old.Program -> Either Error RProgram
+rename = run . renamePrg
 
-renameDef :: Def -> Rn R.Def
-renameDef = \case
-  DExp x t _ xs e -> do
-    newSig x
-    xs' <- mapM newUnique xs
-    e'  <- renameExp e
-    let e'' = foldr ($) e' . zipWith R.EAbs xs' $ fromTree t
-    pure . R.DBind $ R.Bind x t e''
+renamePrg :: Old.Program -> Rename RProgram
+renamePrg (Old.Program xs) = do
+    xs' <- mapM renameBind xs
+    return $ RProgram xs'
 
-renameExp :: Exp -> Rn R.Exp
+renameBind :: Old.Bind -> Rename RBind
+renameBind (Old.Bind i args e) = do
+    insertSig i
+    e' <- renameExp (makeLambda (reverse args) e)
+    return $ RBind i e'
+  where 
+    makeLambda :: [Ident] -> Old.Exp -> Old.Exp
+    makeLambda [] e = e
+    makeLambda (x:xs) e = makeLambda xs (Old.EAbs x e)
+
+renameExp :: Old.Exp -> Rename RExp
 renameExp = \case
-  EId x      -> R.EId <$> findBind x
-  EInt i     -> pure $ R.EInt i
-  EApp e e1  -> liftA2 R.EApp (renameExp e) $ renameExp e1
-  EAdd e e1  -> liftA2 R.EAdd (renameExp e) $ renameExp e1
-  EAbs x t e -> do
-    x' <- newUnique x
-    e' <- renameExp e
-    pure $ R.EAbs x' t e'
 
-findBind :: Ident -> Rn R.Name
-findBind x = lookupUnique x >>= \case
-    Just u  -> pure $ R.Nu u
-    Nothing -> gets (Set.member x . sig) >>= \case
-      False -> throwError ("Unbound variable " ++ printTree x)
-      True  -> pure $ R.Ni x
+    Old.EId i -> do
+        st <- get
+        case M.lookup i st.env of
+            Just n -> return $ RBound n i
+            Nothing -> case S.member i st.sig of
+                         True -> return $ RFree i
+                         False -> throwError $ UnboundVar (show i)
 
-newUnique :: Ident -> Rn R.Unique
-newUnique x = do
-  u <- gets nextUnique
-  modify $ \env -> env { nextUnique = succ u
-                       , uniques = (x, u) : env.uniques
-                       }
-  pure u
+    Old.EConst c -> return $ RConst c
 
-newSig :: Ident -> Rn ()
-newSig x = modify $ \cxt -> cxt { sig = Set.insert x cxt.sig}
+    Old.EAnn e t -> flip RAnn t <$> renameExp e
 
-lookupUnique :: Ident -> Rn (Maybe R.Unique)
-lookupUnique x = lookup x <$> gets uniques
+    Old.EApp e1 e2 -> RApp <$> renameExp e1 <*> renameExp e2
 
-fromTree :: Type -> [Type]
-fromTree = fromTree' []
+    Old.EAdd e1 e2 -> RAdd <$> renameExp e1 <*> renameExp e2
 
-fromTree' :: [Type] -> Type -> [Type]
-fromTree' acc = \case
-  TFun t t1 -> acc ++ [t] ++ fromTree t1
-  other     -> other : acc
+    -- Convert let-expressions to lambdas
+    Old.ELet i e1 e2 -> renameExp (Old.EApp (Old.EAbs i e2) e1)
+
+    Old.EAbs i e -> do
+        n <- cnt
+        ctx <- get
+        insertEnv i n
+        re <- renameExp e
+        return $ RAbs n i re
+
+-- | Get current count and increase it by one
+cnt :: Rename Integer
+cnt = do
+    st <- get
+    put (Ctx { count = succ st.count
+             , sig = st.sig
+             , env = st.env })
+    return st.count
+        
+insertEnv :: Ident -> Integer -> Rename ()
+insertEnv i n = do
+    c <- get
+    put ( Ctx { env = M.insert i n c.env , sig = c.sig , count = c.count} )
+
+insertSig :: Ident -> Rename ()
+insertSig i = do
+    c <- get
+    put ( Ctx { sig = S.insert i c.sig , env = c.env , count = c.count } )
+
+data Error = UnboundVar String
+
+instance Show Error where
+    show (UnboundVar str) = "Unbound variable: " <> str

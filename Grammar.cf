@@ -14,12 +14,12 @@ EAbs.   Exp  ::= "\\" Ident "." Exp ;
 CInt. Const ::= Integer ;
 CStr. Const ::= String ;
 
-TMono. Type1 ::= UIdent ;
-TPoly. Type1 ::= LIdent ;
+TMono. Type ::= "Mono" Ident ;
+TPoly. Type ::= "Poly" Ident ;
 TArrow. Type ::= Type "->" Type1 ;
 
-token UIdent (upper (letter | digit | '_')*) ;
-token LIdent (lower (letter | digit | '_')*) ;
+-- token Upper (upper (letter | digit | '_')*) ;
+-- token Lower (lower (letter | digit | '_')*) ;
 
 separator Bind ";" ;
 separator Ident " ";

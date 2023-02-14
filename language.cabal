@@ -31,12 +31,10 @@ executable language
       Grammar.Print
       Grammar.Skel
       Grammar.ErrM
-      -- LambdaLifter
       TypeChecker.TypeChecker
       TypeChecker.TypeCheckerIr
-      -- Renamer.Renamer
-      -- Renamer.RenamerIr
-      -- Interpreter
+      Renamer.Renamer
+      Renamer.RenamerIr
 
     hs-source-dirs:   src
 

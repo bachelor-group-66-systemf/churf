@@ -76,8 +76,8 @@ inferExp = \case
         return infT
 
     Old.EConst c -> case c of
-        (Old.CInt i) -> return (TMono $ UIdent "Int")
-        (Old.CStr s) -> return (TMono $ UIdent "String")
+        (Old.CInt i) -> return (TMono "Int")
+        (Old.CStr s) -> return (TMono "String")
 
     Old.EAdd e1 e2 -> do
         let int = TMono "Int"

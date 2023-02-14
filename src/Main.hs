@@ -6,6 +6,7 @@ import           Grammar.Print      (printTree)
 import           System.Environment (getArgs)
 import           System.Exit        (exitFailure, exitSuccess)
 import TypeChecker.TypeChecker (typecheck)
+import Renamer.Renamer (rename)
 
 main :: IO ()
 main = getArgs >>= \case
@@ -17,12 +18,11 @@ main = getArgs >>= \case
        putStrLn "SYNTAX ERROR"
        putStrLn err
        exitFailure
-      Right prg -> case typecheck prg of
+      Right prg -> case rename prg of
         Right prg -> do
-            putStrLn "TYPE CHECK SUCCESSFUL"
-            putStrLn . show $ prg
+            putStrLn "RENAME SUCCESSFUL"
+            putStrLn $ printTree prg
         Left err -> do
-            putStrLn "TYPE CHECK ERROR"
+            putStrLn "FAILED RENAMING"
             putStrLn . show $ err
             exitFailure
-
