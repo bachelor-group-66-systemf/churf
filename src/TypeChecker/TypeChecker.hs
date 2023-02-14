@@ -14,11 +14,13 @@ import Data.Functor.Identity (Identity, runIdentity)
 import Data.Map (Map)
 import qualified Data.Map as M
 import Grammar.ErrM (Err)
+import Grammar.Print
 
 import TypeChecker.TypeCheckerIr
 
 data Ctx = Ctx { vars :: Map Integer Type
                , sigs :: Map Ident Type
+               , count :: Int
                }
     deriving Show
 
@@ -33,7 +35,7 @@ programmer.
 type Infer = StateT Ctx (ExceptT Error Identity)
 
 initEnv :: Ctx
-initEnv = Ctx mempty mempty
+initEnv = Ctx mempty mempty 0
 
 run :: Infer a -> Either Error a
 run = runIdentity . runExceptT . flip St.evalStateT initEnv
@@ -147,15 +149,27 @@ isPoly _         = False
 
 fit :: Type -> Type -> Infer Type
 fit (TArrow t1 (TArrow t2 t3)) t4
-  | t1 == t4 = return $ TArrow t2 t3
+  | t1 `match` t4 = return $ TArrow t2 t3
   | otherwise = fit (TArrow (TArrow t1 t2) t3) t4
 fit (TArrow t1 t2) t3
-  | t1 == t3 = return t2
+  | t1 `match` t3 = return t2
   | otherwise = throwError TypeMismatch
 fit _ _ = throwError TypeMismatch
 
--- a -> (b -> (c -> d))
--- a -> b
+match :: Type -> Type -> Bool
+match (TPoly _) (TMono _) = True
+match (TMono _) (TPoly _) = True
+match (TMono _) (TMono _) = True
+match (TPoly _) (TPoly _) = True
+match (TArrow t1 t2) (TArrow t3 t4) = match t1 t3 && match t2 t4
+
+incCount :: Infer Int
+incCount = do
+    st <- St.get
+    St.put (Ctx { vars = st.vars, sigs = st.sigs, count = succ st.count })
+    return st.count
+
+
 
 -- | Specify the type of a bound variable
 -- Because in lambdas we have to assume a general type and update it
@@ -204,14 +218,4 @@ data Error
 lambda = RAbs 0 "x" (RAdd (RBound 0 "x") (RBound 0 "x"))
 lambda2 = RAbs 0 "x" (RAnn (RBound 0 "x") (TArrow (TMono "Int") (TMono "String")))
 
-pp :: Type -> String
-pp (TMono (Ident x)) = x
-pp (TPoly (Ident x)) = x
-pp (TArrow t1 t2) = pp t1 <> " -> " <> pp t2
-
-int,str :: Type
-int = TMono "Int"
-str = TMono "Str"
-
-arrow :: Type -> Type -> Type
-arrow = TArrow
+fn_on_var = RAbs 0 "x" (RAbs 1 "y" (RApp (RBound 0 "x") (RBound 1 "y")))
