@@ -57,7 +57,7 @@ data LLVMIr = Define LLVMType Ident Params
 llvmIrToString :: LLVMIr -> String
 llvmIrToString = \case
     (Define t (Ident i) params)           -> concat ["define ", show t, " @", i, "("
-                                                    , intercalate "," (fmap (\(x,Ident y) -> unwords [show x, "%"<>y]) params)
+                                                    , intercalate ", " (fmap (\(x,Ident y) -> unwords [show x, "%"<>y]) params)
                                                     ,") {\n"]
     DefineEnd                             -> "}\n"
     (Declare _t (Ident _i) _params)       -> undefined
