@@ -59,10 +59,10 @@ compile (Program prg) = do
     ins <- instructions <$> execStateT (goDef prg) s
     pure $ concatMap llvmIrToString ins
     where
-        mainContent :: Integer -> [LLVMIr]
+        mainContent :: Value -> [LLVMIr]
         mainContent var =
                 [ UnsafeRaw $
-                    "call i32 (ptr, ...) @printf(ptr noundef @.str, i64 noundef %" <> show var <> ")\n"
+                    "call i32 (ptr, ...) @printf(ptr noundef @.str, i64 noundef " <> show var <> ")\n"
                 , Ret I64 (VInteger 0)
                 ]
 
@@ -79,20 +79,9 @@ compile (Program prg) = do
             emit $ UnsafeRaw "\n"
             emit $ Comment $ show str <> ": " <> show exp
             emit $ Define I64 id (map (I64,) args)
-            case exp of
-                EId id -> do
-                    funcs <- gets functions
-                    case Map.lookup id funcs of
-                        Nothing -> emit $ Ret I64 (VIdent id)
-                        Just _  -> do
-                            vc <- getNewVar
-                            emit $ SetVariable (Ident $ show vc)
-                            emit $ Call I64 id []
-                _      -> do
-                    go exp
-            varNum <- getVarCount
-            if str == "main" then mapM_ emit (mainContent varNum)
-                             else emit $ Ret I64 (VIdent (Ident (show varNum)))
+            var <- exprToValue exp
+            if str == "main" then mapM_ emit (mainContent var)
+                             else emit $ Ret I64 var
             emit DefineEnd
             modify (\s -> s {variableCount = 0})
             goDef xs
@@ -157,7 +146,8 @@ compile (Program prg) = do
 
         emitAdd :: Exp -> Exp -> CompilerState ()
         emitAdd e1 e2 = do
-            (v1,v2) <- binExprToValues e1 e2
+            v1 <- exprToValue e1
+            v2 <- exprToValue e2
             v <- getNewVar
             emit $ SetVariable $ Ident $ show v
             emit $ Add I64 v1 v2
@@ -223,22 +213,8 @@ compile (Program prg) = do
             v <- getVarCount
             return . VIdent . Ident $ show v
 
-        binExprToValues :: Exp -> Exp -> CompilerState (Value, Value)
-        binExprToValues e1 e2 = do
-            v1 <- exprToValue e1
-            v2 <- exprToValue e2
-            return (v1,v2)
-
 -- | A pretty nasty function to flatten out function types,
 --   as they are currently represented by a recursive data type.
--- flattenFuncType :: Type -> (LLVMType, [LLVMType])
--- flattenFuncType xs = do
---     let res = go xs
---     (last res, init res)
---     where
---         go TInt         = [I64]
---         go (TPol id)    = [CustomType id]
---         go (TFun t1 t2) = go t1 ++ go t2
-
 cTrace :: Show a => a -> a
 cTrace a = trace (show a) a
+
