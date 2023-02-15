@@ -1,4 +1,6 @@
-module Compiler.LLVMIr (LLVMType (..), LLVMIr (..), llvmIrToString, LLVMValue (..)) where
+{-# LANGUAGE LambdaCase #-}
+
+module Compiler.LLVMIr (LLVMType (..), LLVMIr (..), llvmIrToString, LLVMValue (..), LLVMComp (..)) where
 
 import Data.List (intercalate)
 import Grammar.Abs (Ident (Ident))
@@ -16,7 +18,7 @@ data LLVMType
 
 instance Show LLVMType where
     show :: LLVMType -> String
-    show t = case t of
+    show = \case
         I1 -> "i1"
         I8 -> "i8"
         I32 -> "i32"
@@ -25,6 +27,31 @@ instance Show LLVMType where
         Ref ty -> show ty <> "*"
         Array n ty -> concat ["[", show n, " x ", show ty, "]"]
         CustomType (Ident ty) -> ty
+
+data LLVMComp
+    = LLEq
+    | LLNe
+    | LLUgt
+    | LLUge
+    | LLUlt
+    | LLUle
+    | LLSgt
+    | LLSge
+    | LLSlt
+    | LLSle
+instance Show LLVMComp where
+    show :: LLVMComp -> String
+    show = \case
+        LLEq -> "eq"
+        LLNe -> "ne"
+        LLUgt -> "ugt"
+        LLUge -> "uge"
+        LLUlt -> "ult"
+        LLUle -> "ule"
+        LLSgt -> "sgt"
+        LLSge -> "sge"
+        LLSlt -> "slt"
+        LLSle -> "sle"
 
 {- | Represents a LLVM "value", as in an integer, a register variable,
   or a string contstant
@@ -53,6 +80,10 @@ data LLVMIr
     | Div LLVMType LLVMValue LLVMValue
     | Mul LLVMType LLVMValue LLVMValue
     | Srem LLVMType LLVMValue LLVMValue
+    | Icmp LLVMComp LLVMType LLVMValue LLVMValue
+    | Br Ident
+    | BrCond LLVMValue Ident Ident
+    | Label Ident
     | Call LLVMType Ident Args
     | Alloca LLVMType
     | Store LLVMType Ident LLVMType Ident
@@ -134,12 +165,24 @@ llvmIrToString = go 0
                     [ "bitcast ", show t1, " %"
                     , i, " to ", show t2, "\n"
                     ]
+            (Icmp comp t v1 v2) ->
+                concat 
+                    [ "icmp ", show comp, " ", show t
+                    , " ", show v1, ", ", show v2, "\n"
+                    ]
             (Ret t v) ->
                 concat
                     [ "ret ", show t, " "
                     , show v, "\n"
                     ]
             (UnsafeRaw s) -> s
+            (Label (Ident s)) -> "\nlabel_" <> s <> ":\n"
+            (Br (Ident s)) -> "br label %label_" <> s <> "\n"
+            (BrCond val (Ident s1) (Ident s2)) -> 
+                concat 
+                    [ "br i1 ", show val, ", ", "label %"
+                    , "label_", s1, ", ", "label %", "label_", s2, "\n"
+                    ]
             (Comment s) -> "; " <> s <> "\n"
             (Variable (Ident id)) -> "%" <> id
 {- FOURMOLU_ENABLE -}

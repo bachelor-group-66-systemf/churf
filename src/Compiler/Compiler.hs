@@ -1,6 +1,7 @@
 module Compiler.Compiler (compile) where
 
 import Compiler.LLVMIr (
+    LLVMComp (..),
     LLVMIr (..),
     LLVMType (..),
     LLVMValue (..),
@@ -85,7 +86,18 @@ compile (Program prg) = do
     mainContent var =
         [ UnsafeRaw $
             "call i32 (ptr, ...) @printf(ptr noundef @.str, i64 noundef " <> show var <> ")\n"
-        , Ret I64 (VInteger 0)
+        , -- , SetVariable (Ident "p") (Icmp LLEq I64 (VInteger 2) (VInteger 2))
+          -- , BrCond (VIdent (Ident "p")) (Ident "b_1") (Ident "b_2")
+          -- , Label (Ident "b_1")
+          -- , UnsafeRaw
+          --     "call i32 (ptr, ...) @printf(ptr noundef @.str, i64 noundef 1)\n"
+          -- , Br (Ident "end")
+          -- , Label (Ident "b_2")
+          -- , UnsafeRaw
+          --     "call i32 (ptr, ...) @printf(ptr noundef @.str, i64 noundef 2)\n"
+          -- , Br (Ident "end")
+          -- , Label (Ident "end")
+          Ret I64 (VInteger 0)
         ]
 
     defaultStart :: [LLVMIr]
