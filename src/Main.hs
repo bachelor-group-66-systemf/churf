@@ -2,6 +2,7 @@
 module Main where
 
 import           Compiler.Compiler  (compile)
+import           GHC.IO.Handle.Text (hPutStrLn)
 import           Grammar.ErrM       (Err)
 import           Grammar.Par        (myLexer, pProgram)
 import           Grammar.Print      (printTree)
@@ -9,6 +10,7 @@ import           Interpreter        (interpret)
 import           LambdaLifter       (abstract, freeVars, lambdaLift)
 import           System.Environment (getArgs)
 import           System.Exit        (exitFailure, exitSuccess)
+import           System.IO          (stderr)
 
 main :: IO ()
 main = getArgs >>= \case
@@ -19,15 +21,16 @@ main' :: String -> IO ()
 main' s = do
   file   <- readFile s
 
-  --putStrLn "\n-- parse"
+  printToErr "-- Parse Tree -- "
   parsed    <- fromSyntaxErr . pProgram $ myLexer file
-  --putStrLn $ printTree parsed
+  printToErr $ printTree parsed
 
-  --putStrLn "\n-- Lambda Lifter"
+  printToErr "\n-- Lambda Lifter --"
   let lifted = lambdaLift parsed
-  -- putStrLn $ printTree lifted
+  printToErr $ printTree lifted
 
   --putStrLn "\n-- Compiler"
+  printToErr "\n -- Printing compiler output to stdout --"
   compiled  <- fromCompilerErr $ compile lifted
   putStrLn compiled
 
@@ -36,6 +39,9 @@ main' s = do
   -- print interpred
 
   exitSuccess
+
+printToErr :: String -> IO ()
+printToErr = hPutStrLn stderr
 
 fromCompilerErr :: Err a -> IO a
 fromCompilerErr = either
