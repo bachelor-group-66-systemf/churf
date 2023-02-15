@@ -4,5 +4,6 @@ dist-newstyle
 *.bak
 src/Grammar
 /language
+.vscode/
 
 src/GC/tests/*.out
