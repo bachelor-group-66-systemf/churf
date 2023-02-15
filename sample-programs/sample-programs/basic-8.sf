@@ -1,2 +1,4 @@
-f y = let double = \y. y+y in (\x. x+y) 4;
+f z = let double = \y. y+y in (\x. x+z) 4;
+-- f y = let double = \y. y+y in (\x. x+y) 4;
+-- ^ this produces a bug in the renamer
 main = f 40
