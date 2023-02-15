@@ -62,7 +62,7 @@ instance Print TExp where
         TAdd e e1 t -> prPrec i 1 $ concatD [ prt 1 e , doc (showString "+") , prt 2 e1 ]
         TAbs _ u e t -> prPrec i 0 $ concatD
               [ doc (showString "(")
-              , doc (showString "\\")
+              , doc (showString "λ")
               , prt 0 u
               , doc (showString ".")
               , prt 0 e

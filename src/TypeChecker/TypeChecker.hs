@@ -47,97 +47,60 @@ inferPrg (RProgram xs) = do
 
 inferBind :: RBind -> Infer TBind
 inferBind (RBind name e) = do
-    t <- inferExp e
-    e' <- toTExpr e
+    (t, e') <- inferExp e
     insertSigs name t
     return $ TBind name t e'
 
--- This needs to be fixed. Should not separate inference of type and creation of the new data type.
-toTExpr :: RExp -> Infer TExp
-toTExpr = \case
 
-    re@(RAnn e t) -> do
-        t <- inferExp re
-        e' <- toTExpr e
-        return $ TAnn e' t
-
-    re@(RBound num name) -> do
-        t <- inferExp re
-        return $ TBound num name t
-
-    re@(RFree name) -> do
-        t <- inferExp re
-        return $ TFree name t
-
-    re@(RConst con)-> do
-        t <- inferExp re
-        return $ TConst con t
-
-    re@(RApp e1 e2) -> do
-        t <- inferExp re
-        e1' <- toTExpr e1
-        e2' <- toTExpr e2
-        return $ TApp e1' e2' t
-
-    re@(RAdd e1 e2)-> do
-        t <- inferExp re
-        e1' <- toTExpr e1
-        e2' <- toTExpr e2
-        return $ TAdd e1' e2' t
-
-    re@(RAbs num name e) -> do
-        t <- inferExp re
-        e' <- toTExpr e
-        return $ TAbs num name e' t
-
-inferExp :: RExp -> Infer Type
+inferExp :: RExp -> Infer (Type, TExp)
 inferExp = \case
 
     RAnn expr typ -> do
-        exprT <- inferExp expr
-        when (not (exprT == typ || isPoly exprT)) (throwError $ AnnotatedMismatch "inferExp, RAnn")
-        return typ
+        (t,expr') <- inferExp expr
+        when (not (t == typ || isPoly t)) (throwError $ AnnotatedMismatch "inferExp, RAnn")
+        return (typ,expr')
 
     -- Name is only here for proper error messages
     RBound num name ->
         M.lookup num <$> St.gets vars >>= \case
             Nothing -> throwError $ UnboundVar "RBound"
-            Just t -> return t
+            Just t -> return (t, TBound num name t)
 
     RFree name -> do
         M.lookup name <$> St.gets sigs >>= \case
             Nothing -> throwError $ UnboundVar "RFree"
-            Just t -> return t
+            Just t -> return (t, TFree name t)
 
-    RConst (CInt _) -> return $ TMono "Int"
+    RConst (CInt i) -> return $ (TMono "Int", TConst (CInt i) (TMono "Int"))
 
-    RConst (CStr _) -> return $ TMono "Str"
+    RConst (CStr str) -> return $ (TMono "Str", TConst (CStr str) (TMono "Str"))
 
     -- Should do proper unification using union-find. Some nice libs exist
     RApp expr1 expr2 -> do
-        typ1 <- inferExp expr1
-        typ2 <- inferExp expr2
+        (typ1, expr1') <- inferExp expr1
+        (typ2, expr2') <- inferExp expr2
         cnt <- incCount
         case typ1 of
             (TPoly (Ident x)) -> do 
                 let newType = (TArrow (TPoly (Ident x)) (TPoly . Ident $ x ++ (show cnt)))
                 specifyType expr1 newType
-                apply newType typ1
-            _         -> apply typ2 typ1
+                typ1' <- apply newType typ1
+                return $ (typ1', TApp expr1' expr2' typ1')
+            _         -> (\t -> (t, TApp expr1' expr2' t)) <$> apply typ2 typ1
 
     RAdd expr1 expr2 -> do
-        typ1 <- inferExp expr1
-        typ2 <- inferExp expr2
+        (typ1, expr1') <- inferExp expr1
+        (typ2, expr2') <- inferExp expr2
         when (not $ (isInt typ1 || isPoly typ1) && (isInt typ2 || isPoly typ2)) (throwError $ TypeMismatch "inferExp, RAdd")
         specifyType expr1 (TMono "Int")
         specifyType expr2 (TMono "Int")
-        return (TMono "Int")
+        return (TMono "Int", TAdd expr1' expr2' (TMono "Int"))
 
     RAbs num name expr -> do
         insertVars num (TPoly "a")
-        typ <- inferExp expr
+        (typ, expr') <- inferExp expr
         newTyp <- lookupVars num
-        return $ TArrow newTyp typ
+        return $ (TArrow newTyp typ, TAbs num name expr' typ)
 
 -- Aux
 isInt :: Type -> Bool
@@ -196,6 +159,8 @@ union = todo
 find :: Type -> Type
 find = todo
 
+-- Have to figure out the equivalence classes for types.
+-- Currently this does not support more than exact matches.
 apply :: Type -> Type -> Infer Type
 apply (TArrow t1 t2) t3
   | t1 == t3 = return t2
@@ -222,4 +187,12 @@ lambda2 = RAbs 0 "x" (RAnn (RBound 0 "x") (TArrow (TMono "Int") (TMono "String")
 
 fn_on_var = RAbs 0 (Ident "f") (RAbs 1 (Ident "x") (RApp (RBound 0 (Ident "f")) (RBound 1 (Ident "x"))))
 
-bind = RBind "test" fn_on_var
+
+--add x = \y. x+y;
+add = RAbs 0 "x" (RAbs 1 "y" (RAdd (RBound 0 "x") (RBound 1 "y")))
+-- main = (\z. z+z) ((add 4) 6);
+main = RApp (RAbs 0 "z" (RAdd (RBound 0 "z") (RBound 0 "z"))) applyAdd
+four = RConst (CInt 4)
+six = RConst (CInt 6)
+applyAdd = (RApp (RApp add four) six)
+partialAdd = RApp add four

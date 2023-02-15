@@ -45,6 +45,7 @@ instance Print RBind where
                     [ prt 0 x
                     , doc (showString "=")
                     , prt 0 e
+                    , doc (showString "\n")
                     ]
 
 instance Print RExp where
@@ -55,4 +56,4 @@ instance Print RExp where
         RConst n -> prPrec i 3 (concatD [prt 0 n])
         RApp e e1 -> prPrec i 2 (concatD [prt 2 e, prt 3 e1])
         RAdd e e1 -> prPrec i 1 (concatD [prt 1 e, doc (showString "+"), prt 2 e1])
-        RAbs u id e -> prPrec i 0 (concatD [doc (showString "\\"), prt 0 ("var" ++ show u), doc (showString "."), prt 0 e])
+        RAbs u id e -> prPrec i 0 (concatD [doc (showString "λ"), prt 0 ("var" ++ show u), doc (showString "."), prt 0 e])

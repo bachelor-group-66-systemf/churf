@@ -24,7 +24,6 @@ main = getArgs >>= \case
         putStrLn " ----- PARSER ----- "
         putStrLn ""
         putStrLn . printTree $ prg
-        putStrLn . show $ prg
         case rename prg of
             Left err -> do
               putStrLn "FAILED RENAMING"
