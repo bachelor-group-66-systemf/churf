@@ -19,20 +19,29 @@ main = getArgs >>= \case
        putStrLn "SYNTAX ERROR"
        putStrLn err
        exitFailure
-      Right prg -> case rename prg of
-        Left err -> do
-          putStrLn "FAILED RENAMING"
-          putStrLn . show $ err
-          exitFailure
-        Right prg -> case typecheck prg of
+      Right prg -> do
+        putStrLn ""
+        putStrLn " ----- PARSER ----- "
+        putStrLn ""
+        putStrLn . printTree $ prg
+        putStrLn . show $ prg
+        case rename prg of
             Left err -> do
-                putStrLn "TYPECHECK ERROR"
-                putStrLn . show $ err
-                exitFailure
-            Right prg -> do
+              putStrLn "FAILED RENAMING"
+              putStrLn . show $ err
+              exitFailure
+            Right prg ->do
+                putStrLn ""
+                putStrLn " ----- RENAMER ----- "
                 putStrLn ""
                 putStrLn . printTree $ prg
-                putStrLn ""
-                putStrLn " ----- ADT ----- "
-                putStrLn ""
-                putStrLn $ show prg
+                case typecheck prg of
+                    Left err -> do
+                        putStrLn "TYPECHECK ERROR"
+                        putStrLn . show $ err
+                        exitFailure
+                    Right prg -> do
+                        putStrLn ""
+                        putStrLn " ----- TYPECHECKER ----- "
+                        putStrLn ""
+                        putStrLn . printTree $ prg

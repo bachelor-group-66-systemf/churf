@@ -12,6 +12,7 @@ import qualified Data.Map as M
 import Grammar.ErrM (Err)
 import Grammar.Print
 
+import Debug.Trace (trace)
 import TypeChecker.TypeCheckerIr
 
 data Ctx = Ctx { vars :: Map Integer Type
@@ -51,6 +52,7 @@ inferBind (RBind name e) = do
     insertSigs name t
     return $ TBind name t e'
 
+-- This needs to be fixed. Should not separate inference of type and creation of the new data type.
 toTExpr :: RExp -> Infer TExp
 toTExpr = \case
 
@@ -87,7 +89,6 @@ toTExpr = \case
         t <- inferExp re
         e' <- toTExpr e
         return $ TAbs num name e' t
-
 
 inferExp :: RExp -> Infer Type
 inferExp = \case
@@ -198,7 +199,7 @@ find = todo
 apply :: Type -> Type -> Infer Type
 apply (TArrow t1 t2) t3
   | t1 == t3 = return t2
-  | otherwise = throwError $ TypeMismatch "apply"
+apply t1 t2 = throwError $ TypeMismatch "apply"
 
 {-# WARNING todo "TODO IN CODE" #-}
 todo :: a
@@ -219,4 +220,6 @@ data Error
 lambda = RAbs 0 "x" (RAdd (RBound 0 "x") (RBound 0 "x"))
 lambda2 = RAbs 0 "x" (RAnn (RBound 0 "x") (TArrow (TMono "Int") (TMono "String")))
 
-fn_on_var = RAbs 0 "f" (RAbs 1 "x" (RApp (RBound 0 "f") (RBound 1 "x")))
+fn_on_var = RAbs 0 (Ident "f") (RAbs 1 (Ident "x") (RApp (RBound 0 (Ident "f")) (RBound 1 (Ident "x"))))
+
+bind = RBind "test" fn_on_var
