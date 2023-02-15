@@ -1,3 +1,0 @@
-b = 21;
-add x y = x + y;
-main = add 1 b;

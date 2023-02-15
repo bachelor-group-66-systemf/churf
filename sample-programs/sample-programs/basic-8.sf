@@ -1,0 +1,2 @@
+f y = let double = \y. y+y in (\x. x+y) 4;
+main = f 40
