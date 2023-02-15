@@ -5,7 +5,6 @@
 #include <setjmp.h>
 #include <stdlib.h>
 #include <vector>
-using namespace std;
 
 #include "chunk.hpp"
 
@@ -14,22 +13,6 @@ using namespace std;
 namespace GC {
 
   class Heap {
-  public:
-
-    // Singleton
-    static Heap &the() {
-      if (m_instance)
-	      return *m_instance;
-      m_instance = new Heap();
-      return *m_instance;
-    }
-
-    ~Heap() {
-      free((char *)m_heap);
-    }
-
-    void *alloc(size_t size);
-    void print_contents();
 
   private:
 
@@ -40,11 +23,11 @@ namespace GC {
     }
 
     void collect();
-    void compact();
+    void sweep();
+    // void compact();
     void mark(uintptr_t *start, const uintptr_t *end, std::vector<Chunk *> worklist);
+    void print_line(Chunk *chunk);
 
-    bool compareChunks(Chunk *c1, Chunk *c2);
-      
     inline static Heap *m_instance = nullptr;
     const char *m_heap;
     size_t m_size;
@@ -53,5 +36,30 @@ namespace GC {
     std::vector<Chunk *> m_allocated_chunks;
     std::vector<Chunk *> m_freed_chunks;
 
+  public:
+
+    // Singleton
+    static Heap &the() {
+      if (m_instance)
+	      return *m_instance;
+      m_instance = new Heap();
+      return *m_instance;
+    }
+
+    static Heap *the2() {
+      if (m_instance)
+        return m_instance;
+      m_instance = new Heap();
+      return m_instance;
+    }
+
+    // BEWARE only for testing, this should be adressed
+/*     ~Heap() {
+      free((char *)m_heap);
+    } */
+
+    void *alloc(size_t size);
+    void print_contents();
+    void force_collect();
   };
 }

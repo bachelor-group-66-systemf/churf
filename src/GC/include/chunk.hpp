@@ -8,7 +8,7 @@ namespace GC {
   
   struct Chunk {
     bool marked;
-    void *start;
+    uintptr_t *start;
     size_t size;
   };
 
