@@ -53,42 +53,55 @@ data LLVMIr = Define LLVMType Ident Params
                                -- instructions should be used in its place
     deriving (Show)
 
--- | Converts a LLVM inststruction to a String, allowing for printing etc.
-llvmIrToString :: LLVMIr -> String
-llvmIrToString = \case
-    (Define t (Ident i) params)           -> concat ["define ", show t, " @", i, "("
-                                                    , intercalate ", " (fmap (\(x,Ident y) -> unwords [show x, "%"<>y]) params)
-                                                    ,") {\n"]
-    DefineEnd                             -> "}\n"
-    (Declare _t (Ident _i) _params)       -> undefined
-    (SetVariable (Ident i))               -> concat ["%", i, " = "]
-    (Add t v1 v2)                         -> concat ["add ", show t, " "
-                                                    , show v1, ", ", show v2
-                                                    , "\n"]
-    (Sub t v1 v2)                         -> concat ["sub ", show t, " "
-                                                    , show v1, ", "
-                                                    , show v2, "\n"]
-    (Div t v1 v2)                         -> concat ["sdiv ", show t, " "
-                                                    , show v1, ", "
-                                                    , show v2, "\n"]
-    (Mul t v1 v2)                         -> concat ["mul ", show t, " "
-                                                    , show v1, ", "
-                                                    , show v2, "\n"]
-    (Srem t v1 v2)                        -> concat ["srem ", show t, " "
-                                                    , show v1, ", "
-                                                    , show v2, "\n"]
-    (Call t (Ident i) arg)                -> concat ["call ", show t, " @", i, "("
-                                                   , intercalate ", " $ Prelude.map (\(x,y) -> show x <> " " <> show y) arg
-                                                   , ")\n"]
-    (Alloca t)                            -> unwords ["alloca", show t, "\n"]
-    (Store t1 (Ident id1) t2 (Ident id2)) -> concat ["store ", show t1, " %"
-                                                    , id1, ", ", show t2, " %"
-                                                    , id2, "\n"]
-    (Bitcast t1 (Ident i) t2)             -> concat ["bitcast ", show t1, " %"
-                                                    , i, " to ", show t2, "\n"]
-    (Ret t v)                             -> concat ["ret ", show t
-                                                    , " ", show v, "\n"]
-    (UnsafeRaw s)                         -> s
-    (Comment s)                           -> "; " <> s <> "\n"
-    (Variable (Ident id))                 -> "%" <> id
+llvmIrToString :: [LLVMIr] -> String
+llvmIrToString = go 0
+    where
+        go :: Int -> [LLVMIr] -> String
+        go _ [] = mempty
+        go i (x:xs) = do
+            let (i', n) = case x of
+                    Define {} -> (i + 1, 0)
+                    DefineEnd -> (i - 1, 0)
+                    _         -> (i, i)
+            insToIns n x <> go i' xs
+        -- | Converts a LLVM inststruction to a String, allowing for printing etc.
+        --   The integer represents the indentation
+        insToIns :: Int ->  LLVMIr -> String
+        insToIns i l = replicate i '\t' <> case l of
+            (Define t (Ident i) params)           -> concat ["define ", show t, " @", i, "("
+                                                            , intercalate ", " (fmap (\(x,Ident y) -> unwords [show x, "%"<>y]) params)
+                                                            ,") {\n"]
+            DefineEnd                             -> "}\n"
+            (Declare _t (Ident _i) _params)       -> undefined
+            (SetVariable (Ident i))               -> concat ["%", i, " = "]
+            (Add t v1 v2)                         -> concat ["add ", show t, " "
+                                                            , show v1, ", ", show v2
+                                                            , "\n"]
+            (Sub t v1 v2)                         -> concat ["sub ", show t, " "
+                                                            , show v1, ", "
+                                                            , show v2, "\n"]
+            (Div t v1 v2)                         -> concat ["sdiv ", show t, " "
+                                                            , show v1, ", "
+                                                            , show v2, "\n"]
+            (Mul t v1 v2)                         -> concat ["mul ", show t, " "
+                                                            , show v1, ", "
+                                                            , show v2, "\n"]
+            (Srem t v1 v2)                        -> concat ["srem ", show t, " "
+                                                            , show v1, ", "
+                                                            , show v2, "\n"]
+            (Call t (Ident i) arg)                -> concat ["call ", show t, " @", i, "("
+                                                        , intercalate ", " $ Prelude.map (\(x,y) -> show x <> " " <> show y) arg
+                                                        , ")\n"]
+            (Alloca t)                            -> unwords ["alloca", show t, "\n"]
+            (Store t1 (Ident id1) t2 (Ident id2)) -> concat ["store ", show t1, " %"
+                                                            , id1, ", ", show t2, " %"
+                                                            , id2, "\n"]
+            (Bitcast t1 (Ident i) t2)             -> concat ["bitcast ", show t1, " %"
+                                                            , i, " to ", show t2, "\n"]
+            (Ret t v)                             -> concat ["ret ", show t
+                                                            , " ", show v, "\n"]
+            (UnsafeRaw s)                         -> s
+            (Comment s)                           -> "; " <> s <> "\n"
+            (Variable (Ident id))                 -> "%" <> id
+
 

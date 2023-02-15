@@ -57,7 +57,7 @@ compile (Program prg) = do
             functions = getFunctions prg
         }
     ins <- instructions <$> execStateT (goDef prg) s
-    pure $ concatMap llvmIrToString ins
+    pure $ llvmIrToString ins
     where
         mainContent :: Value -> [LLVMIr]
         mainContent var =
