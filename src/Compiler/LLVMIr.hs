@@ -36,7 +36,7 @@ type Args = [(LLVMType, Value)]
 data LLVMIr = Define LLVMType Ident Params
             | DefineEnd
             | Declare LLVMType Ident Params
-            | SetVariable Ident
+            | SetVariable Ident LLVMIr
             | Variable Ident
             | Add LLVMType Value Value
             | Sub LLVMType Value Value
@@ -63,17 +63,17 @@ llvmIrToString = go 0
                     Define {} -> (i + 1, 0)
                     DefineEnd -> (i - 1, 0)
                     _         -> (i, i)
-            insToIns n x <> go i' xs
+            insToString n x <> go i' xs
         -- | Converts a LLVM inststruction to a String, allowing for printing etc.
         --   The integer represents the indentation
-        insToIns :: Int ->  LLVMIr -> String
-        insToIns i l = replicate i '\t' <> case l of
+        insToString :: Int ->  LLVMIr -> String
+        insToString i l = replicate i '\t' <> case l of
             (Define t (Ident i) params)           -> concat ["define ", show t, " @", i, "("
                                                             , intercalate ", " (fmap (\(x,Ident y) -> unwords [show x, "%"<>y]) params)
                                                             ,") {\n"]
             DefineEnd                             -> "}\n"
             (Declare _t (Ident _i) _params)       -> undefined
-            (SetVariable (Ident i))               -> concat ["%", i, " = "]
+            (SetVariable (Ident i) ir)            -> concat ["%", i, " = ", insToString 0 ir]
             (Add t v1 v2)                         -> concat ["add ", show t, " "
                                                             , show v1, ", ", show v2
                                                             , "\n"]

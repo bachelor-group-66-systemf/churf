@@ -119,8 +119,7 @@ compile (Program prg) = do
                         EId id  -> do
                             args <- traverse exprToValue newStack
                             vs <- getNewVar
-                            emit $ SetVariable (Ident $ show vs)
-                            emit $ Call I64 id (map (I64,) args)
+                            emit $ SetVariable (Ident $ show vs) (Call I64 id (map (I64,) args))
                         x -> do
                             emit . Comment $ "The unspeakable happened: "
                             emit . Comment $ show x
@@ -141,16 +140,14 @@ compile (Program prg) = do
             -- !!this should never happen!!
             varCount <- getNewVar
             emit $ Comment "This should not have happened!"
-            emit $ SetVariable $ Ident (show varCount)
-            emit $ Add I64 (VInteger i) (VInteger 0)
+            emit $ SetVariable (Ident (show varCount)) (Add I64 (VInteger i) (VInteger 0))
 
         emitAdd :: Exp -> Exp -> CompilerState ()
         emitAdd e1 e2 = do
             v1 <- exprToValue e1
             v2 <- exprToValue e2
             v <- getNewVar
-            emit $ SetVariable $ Ident $ show v
-            emit $ Add I64 v1 v2
+            emit $ SetVariable (Ident $ show v) (Add I64 v1 v2)
 
         -- emitMul :: Exp -> Exp -> CompilerState ()
         -- emitMul e1 e2 = do
@@ -204,8 +201,7 @@ compile (Program prg) = do
             case Map.lookup id funcs of
                 Just _  -> do
                     vc <- getNewVar
-                    emit $ SetVariable (Ident $ show vc)
-                    emit $ Call I64 id []
+                    emit $ SetVariable (Ident $ show vc) (Call I64 id [])
                     return $ VIdent (Ident $ show vc)
                 Nothing -> return $ VIdent id
         exprToValue e        = do
