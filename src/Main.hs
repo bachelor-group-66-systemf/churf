@@ -30,4 +30,9 @@ main = getArgs >>= \case
                 putStrLn . show $ err
                 exitFailure
             Right prg -> do
+                putStrLn ""
                 putStrLn . printTree $ prg
+                putStrLn ""
+                putStrLn " ----- ADT ----- "
+                putStrLn ""
+                putStrLn $ show prg

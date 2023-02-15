@@ -4,10 +4,6 @@ module TypeChecker.TypeChecker where
 
 import Control.Monad (when, void)
 import Control.Monad.Except (ExceptT, throwError, runExceptT)
-import Control.Monad.Reader (ReaderT)
-import qualified Control.Monad.Reader as R
-import Control.Monad.Writer (WriterT)
-import qualified Control.Monad.Writer as W
 import Control.Monad.State (StateT)
 import qualified Control.Monad.State as St
 import Data.Functor.Identity (Identity, runIdentity)
@@ -52,6 +48,7 @@ inferBind :: RBind -> Infer TBind
 inferBind (RBind name e) = do
     t <- inferExp e
     e' <- toTExpr e
+    insertSigs name t
     return $ TBind name t e'
 
 toTExpr :: RExp -> Infer TExp
@@ -97,33 +94,40 @@ inferExp = \case
 
     RAnn expr typ -> do
         exprT <- inferExp expr
-        when (not (exprT == typ || isPoly exprT)) (throwError AnnotatedMismatch)
+        when (not (exprT == typ || isPoly exprT)) (throwError $ AnnotatedMismatch "inferExp, RAnn")
         return typ
 
     -- Name is only here for proper error messages
     RBound num name ->
         M.lookup num <$> St.gets vars >>= \case
-            Nothing -> throwError UnboundVar
+            Nothing -> throwError $ UnboundVar "RBound"
             Just t -> return t
 
     RFree name -> do
         M.lookup name <$> St.gets sigs >>= \case
-            Nothing -> throwError UnboundVar
+            Nothing -> throwError $ UnboundVar "RFree"
             Just t -> return t
 
     RConst (CInt _) -> return $ TMono "Int"
+
     RConst (CStr _) -> return $ TMono "Str"
 
-    -- Currently does not accept using a polymorphic type as the function.
+    -- Should do proper unification using union-find. Some nice libs exist
     RApp expr1 expr2 -> do
         typ1 <- inferExp expr1
         typ2 <- inferExp expr2
-        fit typ2 typ1
+        cnt <- incCount
+        case typ1 of
+            (TPoly (Ident x)) -> do 
+                let newType = (TArrow (TPoly (Ident x)) (TPoly . Ident $ x ++ (show cnt)))
+                specifyType expr1 newType
+                apply newType typ1
+            _         -> apply typ2 typ1
 
     RAdd expr1 expr2 -> do
         typ1 <- inferExp expr1
         typ2 <- inferExp expr2
-        when (not $ (isInt typ1 || isPoly typ1) && (isInt typ2 || isPoly typ2)) (throwError TypeMismatch)
+        when (not $ (isInt typ1 || isPoly typ1) && (isInt typ2 || isPoly typ2)) (throwError $ TypeMismatch "inferExp, RAdd")
         specifyType expr1 (TMono "Int")
         specifyType expr2 (TMono "Int")
         return (TMono "Int")
@@ -147,29 +151,11 @@ isPoly :: Type -> Bool
 isPoly (TPoly _) = True
 isPoly _         = False
 
-fit :: Type -> Type -> Infer Type
-fit (TArrow t1 (TArrow t2 t3)) t4
-  | t1 `match` t4 = return $ TArrow t2 t3
-  | otherwise = fit (TArrow (TArrow t1 t2) t3) t4
-fit (TArrow t1 t2) t3
-  | t1 `match` t3 = return t2
-  | otherwise = throwError TypeMismatch
-fit _ _ = throwError TypeMismatch
-
-match :: Type -> Type -> Bool
-match (TPoly _) (TMono _) = True
-match (TMono _) (TPoly _) = True
-match (TMono _) (TMono _) = True
-match (TPoly _) (TPoly _) = True
-match (TArrow t1 t2) (TArrow t3 t4) = match t1 t3 && match t2 t4
-
 incCount :: Infer Int
 incCount = do
     st <- St.get
-    St.put (Ctx { vars = st.vars, sigs = st.sigs, count = succ st.count })
+    St.put ( st { count = succ st.count } )
     return st.count
-
-
 
 -- | Specify the type of a bound variable
 -- Because in lambdas we have to assume a general type and update it
@@ -184,33 +170,48 @@ lookupVars i = do
     st <- St.gets vars
     case M.lookup i st of
       Just t -> return t
-      Nothing -> throwError UnboundVar
+      Nothing -> throwError $ UnboundVar "lookupVars"
+
+insertVars :: Integer -> Type -> Infer ()
+insertVars i t = do
+    st <- St.get
+    St.put ( st { vars = M.insert i t st.vars } )
 
 lookupSigs :: Ident -> Infer Type
 lookupSigs i = do
     st <- St.gets sigs
     case M.lookup i st of
       Just t -> return t
-      Nothing -> throwError UnboundVar
+      Nothing -> throwError $ UnboundVar "lookupSigs"
 
-
-insertVars :: Integer -> Type -> Infer ()
-insertVars i t = do
+insertSigs :: Ident -> Type -> Infer ()
+insertSigs i t = do
     st <- St.get
-    St.put ( Ctx { vars = M.insert i t st.vars, sigs = st.sigs } )
+    St.put ( st { sigs = M.insert i t st.sigs } )
+
+union :: Type -> Type -> Infer ()
+union = todo
+
+find :: Type -> Type
+find = todo
+
+apply :: Type -> Type -> Infer Type
+apply (TArrow t1 t2) t3
+  | t1 == t3 = return t2
+  | otherwise = throwError $ TypeMismatch "apply"
 
 {-# WARNING todo "TODO IN CODE" #-}
 todo :: a
 todo = error "TODO in code"
 
 data Error
-    = TypeMismatch
-    | NotNumber
-    | FunctionTypeMismatch
-    | NotFunction
-    | UnboundVar
-    | AnnotatedMismatch
-    | Default
+    = TypeMismatch String
+    | NotNumber String
+    | FunctionTypeMismatch String
+    | NotFunction String
+    | UnboundVar String
+    | AnnotatedMismatch String
+    | Default String
     deriving Show
 
 -- Tests
@@ -218,4 +219,4 @@ data Error
 lambda = RAbs 0 "x" (RAdd (RBound 0 "x") (RBound 0 "x"))
 lambda2 = RAbs 0 "x" (RAnn (RBound 0 "x") (TArrow (TMono "Int") (TMono "String")))
 
-fn_on_var = RAbs 0 "x" (RAbs 1 "y" (RApp (RBound 0 "x") (RBound 1 "y")))
+fn_on_var = RAbs 0 "f" (RAbs 1 "x" (RApp (RBound 0 "f") (RBound 1 "x")))

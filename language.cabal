@@ -45,5 +45,6 @@ executable language
       , either
       , extra
       , array
+      , equivalence
 
     default-language: GHC2021

@@ -1,1 +1,1 @@
-testType f x = f x
+test f x = f x

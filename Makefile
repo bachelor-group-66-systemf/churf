@@ -29,4 +29,7 @@ test :
 	./language ./sample-programs/basic-4
 	./language ./sample-programs/basic-5
 
+run :
+	cabal -v0 new-run language -- "test_program"
+
 # EOF

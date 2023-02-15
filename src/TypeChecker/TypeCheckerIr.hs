@@ -45,6 +45,7 @@ instance Print TBind where
                     , prt 0 t
                     , doc (showString "=")
                     , prt 0 e
+                    , doc (showString "\n")
                     ]
 
 instance Print TExp where
@@ -54,38 +55,11 @@ instance Print TExp where
             , doc (showString ":")
             , prt 1 t
             ]
-        TBound _ u t -> prPrec i 3 $ concatD
-              [ doc (showString "(")
-              , prt 0 u
-              , doc (showString ":")
-              , prt 0 t
-              , doc (showString ")")
-              ]
-        TFree u t -> prPrec i 3 $ concatD
-              [ doc (showString "(")
-              , prt 0 u
-              , doc (showString ":")
-              , prt 0 t
-              , doc (showString ")")
-              ]
+        TBound _ u t -> prPrec i 3 $ concatD [ prt 0 u ]
+        TFree u t -> prPrec i 3 $ concatD [ prt 0 u ]
         TConst c _ -> prPrec i 3 (concatD [prt 0 c])
-        TApp e e1 t -> prPrec i 2 $ concatD
-              [ doc (showString "(")
-              , prt 2 e
-              , prt 3 e1
-              , doc (showString ")")
-              , doc (showString ":")
-              , prt 0 t
-              ]
-        TAdd e e1 t -> prPrec i 1 $ concatD
-              [ doc (showString "(")
-              , prt 1 e
-              , doc (showString "+")
-              , prt 2 e1
-              , doc (showString ")")
-              , doc (showString ":")
-              , prt 0 t
-              ]
+        TApp e e1 t -> prPrec i 2 $ concatD [ prt 2 e , prt 3 e1 ]
+        TAdd e e1 t -> prPrec i 1 $ concatD [ prt 1 e , doc (showString "+") , prt 2 e1 ]
         TAbs _ u e t -> prPrec i 0 $ concatD
               [ doc (showString "(")
               , doc (showString "\\")
@@ -93,6 +67,4 @@ instance Print TExp where
               , doc (showString ".")
               , prt 0 e
               , doc (showString ")")
-              , doc (showString ":")
-              , prt 0 t, doc (showString ".")
               ]

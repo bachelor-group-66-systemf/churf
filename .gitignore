@@ -4,3 +4,4 @@ dist-newstyle
 *.bak
 src/Grammar
 language
+test_program_result

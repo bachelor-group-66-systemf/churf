@@ -14,8 +14,8 @@ EAbs.   Exp  ::= "\\" Ident "." Exp ;
 CInt. Const ::= Integer ;
 CStr. Const ::= String ;
 
-TMono. Type ::= "Mono" Ident ;
-TPoly. Type ::= "Poly" Ident ;
+TMono. Type1 ::= "Mono" Ident ;
+TPoly. Type1 ::= "Poly" Ident ;
 TArrow. Type ::= Type1 "->" Type ;
 
 -- This doesn't seem to work so we'll have to live with ugly keywords for now
@@ -30,3 +30,7 @@ coercions Exp 5 ;
 
 comment "--" ;
 comment "{-" "-}" ;
+
+-- Adt. Adt ::= "data" UIdent "=" [Constructor] ;
+-- Sum. Constructor ::= UIdent ; 
+-- separator Constructor "|" ;
