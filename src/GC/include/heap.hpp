@@ -7,7 +7,7 @@
 #include <vector>
 using namespace std;
 
-#include "include/chunk.hpp"
+#include "chunk.hpp"
 
 #define HEAP_SIZE   65536
 
@@ -29,6 +29,7 @@ namespace GC {
     }
 
     void *alloc(size_t size);
+    void print_contents();
 
   private:
 

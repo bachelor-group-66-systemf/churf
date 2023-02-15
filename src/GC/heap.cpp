@@ -118,4 +118,20 @@ namespace GC {
       }
     }
   }
+
+  // For testing purposes
+  void print_line(bool marked, void *start, size_t size) {
+    std::cout << "Marked: " << marked << "\nStart adr: " << start << "\nSize" << size << std::endl;
+  }
+
+  void Heap::print_contents() {
+    std::cout << "ALLOCATED CHUNKS" << std::endl;
+    for (auto chunk : m_allocated_chunks) {
+        print_line(chunk->marked, chunk->start, chunk->size);
+    }
+    std::cout << "FREED CHUNKS" << std::endl;
+    for (auto fchunk : m_freed_chunks) {
+        print_line(fchunk->marked, fchunk->start, fchunk->size);
+    }
+  }
 }
