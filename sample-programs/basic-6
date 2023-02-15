@@ -1,3 +1,4 @@
 
 
-f = \x.\y. x+y
+f : Int -> Int -> Int;
+f = \x:Int.\y:Int. x+y;

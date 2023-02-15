@@ -5,21 +5,20 @@
 module LambdaLifter (lambdaLift, freeVars, abstract, rename, collectScs) where
 
 import           Auxiliary           (snoc)
+import           Control.Applicative (Applicative (liftA2))
+import           Control.Monad.State (MonadState (get, put), State, evalState)
 import           Data.Foldable.Extra (notNull)
-import           Data.List           (mapAccumL, mapAccumR, partition)
-import           Data.Map            (Map)
-import qualified Data.Map            as Map
-import           Data.Maybe          (fromMaybe, mapMaybe)
+import           Data.List           (mapAccumL, partition)
 import           Data.Set            (Set, (\\))
 import qualified Data.Set            as Set
-import           Data.Tuple.Extra    (uncurry3)
-import           Grammar.Abs
 import           Prelude             hiding (exp)
+import           Renamer             hiding (fromBinders)
+import           TypeCheckerIr
 
 
 -- | Lift lambdas and let expression into supercombinators.
 lambdaLift :: Program -> Program
-lambdaLift = collectScs . rename . abstract . freeVars
+lambdaLift = collectScs . abstract . freeVars
 
 
 -- | Annotate free variables
@@ -28,25 +27,25 @@ freeVars (Program ds) = [ (n, xs, freeVarsExp (Set.fromList xs) e)
                         | Bind n xs e <- ds
                         ]
 
-freeVarsExp :: Set Ident -> Exp -> AnnExp
+freeVarsExp :: Set Id -> Exp -> AnnExp
 freeVarsExp localVars = \case
 
-  EId n | Set.member n localVars -> (Set.singleton n, AId n)
-        | otherwise       -> (mempty, AId n)
+  EId  n  | Set.member n localVars -> (Set.singleton n, AId n)
+          | otherwise              -> (mempty, AId n)
 
   EInt i -> (mempty, AInt i)
 
-  EApp e1 e2 -> (Set.union (freeVarsOf e1') (freeVarsOf e2'), AApp e1' e2')
+  EApp t e1 e2 -> (Set.union (freeVarsOf e1') (freeVarsOf e2'), AApp t e1' e2')
     where
       e1' = freeVarsExp localVars e1
       e2' = freeVarsExp localVars e2
 
-  EAdd e1 e2 -> (Set.union (freeVarsOf e1') (freeVarsOf e2'), AAdd e1' e2')
+  EAdd t e1 e2 -> (Set.union (freeVarsOf e1') (freeVarsOf e2'), AAdd t e1' e2')
     where
       e1' = freeVarsExp localVars e1
       e2' = freeVarsExp localVars e2
 
-  EAbs par e -> (Set.delete par $ freeVarsOf e', AAbs par e')
+  EAbs t par e -> (Set.delete par $ freeVarsOf e', AAbs t par e')
     where
       e' = freeVarsExp (Set.insert par localVars) e
 
@@ -66,143 +65,111 @@ freeVarsExp localVars = \case
       binders' = zipWith3 ABind names parms rhss'
       e'       = freeVarsExp e_localVars e
 
+  EAnn e t -> (freeVarsOf e', AAnn e' t)
+    where
+      e' = freeVarsExp localVars e
 
-freeVarsOf :: AnnExp -> Set Ident
+
+freeVarsOf :: AnnExp -> Set Id
 freeVarsOf = fst
 
-fromBinders :: [Bind] -> ([Ident], [[Ident]], [Exp])
+
+fromBinders :: [Bind] -> ([Id], [[Id]], [Exp])
 fromBinders bs = unzip3 [ (name, parms, rhs) | Bind name parms rhs <- bs ]
 
+
 -- AST annotated with free variables
-type AnnProgram = [(Ident, [Ident], AnnExp)]
+type AnnProgram = [(Id, [Id], AnnExp)]
 
-type AnnExp = (Set Ident, AnnExp')
+type AnnExp = (Set Id, AnnExp')
 
-data ABind = ABind Ident [Ident] AnnExp deriving Show
+data ABind = ABind Id [Id] AnnExp deriving Show
 
-data AnnExp' = AId Ident
+data AnnExp' = AId  Id
              | AInt Integer
-             | AApp AnnExp  AnnExp
-             | AAdd AnnExp  AnnExp
-             | AAbs Ident   AnnExp
              | ALet [ABind] AnnExp
+             | AApp Type    AnnExp  AnnExp
+             | AAdd Type    AnnExp  AnnExp
+             | AAbs Type    Id      AnnExp
+             | AAnn AnnExp  Type
              deriving Show
+
 
 -- | Lift lambdas to let expression of the form @let sc = \v₁ x₁ -> e₁@.
 -- Free variables are @v₁ v₂ .. vₙ@ are bound.
 abstract :: AnnProgram -> Program
-abstract prog = Program $ map go prog
+abstract prog = Program $ evalState (mapM go prog) 0
   where
-  go :: (Ident, [Ident], AnnExp) -> Bind
-  go (name, pars, rhs@(_, e)) =
+  go :: (Id, [Id], AnnExp) -> State Int Bind
+  go (name, parms, rhs@(_, e)) =
     case e of
-      AAbs par e1 -> Bind name (snoc par pars ++ pars2) $ abstractExp e2
+      AAbs _ parm e1 -> do
+                        e2' <- abstractExp e2
+                        pure $ Bind name (snoc parm parms ++ parms2) e2'
         where
-          (e2, pars2) = flattenLambdasAnn e1
-      _           -> Bind name pars            $ abstractExp rhs
+          (e2, parms2) = flattenLambdasAnn e1
+
+      _ -> Bind name parms <$> abstractExp rhs
 
 
 -- | Flatten nested lambdas and collect the parameters
 -- @\x.\y.\z. ae → (ae, [x,y,z])@
-flattenLambdasAnn :: AnnExp -> (AnnExp, [Ident])
+flattenLambdasAnn :: AnnExp -> (AnnExp, [Id])
 flattenLambdasAnn ae = go (ae, [])
   where
-    go :: (AnnExp, [Ident]) -> (AnnExp, [Ident])
+    go :: (AnnExp, [Id]) -> (AnnExp, [Id])
     go ((free, e), acc) =
       case e of
-        AAbs par (free1, e1) -> go ((Set.delete par free1, e1), snoc par acc)
-        _                    -> ((free, e), acc)
+        AAbs _ par (free1, e1) ->
+          go ((Set.delete par free1, e1), snoc par acc)
+        _ -> ((free, e), acc)
 
-
-abstractExp :: AnnExp -> Exp
+abstractExp :: AnnExp -> State Int Exp
 abstractExp (free, exp) = case exp of
-  AId  n     -> EId n
-  AInt i     -> EInt i
-  AApp e1 e2 -> EApp (abstractExp e1) (abstractExp e2)
-  AAdd e1 e2 -> EAdd (abstractExp e1) (abstractExp e2)
-  ALet bs e  -> ELet (map go bs) $ abstractExp e
+  AId  n       -> pure $ EId  n
+  AInt i       -> pure $ EInt i
+  AApp t e1 e2 -> liftA2 (EApp t) (abstractExp e1) (abstractExp e2)
+  AAdd t e1 e2 -> liftA2 (EAdd t) (abstractExp e1) (abstractExp e2)
+  ALet bs e    -> liftA2 ELet (mapM go bs) (abstractExp e)
     where
-      go (ABind name parms rhs) =
-        let
-          (rhs', parms1)  = flattenLambdas $ skipLambdas abstractExp rhs
-        in
-          Bind name (parms ++ parms1) rhs'
+      go (ABind name parms rhs) = do
+          (rhs', parms1)  <- flattenLambdas <$> skipLambdas abstractExp rhs
+          pure $ Bind name (parms ++ parms1) rhs'
 
-      skipLambdas :: (AnnExp -> Exp) -> AnnExp -> Exp
+      skipLambdas :: (AnnExp -> State Int Exp) -> AnnExp -> State Int Exp
       skipLambdas f (free, ae) = case ae of
-        AAbs name ae1 -> EAbs name $ skipLambdas f ae1
-        _             -> f (free, ae)
+        AAbs t par ae1 -> EAbs t par <$> skipLambdas f ae1
+        _              -> f (free, ae)
 
   -- Lift lambda into let and bind free variables
-  AAbs par  e -> foldl EApp sc $ map EId freeList
+  AAbs t parm e -> do
+    i <- nextNumber
+    rhs <- abstractExp e
+
+    let sc_name = Ident ("sc_" ++ show i)
+        sc      = ELet [Bind (sc_name, t_bind) parms rhs] $ EId (sc_name, t)
+
+    pure $ foldl (EApp TInt) sc $ map EId freeList
     where
       freeList = Set.toList free
-      sc  = ELet [Bind "sc" (snoc par freeList) $ abstractExp e] $ EId "sc"
+      t_bind   = typeApplyPars (length parm) t
+      parms    = snoc parm freeList
 
--- | Rename all supercombinators and variables
-rename :: Program -> Program
-rename (Program ds) = Program $ map (uncurry3 Bind) tuples
-  where
-    tuples = snd (mapAccumL renameSc 0 ds)
-    renameSc i (Bind n xs e) = (i2, (n, xs', e'))
-      where
-        (i1, xs', env) = newNames i xs
-        (i2, e')       = renameExp env i1 e
+  AAnn e t -> abstractExp e >>= \e' -> pure $ EAnn e' t
 
-renameExp :: Map Ident Ident -> Int -> Exp -> (Int, Exp)
-renameExp env i = \case
-
-  EId  n     -> (i, EId . fromMaybe n $ Map.lookup n env)
-
-  EInt i1    -> (i, EInt i1)
-
-  EApp e1 e2 -> (i2, EApp e1' e2')
-    where
-      (i1, e1') = renameExp env i e1
-      (i2, e2') = renameExp env i1 e2
-
-  EAdd e1 e2 -> (i2, EAdd e1' e2')
-    where
-      (i1, e1') = renameExp env i e1
-      (i2, e2') = renameExp env i1 e2
-
-  ELet bs e  -> (i3, ELet (zipWith3 Bind ns' pars' es') e')
-    where
-      (i1, e')        = renameExp e_env i e
-      (names, pars, rhss) = fromBinders bs
-      (i2, ns', env') = newNames i1 (names ++ concat pars)
-      pars'           = (map . map) renamePar pars
-      e_env           = Map.union env' env
-      (i3, es')       = mapAccumL (renameExp e_env) i2 rhss
-
-      renamePar p = case Map.lookup p env' of
-                     Just p' -> p'
-                     Nothing -> error ("Can't find name for " ++ show p)
+nextNumber :: State Int Int
+nextNumber = do
+  i <- get
+  put $ succ i
+  pure i
 
 
-  EAbs par  e  -> (i2, EAbs par' e')
-    where
-      (i1, par', env') = newName par
-      (i2, e')         = renameExp (Map.union env' env ) i1 e
-
-
-newName :: Ident -> (Int, Ident, Map Ident Ident)
-newName old_name = (i, head names, env)
-  where (i, names, env) = newNames 1 [old_name]
-
-newNames :: Int -> [Ident] -> (Int, [Ident], Map Ident Ident)
-newNames i old_names = (i', new_names, env)
-  where
-    (i', new_names) = getNames i old_names
-    env = Map.fromList $ zip old_names new_names
-
-getNames :: Int -> [Ident] -> (Int, [Ident])
-getNames i ns = (i + length ss, zipWith makeName ss [i..])
-  where
-    ss = map (\(Ident s) -> s) ns
-
-makeName :: String -> Int -> Ident
-makeName prefix i = Ident (prefix ++ "_" ++ show i)
+typeApplyPars :: Int -> Type -> Type
+typeApplyPars 0 t = t
+typeApplyPars i t =
+  case t of
+    TFun _ t1 -> typeApplyPars (i-1) t1
+    _         -> error "Number of applied pars and type not matching"
 
 
 -- | Collects supercombinators by lifting appropriate let expressions
@@ -216,20 +183,20 @@ collectScs (Program scs) = Program $ concatMap collectFromRhs scs
 
 collectScsExp :: Exp -> ([Bind], Exp)
 collectScsExp = \case
-  EId  n     -> ([], EId n)
-  EInt i     -> ([], EInt i)
+  EId  n -> ([], EId n)
+  EInt i -> ([], EInt i)
 
-  EApp e1 e2 -> (scs1 ++ scs2, EApp e1' e2')
+  EApp t e1 e2 -> (scs1 ++ scs2, EApp t e1' e2')
     where
       (scs1, e1') = collectScsExp e1
       (scs2, e2') = collectScsExp e2
 
-  EAdd e1 e2 -> (scs1 ++ scs2, EAdd e1' e2')
+  EAdd t e1 e2 -> (scs1 ++ scs2, EAdd t e1' e2')
     where
       (scs1, e1') = collectScsExp e1
       (scs2, e2') = collectScsExp e2
 
-  EAbs x  e  -> (scs, EAbs x e')
+  EAbs t par e -> (scs, EAbs t par e')
     where
       (scs, e') = collectScsExp e
 
@@ -241,28 +208,32 @@ collectScsExp = \case
   -- >          ...
   -- >     in e
   --
-  ELet binds e  -> (binds_scs ++ rhss_scs ++ e_scs, mkEAbs non_scs' e')
+  ELet binds e -> (binds_scs ++ rhss_scs ++ e_scs, mkEAbs non_scs' e')
     where
-      binds_scs           = [ let (rhs', parms1) = flattenLambdas rhs in
-                              Bind n (parms ++ parms1) rhs'
-                            | Bind n parms rhs <- scs'
-                            ]
-      (rhss_scs, binds')  = mapAccumL collectScsRhs [] binds
-      (e_scs, e')         = collectScsExp e
+      binds_scs          = [ let (rhs', parms1) = flattenLambdas rhs in
+                             Bind n (parms ++ parms1) rhs'
+                           | Bind n parms rhs <- scs'
+                           ]
+      (rhss_scs, binds') = mapAccumL collectScsRhs [] binds
+      (e_scs, e')        = collectScsExp e
 
-      (scs', non_scs')    = partition (\(Bind _ pars _) -> notNull pars) binds'
+      (scs', non_scs') = partition (\(Bind _ pars _) -> notNull pars) binds'
 
       collectScsRhs acc (Bind n xs rhs) = (acc ++ rhs_scs, Bind n xs rhs')
         where
           (rhs_scs, rhs') = collectScsExp rhs
 
+  EAnn e t -> (scs, EAnn e' t)
+    where
+      (scs, e') = collectScsExp e
+
 -- @\x.\y.\z. e → (e, [x,y,z])@
-flattenLambdas :: Exp -> (Exp, [Ident])
-flattenLambdas e = go (e, [])
+flattenLambdas :: Exp -> (Exp, [Id])
+flattenLambdas = go . (, [])
   where
     go (e, acc) = case e of
-                   EAbs par e1 -> go (e1, snoc par acc)
-                   _           -> (e, acc)
+                   EAbs _ par e1 -> go (e1, snoc par acc)
+                   _             -> (e, acc)
 
 mkEAbs :: [Bind] -> Exp -> Exp
 mkEAbs [] e = e

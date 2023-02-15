@@ -1,5 +1,8 @@
+add : Int -> Int -> Int;
 add x y = x + y;
 
+apply : (Int -> Int) -> Int -> Int;
 apply f x = f x;
 
+main : Int;
 main = apply (add 4) 6;

@@ -33,7 +33,10 @@ executable language
       Grammar.ErrM
       LambdaLifter
       Auxiliary
-      Interpreter
+      -- Interpreter
+      Renamer
+      TypeChecker
+      TypeCheckerIr
 
     hs-source-dirs:   src
 

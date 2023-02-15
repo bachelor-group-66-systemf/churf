@@ -4,10 +4,12 @@ module Main where
 import           Grammar.ErrM       (Err)
 import           Grammar.Par        (myLexer, pProgram)
 import           Grammar.Print      (printTree)
-import           Interpreter        (interpret)
+--import           Interpreter        (interpret)
 import           LambdaLifter       (abstract, freeVars, lambdaLift)
+import           Renamer            (rename)
 import           System.Environment (getArgs)
 import           System.Exit        (exitFailure, exitSuccess)
+import           TypeChecker        (typecheck)
 
 main :: IO ()
 main = getArgs >>= \case
@@ -18,12 +20,20 @@ main' :: String -> IO ()
 main' s = do
   file   <- readFile s
 
-  putStrLn "\n-- parse"
+  putStrLn "\n-- Parser"
   parsed    <- fromSyntaxErr . pProgram $ myLexer file
   putStrLn $ printTree parsed
 
+  putStrLn "\n-- Renamer"
+  let renamed = rename parsed
+  putStrLn $ printTree renamed
+
+  putStrLn "\n-- TypeChecker"
+  typechecked <- fromTypeCheckerErr $ typecheck renamed
+  putStrLn $ printTree typechecked
+
   putStrLn "\n-- Lambda Lifter"
-  let lifted = lambdaLift parsed
+  let lifted = lambdaLift typechecked
   putStrLn $ printTree lifted
 
   -- interpred <- fromInterpreterErr $ interpret lifted
@@ -37,6 +47,14 @@ fromSyntaxErr :: Err a -> IO a
 fromSyntaxErr = either
   (\err -> do
     putStrLn "\nSYNTAX ERROR"
+    putStrLn err
+    exitFailure)
+ pure
+
+fromTypeCheckerErr :: Err a -> IO a
+fromTypeCheckerErr = either
+  (\err -> do
+    putStrLn "\nTYPECHECKER ERROR"
     putStrLn err
     exitFailure)
  pure

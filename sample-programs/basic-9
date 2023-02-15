@@ -1,4 +1,5 @@
 
 
 
-main = (\f.\x.\y. f x + f y) (\x. x+x) ((\x. x+1) ((\x. x+3) 2)) 4
+main : Int;
+main = (\f:Int -> Int.\x:Int.\y:Int. f x + f y) (\x:Int. x+x) ((\x:Int. x+1) ((\x:Int. x+3) 2)) 4

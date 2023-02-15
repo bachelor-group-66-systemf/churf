@@ -1,2 +1,7 @@
 
-f x = let double = \y. y+y in (\x. x+y) 4;
+f : Int -> Int;
+f x = let 
+        double : Int -> Int;
+        double = \y:Int. y+y 
+      in 
+        double (x + 4);
