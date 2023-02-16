@@ -1,7 +1,7 @@
 {-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE OverloadedRecordDot #-}
 
-module TypeChecker (typecheck) where
+module TypeChecker (typecheck, partitionType) where
 
 import           Auxiliary            (maybeToRightM, snoc)
 import           Control.Monad.Except (throwError, unless)

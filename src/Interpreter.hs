@@ -35,7 +35,6 @@ initCxt scs =
 expandLambdas :: Bind -> Bind
 expandLambdas (Bind name parms rhs) = Bind name [] $ foldr EAbs rhs parms
 
-
 findMain :: [Bind] -> Err Exp
 findMain []       = throwError "No main!"
 findMain (sc:scs) = case sc of

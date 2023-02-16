@@ -1,3 +1,0 @@
-
-main : Int -> Int -> Int;
-main x y = (x : Int) + y;

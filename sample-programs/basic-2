@@ -1,7 +1,0 @@
-
-add : Int -> Int -> Int;
-add x = \y:Int. x+y;
-
-main : Int;
-main = (\z:Int. z+z) ((add 4) 6);
-

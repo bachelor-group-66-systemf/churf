@@ -101,15 +101,9 @@ abstract :: AnnProgram -> Program
 abstract prog = Program $ evalState (mapM go prog) 0
   where
   go :: (Id, [Id], AnnExp) -> State Int Bind
-  go (name, parms, rhs@(_, e)) =
-    case e of
-      AAbs _ parm e1 -> do
-                        e2' <- abstractExp e2
-                        pure $ Bind name (snoc parm parms ++ parms2) e2'
-        where
-          (e2, parms2) = flattenLambdasAnn e1
-
-      _ -> Bind name parms <$> abstractExp rhs
+  go (name, parms, rhs) = Bind name (parms ++ parms1) <$> abstractExp rhs'
+    where
+      (rhs', parms1) = flattenLambdasAnn rhs
 
 
 -- | Flatten nested lambdas and collect the parameters
@@ -147,12 +141,11 @@ abstractExp (free, exp) = case exp of
     rhs <- abstractExp e
 
     let sc_name = Ident ("sc_" ++ show i)
-        sc      = ELet [Bind (sc_name, t_bind) parms rhs] $ EId (sc_name, t)
+        sc      = ELet [Bind (sc_name, t) parms rhs] $ EId (sc_name, t)
 
     pure $ foldl (EApp TInt) sc $ map EId freeList
     where
       freeList = Set.toList free
-      t_bind   = typeApplyPars (length parm) t
       parms    = snoc parm freeList
 
   AAnn e t -> abstractExp e >>= \e' -> pure $ EAnn e' t
@@ -162,15 +155,6 @@ nextNumber = do
   i <- get
   put $ succ i
   pure i
-
-
-typeApplyPars :: Int -> Type -> Type
-typeApplyPars 0 t = t
-typeApplyPars i t =
-  case t of
-    TFun _ t1 -> typeApplyPars (i-1) t1
-    _         -> error "Number of applied pars and type not matching"
-
 
 -- | Collects supercombinators by lifting appropriate let expressions
 collectScs :: Program -> Program

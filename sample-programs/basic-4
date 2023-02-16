@@ -1,7 +1,0 @@
-
-f : Int -> Int;
-f x = let 
-        g : Int -> Int;
-        g = (\y:Int. y+1);
-      in 
-        g (g x);

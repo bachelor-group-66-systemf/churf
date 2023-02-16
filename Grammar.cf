@@ -1,5 +1,3 @@
-
-
 Program. Program ::= [Bind];
 
 EId.  Exp3 ::= Ident;
@@ -25,4 +23,3 @@ coercions Type 1 ;
 
 comment "--";
 comment "{-" "-}";
-

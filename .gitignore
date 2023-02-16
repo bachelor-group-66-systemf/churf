@@ -3,4 +3,5 @@ dist-newstyle
 *.x
 *.bak
 src/Grammar
-/language
+language
+llvm.ll

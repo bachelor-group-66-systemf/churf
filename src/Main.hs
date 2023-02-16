@@ -1,14 +1,17 @@
 {-# LANGUAGE LambdaCase #-}
 module Main where
 
+import           Compiler           (compile)
+import           GHC.IO.Handle.Text (hPutStrLn)
 import           Grammar.ErrM       (Err)
 import           Grammar.Par        (myLexer, pProgram)
 import           Grammar.Print      (printTree)
 --import           Interpreter        (interpret)
-import           LambdaLifter       (abstract, freeVars, lambdaLift)
+import           LambdaLifter       (lambdaLift)
 import           Renamer            (rename)
 import           System.Environment (getArgs)
 import           System.Exit        (exitFailure, exitSuccess)
+import           System.IO          (stderr)
 import           TypeChecker        (typecheck)
 
 main :: IO ()
@@ -20,21 +23,26 @@ main' :: String -> IO ()
 main' s = do
   file   <- readFile s
 
-  putStrLn "\n-- Parser"
+  printToErr "-- Parse Tree -- "
   parsed    <- fromSyntaxErr . pProgram $ myLexer file
-  putStrLn $ printTree parsed
+  printToErr $ printTree parsed
 
-  putStrLn "\n-- Renamer"
+  putStrLn "\n-- Renamer --"
   let renamed = rename parsed
   putStrLn $ printTree renamed
 
-  putStrLn "\n-- TypeChecker"
+  putStrLn "\n-- TypeChecker --"
   typechecked <- fromTypeCheckerErr $ typecheck renamed
   putStrLn $ printTree typechecked
 
-  putStrLn "\n-- Lambda Lifter"
+  printToErr "\n-- Lambda Lifter --"
   let lifted = lambdaLift typechecked
-  putStrLn $ printTree lifted
+  printToErr $ printTree lifted
+
+  printToErr "\n -- Printing compiler output to stdout --"
+  compiled  <- fromCompilerErr $ compile lifted
+  putStrLn compiled
+  writeFile "llvm.ll" compiled
 
   -- interpred <- fromInterpreterErr $ interpret lifted
   -- putStrLn "\n-- interpret"
@@ -42,6 +50,16 @@ main' s = do
 
   exitSuccess
 
+printToErr :: String -> IO ()
+printToErr = hPutStrLn stderr
+
+fromCompilerErr :: Err a -> IO a
+fromCompilerErr = either
+  (\err -> do
+    putStrLn "\nCOMPILER ERROR"
+    putStrLn err
+    exitFailure)
+ pure
 
 fromSyntaxErr :: Err a -> IO a
 fromSyntaxErr = either
