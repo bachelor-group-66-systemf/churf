@@ -264,8 +264,14 @@ compile (Program prg) = do
 type2LlvmType :: Type -> LLVMType
 type2LlvmType = \case
     TInt -> I64
-    TFun t xs -> Function (type2LlvmType t) [type2LlvmType xs]
+    TFun t xs -> do
+        let (t', xs') = function2LLVMType xs [type2LlvmType t]
+        Function t' xs'
     t -> CustomType $ Ident ("\"" ++ show t ++ "\"")
+  where
+    function2LLVMType :: Type -> [LLVMType] -> (LLVMType, [LLVMType])
+    function2LLVMType (TFun t xs) s = function2LLVMType xs (type2LlvmType t : s)
+    function2LLVMType x s = (type2LlvmType x, s)
 
 getType :: Exp -> LLVMType
 getType (EInt _) = I64
