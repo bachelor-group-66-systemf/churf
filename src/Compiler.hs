@@ -5,7 +5,7 @@ module Compiler (compile) where
 
 import Control.Monad.State (StateT, execStateT, gets, modify)
 import Data.Map (Map)
-import Data.Map qualified as Map
+import qualified Data.Map as Map
 import Data.Tuple.Extra (second)
 import Grammar.ErrM (Err)
 import Grammar.Print (printTree)
