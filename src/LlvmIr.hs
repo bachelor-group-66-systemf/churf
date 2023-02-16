@@ -1,10 +1,16 @@
 {-# LANGUAGE LambdaCase #-}
 
-module LlvmIr (LLVMType (..), LLVMIr (..), llvmIrToString, LLVMValue (..), LLVMComp (..)) where
+module LlvmIr (
+    LLVMType (..),
+    LLVMIr (..),
+    llvmIrToString,
+    LLVMValue (..),
+    LLVMComp (..),
+    Visibility (..),
+) where
 
-import           Data.List     (intercalate)
-import           TypeCheckerIr
-
+import Data.List (intercalate)
+import TypeCheckerIr
 
 -- | A datatype which represents some basic LLVM types
 data LLVMType
@@ -14,19 +20,21 @@ data LLVMType
     | I64
     | Ptr
     | Ref LLVMType
+    | Function LLVMType [LLVMType]
     | Array Integer LLVMType
     | CustomType Ident
 
 instance Show LLVMType where
     show :: LLVMType -> String
     show = \case
-        I1                    -> "i1"
-        I8                    -> "i8"
-        I32                   -> "i32"
-        I64                   -> "i64"
-        Ptr                   -> "ptr"
-        Ref ty                -> show ty <> "*"
-        Array n ty            -> concat ["[", show n, " x ", show ty, "]"]
+        I1 -> "i1"
+        I8 -> "i8"
+        I32 -> "i32"
+        I64 -> "i64"
+        Ptr -> "ptr"
+        Ref ty -> show ty <> "*"
+        Function t xs -> show t <> " (" <> intercalate ", " (map show xs) <> ")*"
+        Array n ty -> concat ["[", show n, " x ", show ty, "]"]
         CustomType (Ident ty) -> ty
 
 data LLVMComp
@@ -43,8 +51,8 @@ data LLVMComp
 instance Show LLVMComp where
     show :: LLVMComp -> String
     show = \case
-        LLEq  -> "eq"
-        LLNe  -> "ne"
+        LLEq -> "eq"
+        LLNe -> "ne"
         LLUgt -> "ugt"
         LLUge -> "uge"
         LLUlt -> "ult"
@@ -54,6 +62,12 @@ instance Show LLVMComp where
         LLSlt -> "slt"
         LLSle -> "sle"
 
+data Visibility = Local | Global
+instance Show Visibility where
+    show :: Visibility -> String
+    show Local = "%"
+    show Global = "@"
+
 {- | Represents a LLVM "value", as in an integer, a register variable,
   or a string contstant
 -}
@@ -62,9 +76,9 @@ data LLVMValue = VInteger Integer | VIdent Id | VConstant String
 instance Show LLVMValue where
     show :: LLVMValue -> String
     show v = case v of
-        VInteger i    -> show i
+        VInteger i -> show i
         VIdent (n, _) -> "%" <> fromIdent n
-        VConstant s   -> "c" <> show s
+        VConstant s -> "c" <> show s
 
 type Params = [(Ident, LLVMType)]
 type Args = [(LLVMType, LLVMValue)]
@@ -85,7 +99,7 @@ data LLVMIr
     | Br Ident
     | BrCond LLVMValue Ident Ident
     | Label Ident
-    | Call LLVMType Ident Args
+    | Call LLVMType Visibility Ident Args
     | Alloca LLVMType
     | Store LLVMType Ident LLVMType Ident
     | Bitcast LLVMType Ident LLVMType
@@ -103,9 +117,9 @@ llvmIrToString = go 0
     go _ [] = mempty
     go i (x : xs) = do
         let (i', n) = case x of
-                Define{}  -> (i + 1, 0)
+                Define{} -> (i + 1, 0)
                 DefineEnd -> (i - 1, 0)
-                _         -> (i, i)
+                _ -> (i, i)
         insToString n x <> go i' xs
 
 {- | Converts a LLVM inststruction to a String, allowing for printing etc.
@@ -149,9 +163,9 @@ llvmIrToString = go 0
                     [ "srem ", show t, " ", show v1, ", "
                     , show v2, "\n"
                     ]
-            (Call t (Ident i) arg) ->
+            (Call t vis (Ident i) arg) ->
                 concat
-                    [ "call ", show t, " @", i, "("
+                    [ "call ", show t, " ", show vis, i, "("
                     , intercalate ", " $ Prelude.map (\(x, y) -> show x <> " " <> show y) arg
                     , ")\n"
                     ]

@@ -13,6 +13,7 @@ import LlvmIr (
     LLVMIr (..),
     LLVMType (..),
     LLVMValue (..),
+    Visibility (..),
     llvmIrToString,
  )
 import TypeChecker (partitionType)
@@ -108,7 +109,7 @@ compile (Program prg) = do
 
     goDef :: [Bind] -> CompilerState ()
     goDef [] = return ()
-    goDef (Bind id@(name, t) args exp : xs) = do
+    goDef (Bind (name, t) args exp : xs) = do
         emit $ UnsafeRaw "\n"
         emit $ Comment $ show name <> ": " <> show exp
         emit $ Define (type2LlvmType t_return) name (map (second type2LlvmType) args)
@@ -159,14 +160,18 @@ compile (Program prg) = do
     emitApp t e1 e2 = appEmitter t e1 e2 []
       where
         appEmitter :: Type -> Exp -> Exp -> [Exp] -> CompilerState ()
-        appEmitter t e1 e2 stack = do
+        appEmitter _t e1 e2 stack = do
             let newStack = e2 : stack
             case e1 of
                 EApp t' e1' e2' -> appEmitter t' e1' e2' newStack
-                EId (name, _) -> do
+                EId id@(name, t') -> do
                     args <- traverse exprToValue newStack
                     vs <- getNewVar
-                    emit $ SetVariable (Ident $ show vs) (Call (type2LlvmType t) name (map (I64,) args))
+                    funcs <- gets functions
+                    let vis = case Map.lookup id funcs of
+                            Nothing -> Local
+                            Just _ -> Global
+                    emit $ SetVariable (Ident $ show vs) (Call (type2LlvmType t') vis name (map (I64,) args))
                 x -> do
                     emit . Comment $ "The unspeakable happened: "
                     emit . Comment $ show x
@@ -244,7 +249,7 @@ compile (Program prg) = do
         case Map.lookup id funcs of
             Just _ -> do
                 vc <- getNewVar
-                emit $ SetVariable (Ident $ show vc) (Call (type2LlvmType t) name [])
+                emit $ SetVariable (Ident $ show vc) (Call (type2LlvmType t) Global name [])
                 return $ VIdent (Ident $ show vc, t)
             Nothing -> return $ VIdent id
     exprToValue e = do
@@ -255,5 +260,5 @@ compile (Program prg) = do
 type2LlvmType :: Type -> LLVMType
 type2LlvmType = \case
     TInt -> I64
-    TFun t _ -> type2LlvmType t
+    TFun t xs -> Function (type2LlvmType t) [type2LlvmType xs]
     t -> CustomType $ Ident ("\"" ++ show t ++ "\"")
