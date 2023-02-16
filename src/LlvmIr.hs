@@ -21,7 +21,7 @@ data LLVMType
     | Ptr
     | Ref LLVMType
     | Function LLVMType [LLVMType]
-    | Array Integer LLVMType
+    | Array Int LLVMType
     | CustomType Ident
 
 instance Show LLVMType where
@@ -71,13 +71,18 @@ instance Show Visibility where
 {- | Represents a LLVM "value", as in an integer, a register variable,
   or a string contstant
 -}
-data LLVMValue = VInteger Integer | VIdent Id | VConstant String
+data LLVMValue
+    = VInteger Integer
+    | VIdent Ident LLVMType
+    | VConstant String
+    | VFunction Ident Visibility LLVMType
 
 instance Show LLVMValue where
     show :: LLVMValue -> String
     show v = case v of
         VInteger i -> show i
-        VIdent (n, _) -> "%" <> fromIdent n
+        VIdent (Ident n) _ -> "%" <> n
+        VFunction (Ident n) vis _ -> show vis <> n
         VConstant s -> "c" <> show s
 
 type Params = [(Ident, LLVMType)]
@@ -201,6 +206,3 @@ llvmIrToString = go 0
             (Comment s) -> "; " <> s <> "\n"
             (Variable (Ident id)) -> "%" <> id
 {- FOURMOLU_ENABLE -}
-
-fromIdent :: Ident -> String
-fromIdent (Ident s) = s
