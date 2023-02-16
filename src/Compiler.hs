@@ -1,23 +1,27 @@
-{-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Compiler (compile) where
 
-import           Control.Monad.State (StateT, execStateT, gets, modify)
-import           Data.Map            (Map)
-import qualified Data.Map            as Map
-import           Data.Tuple.Extra    (second)
-import           Grammar.ErrM        (Err)
-import           Grammar.Print       (printTree)
-import           LlvmIr              (LLVMIr (..), LLVMType (..),
-                                      LLVMValue (..), llvmIrToString)
-import           TypeChecker         (partitionType)
-import           TypeCheckerIr
+import Control.Monad.State (StateT, execStateT, gets, modify)
+import Data.Map (Map)
+import Data.Map qualified as Map
+import Data.Tuple.Extra (second)
+import Grammar.ErrM (Err)
+import Grammar.Print (printTree)
+import LlvmIr (
+    LLVMIr (..),
+    LLVMType (..),
+    LLVMValue (..),
+    llvmIrToString,
+ )
+import TypeChecker (partitionType)
+import TypeCheckerIr
 
 -- | The record used as the code generator state
 data CodeGenerator = CodeGenerator
-    { instructions  :: [LLVMIr]
-    , functions     :: Map Id FunctionInfo
+    { instructions :: [LLVMIr]
+    , functions :: Map Id FunctionInfo
     , variableCount :: Integer
     }
 
@@ -25,7 +29,7 @@ data CodeGenerator = CodeGenerator
 type CompilerState a = StateT CodeGenerator Err a
 
 data FunctionInfo = FunctionInfo
-    { numArgs   :: Int
+    { numArgs :: Int
     , arguments :: [Id]
     }
 
@@ -118,32 +122,27 @@ compile (Program prg) = do
       where
         t_return = snd $ partitionType (length args) t
 
-
-
     go :: Exp -> CompilerState ()
-    go (EInt int)      = emitInt int
-    go (EAdd t e1 e2)  = emitAdd e1 e2
+    go (EInt int) = emitInt int
+    go (EAdd t e1 e2) = emitAdd t e1 e2
     -- go (ESub e1 e2)  = emitSub e1 e2
     -- go (EMul e1 e2)  = emitMul e1 e2
     -- go (EDiv e1 e2)  = emitDiv e1 e2
     -- go (EMod e1 e2)  = emitMod e1 e2
     go (EId (name, _)) = emitIdent name
-    go (EApp t e1 e2)  = emitApp e1 e2
+    go (EApp t e1 e2) = emitApp t e1 e2
+    go (EAbs t ti e) = emitAbs t ti e
+    go (ELet binds e) = emitLet binds e
+    go (EAnn _ _) = emitEAnn
 
     --- aux functions ---
-    emitAbs :: Ident -> Exp -> CompilerState ()
-    emitAbs id e = do
-        emit $
-            Comment $
-                concat
-                    [ "EAbs ("
-                    , show id
-                    , ", "
-                    , show I64
-                    , ", "
-                    , show e
-                    , ") is not implemented!"
-                    ]
+    emitEAnn :: CompilerState ()
+    emitEAnn = emit . UnsafeRaw $ "why?"
+
+    emitAbs :: Type -> Id -> Exp -> CompilerState ()
+    emitAbs _t tid e = do
+        emit . Comment $
+            "Lambda escaped previous stages: \\" <> show tid <> " . " <> show e
     emitLet :: [Bind] -> Exp -> CompilerState ()
     emitLet xs e = do
         emit $
@@ -156,18 +155,18 @@ compile (Program prg) = do
                     , ") is not implemented!"
                     ]
 
-    emitApp :: Exp -> Exp -> CompilerState ()
-    emitApp e1 e2 = appEmitter e1 e2 []
+    emitApp :: Type -> Exp -> Exp -> CompilerState ()
+    emitApp t e1 e2 = appEmitter t e1 e2 []
       where
-        appEmitter :: Exp -> Exp -> [Exp] -> CompilerState ()
-        appEmitter e1 e2 stack = do
+        appEmitter :: Type -> Exp -> Exp -> [Exp] -> CompilerState ()
+        appEmitter t e1 e2 stack = do
             let newStack = e2 : stack
             case e1 of
-                EApp t e1' e2' -> appEmitter e1' e2' newStack
+                EApp t' e1' e2' -> appEmitter t' e1' e2' newStack
                 EId (name, _) -> do
                     args <- traverse exprToValue newStack
                     vs <- getNewVar
-                    emit $ SetVariable (Ident $ show vs) (Call I64 name (map (I64,) args))
+                    emit $ SetVariable (Ident $ show vs) (Call (type2LlvmType t) name (map (I64,) args))
                 x -> do
                     emit . Comment $ "The unspeakable happened: "
                     emit . Comment $ show x
@@ -186,12 +185,12 @@ compile (Program prg) = do
         emit $ Comment "This should not have happened!"
         emit $ SetVariable (Ident (show varCount)) (Add I64 (VInteger i) (VInteger 0))
 
-    emitAdd :: Exp -> Exp -> CompilerState ()
-    emitAdd e1 e2 = do
+    emitAdd :: Type -> Exp -> Exp -> CompilerState ()
+    emitAdd t e1 e2 = do
         v1 <- exprToValue e1
         v2 <- exprToValue e2
         v <- getNewVar
-        emit $ SetVariable (Ident $ show v) (Add I64 v1 v2)
+        emit $ SetVariable (Ident $ show v) (Add (type2LlvmType t) v1 v2)
 
     -- emitMul :: Exp -> Exp -> CompilerState ()
     -- emitMul e1 e2 = do
@@ -255,5 +254,6 @@ compile (Program prg) = do
 
 type2LlvmType :: Type -> LLVMType
 type2LlvmType = \case
-  TInt -> I64
-  t    -> error $ "missing type case: " ++ show t
+    TInt -> I64
+    TFun t _ -> type2LlvmType t
+    t -> CustomType $ Ident ("\"" ++ show t ++ "\"")

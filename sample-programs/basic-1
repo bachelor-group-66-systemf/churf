@@ -1,6 +1,13 @@
 
-tripplemagic : Int -> Int -> Int -> Int;
-tripplemagic x y z = ((\x:Int. x+x) x) + y + z;
+--tripplemagic : Int -> Int -> Int -> Int;
+--tripplemagic x y z = ((\x:Int. x+x) x) + y + z;
+
+-- main : Int;
+-- main = tripplemagic ((\x:Int. x+x+3) ((\x:Int. x) 2)) 5 3
+
+apply : (Int -> Int) -> Int -> Int;
+apply f x = f x;
 
 main : Int;
-main = tripplemagic ((\x:Int. x+x+3) ((\x:Int. x) 2)) 5 3
+main = apply (\x:Int . x + 2) 5;
+
