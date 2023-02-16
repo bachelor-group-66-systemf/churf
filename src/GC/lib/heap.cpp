@@ -119,13 +119,25 @@ namespace GC {
 
   // Not optimal for now, it doesn't have to loop over all objects
   // but mark needs some refinements before this can be optimised
+  // sweep apparently only sweeps chunks of odd size, eventhough the're not marked
   void Heap::sweep() {
-    for (size_t i = 0; i < m_allocated_chunks.size(); i++) {
+/*     for (char i = 0; i < m_allocated_chunks.size();) {
       auto chunk = m_allocated_chunks.at(i);
+      std::cout << "Current chunk: " << chunk->start << std::endl;
       if (chunk->marked == false) {
+        std::cout << "The current chunk was removed" << std::endl;
         m_allocated_chunks.erase(m_allocated_chunks.begin() + i);
         m_freed_chunks.push_back(chunk);
       } 
+    } */
+    // This captures the wierd behavior or my lack of knowledge of vectors
+    for (auto chunk : m_allocated_chunks) {
+        if (!chunk->marked) {
+            auto it = std::find(m_allocated_chunks.begin(), m_allocated_chunks.end(), chunk);
+            if (it != m_allocated_chunks.end())
+                m_allocated_chunks.erase(it);
+            m_freed_chunks.push_back(chunk);
+        }
     }
   }
 
@@ -168,20 +180,20 @@ namespace GC {
   */
   // For testing purposes
   void Heap::print_line(Chunk *chunk) {
-    std::cout << "Marked: " << chunk->marked << "\nStart adr: " << chunk->start << "\nSize: " << chunk->size << " B" << std::endl;
+    std::cout << "Marked: " << chunk->marked << "\nStart adr: " << chunk->start << "\nSize: " << chunk->size << " B\n" << std::endl;
   }
 
   void Heap::print_contents() {
     if (m_allocated_chunks.size()) {
-      std::cout << "ALLOCATED CHUNKS" << std::endl;
+      std::cout << "\nALLOCATED CHUNKS #" << m_allocated_chunks.size() << std::endl;
       for (auto chunk : m_allocated_chunks) {
           print_line(chunk);
       }
     } else {
-      std::cout << "NO ALLOCATIONS" << std::endl;
+      std::cout << "NO ALLOCATIONS\n" << std::endl;
     }
     if (m_freed_chunks.size()) {
-      std::cout << "FREED CHUNKS" << std::endl;
+      std::cout << "\nFREED CHUNKS #" <<  m_freed_chunks.size() << std::endl;
       for (auto fchunk : m_freed_chunks) {
           print_line(fchunk);
       }
