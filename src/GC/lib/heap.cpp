@@ -65,7 +65,10 @@ namespace GC {
     // get the frame adress, whwere local variables and saved registers are located
     auto stack_start = reinterpret_cast<uintptr_t *>(__builtin_frame_address(0));
     // looking at 10 stack frames back
-    const uintptr_t *stack_end = (uintptr_t *)0; //reinterpret_cast<const uintptr_t *>(__builtin_frame_address(10));
+    const uintptr_t *stack_end = (uintptr_t *)0;
+    
+    // denna segfaultar om arg för __b_f_a är > 2
+    // reinterpret_cast<const uintptr_t *>(__builtin_frame_address(10));
     auto work_list = m_allocated_chunks;
     mark(stack_start, stack_end, work_list);
 
