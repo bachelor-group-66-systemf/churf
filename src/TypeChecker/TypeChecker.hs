@@ -11,13 +11,14 @@ import Data.Map (Map)
 import qualified Data.Map as M
 import Grammar.ErrM (Err)
 import Grammar.Print
+import Data.List (findIndex)
 
 import Debug.Trace (trace)
 import TypeChecker.TypeCheckerIr
 
 data Ctx = Ctx { vars :: Map Integer Type
                , sigs :: Map Ident Type
-               , count :: Int
+               , nextFresh :: Ident
                }
     deriving Show
 
@@ -32,7 +33,7 @@ programmer.
 type Infer = StateT Ctx (ExceptT Error Identity)
 
 initEnv :: Ctx
-initEnv = Ctx mempty mempty 0
+initEnv = Ctx mempty mempty "a"
 
 run :: Infer a -> Either Error a
 run = runIdentity . runExceptT . flip St.evalStateT initEnv
@@ -50,7 +51,6 @@ inferBind (RBind name e) = do
     (t, e') <- inferExp e
     insertSigs name t
     return $ TBind name t e'
-
 
 inferExp :: RExp -> Infer (Type, TExp)
 inferExp = \case
@@ -79,14 +79,14 @@ inferExp = \case
     RApp expr1 expr2 -> do
         (typ1, expr1') <- inferExp expr1
         (typ2, expr2') <- inferExp expr2
-        cnt <- incCount
+        fvar <- fresh
         case typ1 of
             (TPoly (Ident x)) -> do 
-                let newType = (TArrow (TPoly (Ident x)) (TPoly . Ident $ x ++ (show cnt)))
+                let newType = (TArrow (TPoly (Ident x)) (TPoly fvar))
                 specifyType expr1 newType
                 typ1' <- apply newType typ1
                 return $ (typ1', TApp expr1' expr2' typ1')
-            _         -> (\t -> (t, TApp expr1' expr2' t)) <$> apply typ2 typ1
+            _         -> (\t -> (t, TApp expr1' expr2' t)) <$> apply typ1 typ2
 
     RAdd expr1 expr2 -> do
         (typ1, expr1') <- inferExp expr1
@@ -115,11 +115,22 @@ isPoly :: Type -> Bool
 isPoly (TPoly _) = True
 isPoly _         = False
 
-incCount :: Infer Int
-incCount = do
-    st <- St.get
-    St.put ( st { count = succ st.count } )
-    return st.count
+fresh :: Infer Ident
+fresh = do
+    (Ident var) <- St.gets nextFresh
+    when (length var == 0) (throwError $ Default "fresh")
+    index <- case findIndex (== (head var)) alphabet of
+                  Nothing -> throwError $ Default "fresh"
+                  Just i -> return i
+    let nextIndex = (index + 1) `mod` 26
+    let newVar = Ident $ [alphabet !! nextIndex]
+    St.modify (\st -> st { nextFresh = newVar })
+    return newVar
+  where
+    alphabet = "abcdefghijklmnopqrstuvwxyz" :: [Char]
+
+unify :: Type -> Type -> Infer Type
+unify = todo
 
 -- | Specify the type of a bound variable
 -- Because in lambdas we have to assume a general type and update it
@@ -152,12 +163,6 @@ insertSigs :: Ident -> Type -> Infer ()
 insertSigs i t = do
     st <- St.get
     St.put ( st { sigs = M.insert i t st.sigs } )
-
-union :: Type -> Type -> Infer ()
-union = todo
-
-find :: Type -> Type
-find = todo
 
 -- Have to figure out the equivalence classes for types.
 -- Currently this does not support more than exact matches.

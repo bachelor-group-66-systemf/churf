@@ -5,7 +5,8 @@ import           Grammar.Par        (myLexer, pProgram)
 import           Grammar.Print      (printTree)
 import           System.Environment (getArgs)
 import           System.Exit        (exitFailure, exitSuccess)
-import           TypeChecker.TypeChecker (typecheck)
+-- import           TypeChecker.TypeChecker (typecheck)
+import           TypeChecker.Unification (typecheck)
 import           Renamer.Renamer (rename)
 import           Grammar.Print (prt)
 
@@ -43,4 +44,4 @@ main = getArgs >>= \case
                         putStrLn ""
                         putStrLn " ----- TYPECHECKER ----- "
                         putStrLn ""
-                        putStrLn . printTree $ prg
+                        putStrLn . show $ prg

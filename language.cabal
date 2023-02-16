@@ -33,6 +33,7 @@ executable language
       Grammar.ErrM
       TypeChecker.TypeChecker
       TypeChecker.TypeCheckerIr
+      TypeChecker.Unification
       Renamer.Renamer
       Renamer.RenamerIr
 
@@ -45,6 +46,6 @@ executable language
       , either
       , extra
       , array
-      , equivalence
+      , unification-fd
 
     default-language: GHC2021
