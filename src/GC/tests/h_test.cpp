@@ -4,7 +4,8 @@ GC::Heap *gc = GC::Heap::the2();
 
 void init() {
     std::vector<int> live_int_vec{1, 2, 3, 4, 5};
-    std::vector<int> dead_int_vec(10, 1);
+    std::vector<int> dead_int_vec(1000000, 1);
+    int *arr = static_cast<int *>(gc->alloc(sizeof(int) * 300));
     int *a_ptr;
     int a = 10;
     a_ptr = &a;
@@ -16,7 +17,7 @@ void init() {
 
 int main() {
     init();
-    gc->force_collect();
+    gc->collect(MARK | SWEEP);
     gc->print_contents();
     //delete gc;
     return 0;

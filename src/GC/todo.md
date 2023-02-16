@@ -13,25 +13,14 @@ TODO:
 
 Potential algorithms:
 - mark & sweep
-    - easy to implement
-    - slow
-- mark & compact
-    - no memory fragmentation
-    - slow
-- stop-copy algorithms (?)
-    - no memory fragmentation
-    - slow
-    - maybe good for FP langs?
 
-## Type hierarchy
+## Tests TODO
+### Library linking
+Compile the GC lib and a test separately, link them together
+and evalutate the following:
 
-- Heap class
-    - Holds all memory
-        - Resizeable array?
-    - Singleton instance
-    - exposes alloc
+    __builtin_frame_address(0)
+    __builtin_frame_address(1)
+    __builtin_return_address(0)
+    __builtin_return_address(1)
 
-- Heap chunks
-    - size
-    - addr
-    - marked bit

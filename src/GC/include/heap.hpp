@@ -10,6 +10,11 @@
 
 #define HEAP_SIZE   65536
 
+#define MARK        (uint) 0x1
+#define SWEEP       (uint) 0x2
+#define FREE        (uint) 0x4
+#define COLLECT_ALL (uint) 0x7
+
 namespace GC {
 
   class Heap {
@@ -60,6 +65,6 @@ namespace GC {
 
     void *alloc(size_t size);
     void print_contents();
-    void force_collect();
+    void collect(uint flags); // DEBUG ONLY
   };
 }

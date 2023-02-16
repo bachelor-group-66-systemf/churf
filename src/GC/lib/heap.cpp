@@ -79,17 +79,47 @@ namespace GC {
     // BELOW SHOULD BE INCLUDED (commented only for tests, to see which objects freed)
     
     //release free chunks
-    /* while (m_freed_chunks.size()) {
+    while (m_freed_chunks.size()) {
       auto chunk_pointer = m_freed_chunks.back();
       m_freed_chunks.pop_back();
       delete chunk_pointer; // deletes chunk object, doesn't free memory to the OS
-    } */
+    }
+  }
+
+  void Heap::collect(uint flags) {
+
+    std::cout << "DEBUG COLLECT\nFLAGS: " << flags << std::endl;
+    // get the frame adress, whwere local variables and saved registers are located
+    auto stack_start = reinterpret_cast<uintptr_t *>(__builtin_frame_address(0));
+
+    const uintptr_t *stack_end = (uintptr_t *)0; // dummy value
+    
+    // denna segfaultar om arg för __b_f_a är > 2
+    // reinterpret_cast<const uintptr_t *>(__builtin_frame_address(10));
+
+    auto work_list = m_allocated_chunks;
+
+    if (flags & MARK) {
+      mark(stack_start, stack_end, work_list);
+    }
+
+    if (flags & SWEEP) {
+      sweep();
+    }
+    
+    //release free chunks
+    if (flags & FREE) {
+      while (m_freed_chunks.size()) {
+        auto chunk_pointer = m_freed_chunks.back();
+        m_freed_chunks.pop_back();
+        delete chunk_pointer; // deletes chunk object, doesn't free heap memory to the OS
+      }
+    }
   }
 
   // Not optimal for now, it doesn't have to loop over all objects
   // but mark needs some refinements before this can be optimised
   void Heap::sweep() {
-    // assert(false && "NOT IMPLEMENTED");
     for (size_t i = 0; i < m_allocated_chunks.size(); i++) {
       auto chunk = m_allocated_chunks.at(i);
       if (chunk->marked == false) {
@@ -99,32 +129,7 @@ namespace GC {
     }
   }
 
-  void Heap::force_collect() {
-    Heap::collect();
-  }
-  
-  // dead code
-  // void Heap::compact() {
-
-  //   // sort alloced_chunks by their start-addresses
-  //   std::sort(m_allocated_chunks.begin(), m_allocated_chunks.end(), [](Chunk *c1, Chunk *c2){
-  //     return c1->start < c2->start;
-  //   });
-    
-  //   // move all chunks to the start of the heap
-  //   auto heap_curr = (uintptr_t *)m_heap; // (char *)m_heap
-  //   for (auto space : m_allocated_chunks) {
-  //     if (space->start != heap_curr) {
-  //       memmove(heap_curr, space->start, space->size);
-  //       space->start = heap_curr;
-  //       heap_curr += space->size;
-  //     } else {
-  //       heap_curr += space->size;
-  //     }
-  //   }
-  // }
-
-  // return the worklist filtered on mark = true
+  // TODO: return the worklist filtered on mark = true
   void Heap::mark(uintptr_t *start, const uintptr_t *end, std::vector<Chunk*> work_list) {
     for (; start < end; start++) { // to find adresses thats in the worklist
       for (size_t i = 0; i < work_list.size(); i++) { // fix this
@@ -140,7 +145,27 @@ namespace GC {
       }
     }
   }
+  
 
+  /* Alternative marking, pseudocode
+  mark_from_roots():
+    worklist <- empty
+    for fld in Roots
+      ref <- *fld
+      if ref ≠ null && !marked(ref)
+        set_marked(ref)
+        worklist.add(ref)
+        mark()
+
+  mark():
+    while size(worklist) > 0
+      ref <- remove_first(worklist)
+      for fld in Pointers(ref)
+        child <- *fld
+        if child ≠ null && !marked(child)
+          set_marked(child)
+          worklist.add(child)
+  */
   // For testing purposes
   void Heap::print_line(Chunk *chunk) {
     std::cout << "Marked: " << chunk->marked << "\nStart adr: " << chunk->start << "\nSize: " << chunk->size << " B" << std::endl;
