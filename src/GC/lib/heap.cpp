@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "heap.hpp"
+using namespace std;
 
 namespace GC {
 
@@ -57,6 +58,7 @@ namespace GC {
 
     m_allocated_chunks.push_back(new_chunk);
 
+    // new_chunk should probably be a unique pointer, if that isn't implicit already 
     return new_chunk->start;
   }
 
@@ -76,8 +78,8 @@ namespace GC {
 
     // compact();
 
-    // BELOW SHOULD BE INCLUDED (commented only for tests, to see which objects freed)
-    
+    // We shouldn't do this, since then m_freed_chunks doesnt' have any real purpose,
+    // it should be used in alloc, it isn't if we delete *all* of its contentes
     //release free chunks
     while (m_freed_chunks.size()) {
       auto chunk_pointer = m_freed_chunks.back();
@@ -88,7 +90,7 @@ namespace GC {
 
   void Heap::collect(uint flags) {
 
-    std::cout << "DEBUG COLLECT\nFLAGS: " << flags << std::endl;
+    cout << "DEBUG COLLECT\nFLAGS: " << flags << endl;
     // get the frame adress, whwere local variables and saved registers are located
     auto stack_start = reinterpret_cast<uintptr_t *>(__builtin_frame_address(0));
 
@@ -119,30 +121,21 @@ namespace GC {
 
   // Not optimal for now, it doesn't have to loop over all objects
   // but mark needs some refinements before this can be optimised
-  // sweep apparently only sweeps chunks of odd size, eventhough the're not marked
   void Heap::sweep() {
-/*     for (char i = 0; i < m_allocated_chunks.size();) {
-      auto chunk = m_allocated_chunks.at(i);
-      std::cout << "Current chunk: " << chunk->start << std::endl;
-      if (chunk->marked == false) {
-        std::cout << "The current chunk was removed" << std::endl;
-        m_allocated_chunks.erase(m_allocated_chunks.begin() + i);
-        m_freed_chunks.push_back(chunk);
-      } 
-    } */
-    // This captures the wierd behavior or my lack of knowledge of vectors
-    for (auto chunk : m_allocated_chunks) {
+    for (auto it = m_allocated_chunks.begin(); it != m_allocated_chunks.end();) {
+        auto chunk = *it;
         if (!chunk->marked) {
-            auto it = std::find(m_allocated_chunks.begin(), m_allocated_chunks.end(), chunk);
-            if (it != m_allocated_chunks.end())
-                m_allocated_chunks.erase(it);
             m_freed_chunks.push_back(chunk);
+            it = m_allocated_chunks.erase(it);
+        }
+        else { 
+            ++it;
         }
     }
   }
 
   // TODO: return the worklist filtered on mark = true
-  void Heap::mark(uintptr_t *start, const uintptr_t *end, std::vector<Chunk*> work_list) {
+  void Heap::mark(uintptr_t *start, const uintptr_t *end, vector<Chunk*> work_list) {
     for (; start < end; start++) { // to find adresses thats in the worklist
       for (size_t i = 0; i < work_list.size(); i++) { // fix this
       auto chunk = work_list.at(i);
@@ -178,27 +171,28 @@ namespace GC {
           set_marked(child)
           worklist.add(child)
   */
+
   // For testing purposes
   void Heap::print_line(Chunk *chunk) {
-    std::cout << "Marked: " << chunk->marked << "\nStart adr: " << chunk->start << "\nSize: " << chunk->size << " B\n" << std::endl;
+    cout << "Marked: " << chunk->marked << "\nStart adr: " << chunk->start << "\nSize: " << chunk->size << " B\n" << endl;
   }
 
   void Heap::print_contents() {
     if (m_allocated_chunks.size()) {
-      std::cout << "\nALLOCATED CHUNKS #" << m_allocated_chunks.size() << std::endl;
+      cout << "\nALLOCATED CHUNKS #" << m_allocated_chunks.size() << endl;
       for (auto chunk : m_allocated_chunks) {
           print_line(chunk);
       }
     } else {
-      std::cout << "NO ALLOCATIONS\n" << std::endl;
+      cout << "NO ALLOCATIONS\n" << endl;
     }
     if (m_freed_chunks.size()) {
-      std::cout << "\nFREED CHUNKS #" <<  m_freed_chunks.size() << std::endl;
+      cout << "\nFREED CHUNKS #" <<  m_freed_chunks.size() << endl;
       for (auto fchunk : m_freed_chunks) {
           print_line(fchunk);
       }
     } else {
-      std::cout << "NO FREED CHUNKS" << std::endl;
+      cout << "NO FREED CHUNKS" << endl;
     }      
   }
 }
