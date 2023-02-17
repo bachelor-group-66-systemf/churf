@@ -5,6 +5,7 @@ import Compiler.LLVMIr (
     LLVMIr (..),
     LLVMType (..),
     LLVMValue (..),
+    Visibilty (..),
     llvmIrToString,
  )
 import Control.Monad.State (StateT, execStateT, gets, modify)
@@ -170,7 +171,7 @@ compile (Program prg) = do
                 EId id -> do
                     args <- traverse exprToValue newStack
                     vs <- getNewVar
-                    emit $ SetVariable (Ident $ show vs) (Call I64 id (map (I64,) args))
+                    emit $ SetVariable (Ident $ show vs) (Call Global I64 id (map (I64,) args))
                 x -> do
                     emit . Comment $ "The unspeakable happened: "
                     emit . Comment $ show x
@@ -248,7 +249,7 @@ compile (Program prg) = do
         case Map.lookup id funcs of
             Just _ -> do
                 vc <- getNewVar
-                emit $ SetVariable (Ident $ show vc) (Call I64 id [])
+                emit $ SetVariable (Ident $ show vc) (Call Global I64 id [])
                 return $ VIdent (Ident $ show vc)
             Nothing -> return $ VIdent id
     exprToValue e = do

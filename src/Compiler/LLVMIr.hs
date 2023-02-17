@@ -1,9 +1,22 @@
 {-# LANGUAGE LambdaCase #-}
 
-module Compiler.LLVMIr (LLVMType (..), LLVMIr (..), llvmIrToString, LLVMValue (..), LLVMComp (..)) where
+module Compiler.LLVMIr (
+    LLVMType (..),
+    LLVMIr (..),
+    llvmIrToString,
+    LLVMValue (..),
+    LLVMComp (..),
+    Visibilty (..),
+) where
 
 import Data.List (intercalate)
 import Grammar.Abs (Ident (Ident))
+
+data Visibilty = Global | Local
+instance Show Visibilty where
+    show :: Visibilty -> String
+    show Global = "@"
+    show Local = "%"
 
 -- | A datatype which represents some basic LLVM types
 data LLVMType
@@ -84,7 +97,7 @@ data LLVMIr
     | Br Ident
     | BrCond LLVMValue Ident Ident
     | Label Ident
-    | Call LLVMType Ident Args
+    | Call Visibilty LLVMType Ident Args
     | Alloca LLVMType
     | Store LLVMType Ident LLVMType Ident
     | Bitcast LLVMType Ident LLVMType
@@ -148,9 +161,9 @@ llvmIrToString = go 0
                     [ "srem ", show t, " ", show v1, ", "
                     , show v2, "\n"
                     ]
-            (Call t (Ident i) arg) ->
+            (Call vis t (Ident i) arg) ->
                 concat
-                    [ "call ", show t, " @", i, "("
+                    [ "call ", show t, " ", show vis, i, "("
                     , intercalate ", " $ Prelude.map (\(x, y) -> show x <> " " <> show y) arg
                     , ")\n"
                     ]
