@@ -39,7 +39,7 @@ instance Show LLVMType where
         Ptr -> "ptr"
         Ref ty -> show ty <> "*"
         Array n ty -> concat ["[", show n, " x ", show ty, "]"]
-        CustomType (Ident ty) -> ty
+        CustomType (Ident ty) -> "%" <> ty
 
 data LLVMComp
     = LLEq
@@ -84,6 +84,7 @@ type Args = [(LLVMType, LLVMValue)]
 -- | A datatype which represents different instructions in LLVM
 data LLVMIr
     = Define LLVMType Ident Params
+    | DeclareType Ident [LLVMType]
     | DefineEnd
     | Declare LLVMType Ident Params
     | SetVariable Ident LLVMIr
@@ -134,6 +135,10 @@ llvmIrToString = go 0
                     , ") {\n"
                     ]
             DefineEnd -> "}\n"
+            (DeclareType (Ident i) ts) -> 
+                concat [ "%", i, " = type { "
+                       , intercalate ", " (show <$> ts)
+                       , " }"]
             (Declare _t (Ident _i) _params) -> undefined
             (SetVariable (Ident i) ir) -> concat ["%", i, " = ", insToString 0 ir]
             (Add t v1 v2) ->
