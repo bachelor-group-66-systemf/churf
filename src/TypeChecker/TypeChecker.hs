@@ -1,21 +1,22 @@
-{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE OverloadedRecordDot #-}
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings   #-}
 
 module TypeChecker.TypeChecker where
 
-import Control.Monad (void)
-import Control.Monad.Except (ExceptT, runExceptT, throwError)
-import Control.Monad.State (StateT)
-import Control.Monad.State qualified as St
-import Data.Functor.Identity (Identity, runIdentity)
-import Data.Map (Map)
-import Data.Map qualified as M
-import TypeChecker.TypeCheckerIr
+import           Control.Monad             (void)
+import           Control.Monad.Except      (ExceptT, runExceptT, throwError)
+import           Control.Monad.State       (StateT)
+import qualified Control.Monad.State       as St
+import           Data.Functor.Identity     (Identity, runIdentity)
+import           Data.Map                  (Map)
+import qualified Data.Map                  as M
+
+import           TypeChecker.TypeCheckerIr
 
 data Ctx = Ctx
-    { vars :: Map Integer Type
-    , sigs :: Map Ident (RBind, Maybe Type)
+    { vars      :: Map Integer Type
+    , sigs      :: Map Ident Type
     , nextFresh :: Int
     }
     deriving (Show)
@@ -38,70 +39,54 @@ TODOs:
 
 -}
 
+typecheck :: RProgram -> Either Error TProgram
+typecheck = todo
+
 run :: Infer a -> Either Error a
 run = runIdentity . runExceptT . flip St.evalStateT (Ctx mempty mempty 0)
 
-typecheck :: RProgram -> Either Error TProgram
-typecheck = run . inferPrg
-
-inferPrg :: RProgram -> Infer TProgram
-inferPrg (RProgram xs) = do
-    xs' <- mapM inferBind xs
-    return $ TProgram xs'
-
--- Binds are not correctly added to the context.
--- Can't type check programs with more than one function currently
-inferBind :: RBind -> Infer TBind
-inferBind b@(RBind name e) = do
-    insertSigs name b Nothing
-    (t, e') <- inferExp e
-    return $ TBind name t e'
-
 -- Have to figure out a way to coerce polymorphic types to monomorphic ones where necessary
 -- { \x. \y. x + y } will have the type { a -> b -> Int }
-inferExp :: RExp -> Infer (Type, TExp)
+inferExp :: RExp -> Infer Type
 inferExp = \case
+
     RAnn expr typ -> do
-        (t, expr') <- inferExp expr
+        t <- inferExp expr
         void $ t =:= typ
-        return (typ, expr')
-    RBound num name -> do
-        t <- lookupVars num
-        return (t, TBound num name t)
-    RFree name -> do
-        (b@(RBind name _), t) <- lookupSigs name
-        t' <- case t of
-            Nothing -> do
-                (TBind _ a _) <- inferBind b
-                insertSigs name b (Just a)
-                return a
-            Just a -> return a
-        return (t', TFree name t')
-    RConst (CInt i) -> return (TMono "Int", TConst (CInt i) (TMono "Int"))
-    RConst (CStr str) -> return (TMono "Str", TConst (CStr str) (TMono "Str"))
+        return t
+
+    RBound num name -> lookupVars num
+
+    RFree name -> lookupSigs name
+
+    RConst (CInt i) -> return $ TMono "Int"
+
+    RConst (CStr str) -> return $ TMono "Str"
+
     RAdd expr1 expr2 -> do
-        (typ1, expr1') <- check expr1 (TMono "Int")
-        (_, expr2') <- check expr2 (TMono "Int")
-        return (typ1, TAdd expr1' expr2' typ1)
+        let int = TMono "Int"
+        typ1 <- check expr1 int
+        typ2 <- check expr2 int
+        return int
+
     RApp expr1 expr2 -> do
-        (fn_t, expr1') <- inferExp expr1
-        (arg_t, expr2') <- inferExp expr2
+        fn_t <- inferExp expr1
+        arg_t <- inferExp expr2
         res <- fresh
-        -- TODO: Double check if this is correct behavior.
-        -- It might be the case that we should return res, rather than new_t
         new_t <- fn_t =:= TArrow arg_t res
-        return (new_t, TApp expr1' expr2' new_t)
+        return res
+
     RAbs num name expr -> do
         arg <- fresh
         insertVars num arg
-        (typ, expr') <- inferExp expr
-        return (TArrow arg typ, TAbs num name expr' typ)
+        typ <- inferExp expr
+        return $ TArrow arg typ
 
-check :: RExp -> Type -> Infer (Type, TExp)
+check :: RExp -> Type -> Infer ()
 check e t = do
-    (t', e') <- inferExp e
-    t'' <- t' =:= t
-    return (t'', e')
+    t' <- inferExp e
+    t =:= t'
+    return ()
 
 fresh :: Infer Type
 fresh = do
@@ -120,30 +105,29 @@ fresh = do
     return $ TArrow t1 t2
 (=:=) a b = throwError (TypeMismatch $ unwords ["Can not unify type", show a, "with", show b])
 
--- Unused currently
 lookupVars :: Integer -> Infer Type
 lookupVars i = do
     st <- St.gets vars
     case M.lookup i st of
-        Just t -> return t
-        Nothing -> throwError $ UnboundVar "lookupVars"
+       Just t  -> return t
+       Nothing -> throwError $ UnboundVar "lookupVars"
 
 insertVars :: Integer -> Type -> Infer ()
 insertVars i t = do
     st <- St.get
     St.put (st {vars = M.insert i t st.vars})
 
-lookupSigs :: Ident -> Infer (RBind, Maybe Type)
+lookupSigs :: Ident -> Infer Type
 lookupSigs i = do
     st <- St.gets sigs
     case M.lookup i st of
-        Just t -> return t
+        Just t  -> return t
         Nothing -> throwError $ UnboundVar "lookupSigs"
 
-insertSigs :: Ident -> RBind -> Maybe Type -> Infer ()
-insertSigs i b t = do
+insertSigs :: Ident -> Type -> Infer ()
+insertSigs i t = do
     st <- St.get
-    St.put (st {sigs = M.insert i (b, t) st.sigs})
+    St.put (st {sigs = M.insert i t st.sigs})
 
 {-# WARNING todo "TODO IN CODE" #-}
 todo :: a
@@ -158,3 +142,12 @@ data Error
     | AnnotatedMismatch String
     | Default String
     deriving (Show)
+
+
+{-
+
+The procedure inst(σ) specializes the polytype
+σ by copying the term and replacing the bound type variables
+consistently by new monotype variables.
+
+-}

@@ -1,1 +1,3 @@
-apply = \x. \y. (x : Mono Int)
+test = \x. (x : Mono String) ;
+
+apply x y = x + y ;

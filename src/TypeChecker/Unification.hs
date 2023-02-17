@@ -1,31 +1,31 @@
-{-# LANGUAGE DeriveAnyClass #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE DeriveAnyClass    #-}
+{-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE PatternSynonyms   #-}
 
 module TypeChecker.Unification where
 
-import Control.Arrow ((>>>))
-import Control.Monad.Except
-import Control.Monad.Reader
-import Control.Monad.State
-import Control.Unification hiding (applyBindings, (=:=))
-import Control.Unification qualified as U
-import Control.Unification.IntVar
-import Data.Foldable (fold)
-import Data.Functor.Fixedpoint
-import Data.Functor.Identity
-import Data.Map (Map)
-import Data.Map qualified as M
-import Data.Maybe (fromJust, fromMaybe)
-import Data.Set (Set, (\\))
-import Data.Set qualified as S
-import Debug.Trace (trace)
-import GHC.Generics (Generic1)
-import Renamer.Renamer
-import Renamer.RenamerIr (Const (..), Ident (..), RBind (..), RExp (..), RProgram (..))
-import Renamer.RenamerIr qualified as R
+import           Control.Arrow              ((>>>))
+import           Control.Monad.Except
+import           Control.Monad.Reader
+import           Control.Monad.State
+import           Control.Unification        hiding (applyBindings, (=:=))
+import qualified Control.Unification        as U
+import           Control.Unification.IntVar
+import           Data.Foldable              (fold)
+import           Data.Functor.Fixedpoint
+import           Data.Functor.Identity
+import           Data.Map                   (Map)
+import qualified Data.Map                   as M
+import           Data.Maybe                 (fromJust, fromMaybe)
+import           Data.Set                   (Set, (\\))
+import qualified Data.Set                   as S
+import           Debug.Trace                (trace)
+import           GHC.Generics               (Generic1)
+import           Renamer.Renamer
+import qualified Renamer.RenamerIr          as R
+import           Renamer.RenamerIr          (Const (..), Ident (..), RBind (..),
+                                             RExp (..), RProgram (..))
 
 type Ctx = Map Ident UPolytype
 
@@ -37,7 +37,7 @@ data TypeT a = TPolyT Ident | TMonoT Ident | TArrowT a a
 instance Show a => Show (TypeT a) where
     show (TPolyT (Ident i)) = i
     show (TMonoT (Ident i)) = i
-    show (TArrowT a b) = show a ++ " -> " ++ show b
+    show (TArrowT a b)      = show a ++ " -> " ++ show b
 
 type Infer = StateT (Map Ident UPolytype) (ReaderT Ctx (ExceptT TypeError (IntBindingT TypeT Identity)))
 
@@ -46,7 +46,10 @@ type Type = Fix TypeT
 type UType = UTerm TypeT IntVar
 
 data Poly t = Forall [Ident] t
-    deriving (Eq, Show, Functor)
+    deriving (Eq, Functor)
+
+instance Show t => Show (Poly t) where
+    show (Forall is t) = unwords (map (\(Ident x) -> "forall " ++ x ++ ".") is) ++ " " ++ show t
 
 type Polytype = Poly Type
 
@@ -101,60 +104,17 @@ data TExp
 
 ----------------------------------------------------------
 typecheck :: RProgram -> Either TypeError Program
-typecheck = run . inferProgram
+typecheck = undefined
 
-inferProgram :: RProgram -> Infer Program
-inferProgram (RProgram binds) = do
-    binds' <- mapM inferBind binds
-    return $ Program binds'
-
-inferBind :: RBind -> Infer Bind
-inferBind (RBind i e) = do
-    (t, e') <- infer e
-    e'' <- convert fromUType e'
-    t' <- fromUType t
-    insertSigs i (Forall [] t)
-    return $ Bind i e'' t'
-
-fromUType :: UType -> Infer Polytype
-fromUType = applyBindings >>> (>>= (generalize >>> fmap fromUPolytype))
-
-convert :: (UType -> Infer Polytype) -> TExp -> Infer Exp
-convert f = \case
-    (TAnn e t) -> do
-        e' <- convert f e
-        EAnn e' <$> f t
-    (TFree i t) -> do
-        t' <- f t
-        return $ EFree i t'
-    (TBound i t) -> do
-        t' <- f t
-        return $ EBound i t'
-    (TConst c t) -> do
-        t' <- f t
-        return $ EConst c t'
-    (TApp e1 e2 t) -> do
-        e1' <- convert f e1
-        e2' <- convert f e2
-        t' <- f t
-        return $ EApp e1' e2' t'
-    (TAdd e1 e2 t) -> do
-        e1' <- convert f e1
-        e2' <- convert f e2
-        t' <- f t
-        return $ EAdd e1' e2' t'
-    (TAbs i e t) -> do
-        e' <- convert f e
-        t' <- f t
-        return $ EAbs i e' t'
-
-run :: Infer a -> Either TypeError a
-run =
-    flip evalStateT mempty
-        >>> flip runReaderT mempty
-        >>> runExceptT
-        >>> evalIntBindingT
-        >>> runIdentity
+run :: Infer (UType, TExp) -> Either TypeError Polytype
+run = fmap fst
+      >>> (>>= applyBindings)
+      >>> (>>= (generalize >>> fmap fromUPolytype))
+      >>> flip evalStateT mempty
+      >>> flip runReaderT mempty
+      >>> runExceptT
+      >>> evalIntBindingT
+      >>> runIdentity
 
 infer :: RExp -> Infer (UType, TExp)
 infer = \case
@@ -166,6 +126,7 @@ infer = \case
         t1 =:= UTMono "Int"
         t2 =:= UTMono "Int"
         return (UTMono "Int", TAdd e1' e2' (UTMono "Int"))
+    -- type is not used, probably wrong
     (RAnn e t) -> do
         (t', e') <- infer e
         check e t'
@@ -180,7 +141,7 @@ infer = \case
         arg <- fresh
         withBinding i (Forall [] arg) $ do
             (res, e') <- infer e
-            return $ (UTArrow arg res, TAbs i e' (UTArrow arg res))
+            return (UTArrow arg res, TAbs i e' (UTArrow arg res))
     (RFree i) -> do
         t <- lookupSigsT i
         return (t, TFree i t)
@@ -213,7 +174,7 @@ fromPolytype :: UPolytype -> UType
 fromPolytype (Forall ids ut) = ut
 
 ucata :: Functor t => (v -> a) -> (t a -> a) -> UTerm t v -> a
-ucata f _ (UVar v) = f v
+ucata f _ (UVar v)  = f v
 ucata f g (UTerm t) = g (fmap (ucata f g) t)
 
 withBinding :: MonadReader Ctx m => Ident -> UPolytype -> m a -> m a
@@ -277,6 +238,7 @@ skolemize (Forall xs uty) = do
 mkVarName :: String -> IntVar -> Ident
 mkVarName nm (IntVar v) = Ident $ nm ++ show (v + (maxBound :: Int) + 1)
 
+-- | Used in let bindings to generalize functions declared there
 generalize :: UType -> Infer UPolytype
 generalize uty = do
     uty' <- applyBindings uty
@@ -289,3 +251,11 @@ generalize uty = do
 
 fromUPolytype :: UPolytype -> Polytype
 fromUPolytype = fmap (fromJust . freeze)
+
+inf = RAbs 0 "x" (RApp (RBound 0 "x") (RBound 0 "x"))
+
+one = RConst (CInt 1)
+
+lambda = RAbs 0 "f" (RAbs 1 "x" (RApp (RBound 0 "f") (RBound 1 "x")))
+
+fn = RAbs 0 "x" (RBound 0 "x")

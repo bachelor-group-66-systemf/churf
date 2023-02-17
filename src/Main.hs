@@ -2,14 +2,14 @@
 
 module Main where
 
-import Grammar.Par (myLexer, pProgram)
+import           Grammar.Par             (myLexer, pProgram)
 -- import           TypeChecker.TypeChecker (typecheck)
 
-import Grammar.Print (printTree)
-import Renamer.Renamer (rename)
-import System.Environment (getArgs)
-import System.Exit (exitFailure, exitSuccess)
-import TypeChecker.TypeChecker (typecheck)
+import           Grammar.Print           (printTree)
+import           Renamer.Renamer         (rename)
+import           System.Environment      (getArgs)
+import           System.Exit             (exitFailure, exitSuccess)
+import           TypeChecker.TypeChecker (typecheck)
 
 main :: IO ()
 main =
@@ -46,5 +46,5 @@ main =
                                     putStrLn ""
                                     putStrLn " ----- TYPECHECKER ----- "
                                     putStrLn ""
-                                    putStrLn . printTree $ prg
+                                    print prg
                                     exitSuccess
