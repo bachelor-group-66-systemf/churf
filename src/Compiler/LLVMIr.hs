@@ -138,7 +138,7 @@ llvmIrToString = go 0
             (DeclareType (Ident i) ts) -> 
                 concat [ "%", i, " = type { "
                        , intercalate ", " (show <$> ts)
-                       , " }"]
+                       , " }\n"]
             (Declare _t (Ident _i) _params) -> undefined
             (SetVariable (Ident i) ir) -> concat ["%", i, " = ", insToString 0 ir]
             (Add t v1 v2) ->
