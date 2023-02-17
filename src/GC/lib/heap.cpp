@@ -23,6 +23,7 @@ namespace GC {
     }
 
     // kolla freed chunks innan
+    // denna är helt onödig just nu, freed chunks kommer alltid va tom
     for (size_t i = 0; i < m_freed_chunks.size(); i++) {
       auto cp = m_freed_chunks.at(i);
       if (cp->size > size)
@@ -80,7 +81,7 @@ namespace GC {
 
     // We shouldn't do this, since then m_freed_chunks doesnt' have any real purpose,
     // it should be used in alloc, it isn't if we delete *all* of its contentes
-    //release free chunks
+    // release free chunks
     while (m_freed_chunks.size()) {
       auto chunk_pointer = m_freed_chunks.back();
       m_freed_chunks.pop_back();
@@ -90,7 +91,14 @@ namespace GC {
 
   void Heap::collect(uint flags) {
 
-    cout << "DEBUG COLLECT\nFLAGS: " << flags << endl;
+    cout << "DEBUG COLLECT\nFLAGS: ";
+    if (flags & MARK)
+      cout << "\n - MARK";
+    if (flags & SWEEP)
+      cout << "\n - SWEEP";
+    if (flags & FREE)
+      cout << "\n - FREE";
+    cout << endl;
     // get the frame adress, whwere local variables and saved registers are located
     auto stack_start = reinterpret_cast<uintptr_t *>(__builtin_frame_address(0));
     cout << "Stack start:\t" << stack_start << endl;
@@ -101,6 +109,7 @@ namespace GC {
     // reinterpret_cast<const uintptr_t *>(__builtin_frame_address(10));
 
     auto work_list = m_allocated_chunks;
+    // print_worklist(work_list);
 
     if (flags & MARK) {
       mark(stack_start, stack_end, work_list);
@@ -136,19 +145,23 @@ namespace GC {
   }
 
   // TODO: return the worklist filtered on mark = true
-  void Heap::mark(uintptr_t *start, const uintptr_t *end, vector<Chunk*> work_list) {
+  // This assumes that there are no chains of pointers, will be fixed later on
+  void Heap::mark(uintptr_t *start, const uintptr_t *end, vector<Chunk*> worklist) {
     for (; start > end; start--) { // to find adresses thats in the worklist
-      cout << "Value of start pointer:\t" << start << endl;
-      for (size_t i = 0; i < work_list.size(); i++) { // fix this
-      auto chunk = work_list.at(i);
-      cout << "Chunk value:\t" << chunk->start << endl;
-      cout << "Chunk pointer value:\t" << &chunk << endl;
-        if (chunk->start <= start && start < chunk->start + chunk->size) {
-          if (!chunk->marked) {
-            chunk->marked = true;
-            work_list.erase(work_list.begin() + i);
-            mark(reinterpret_cast<uintptr_t *>(chunk->start + chunk->size), end, work_list); //
-            return;
+      if (*start % 8 == 0) { // all pointers must be aligned as double words
+        for (size_t i = 0; i < worklist.size(); i++) { // fix this
+          auto chunk = worklist.at(i);
+          uintptr_t c_start = reinterpret_cast<uintptr_t>(chunk->start);
+          uintptr_t c_end = reinterpret_cast<uintptr_t>(chunk->start + chunk->size);
+          if (c_start <= *start && *start < c_end) {
+            uintptr_t c_start = reinterpret_cast<uintptr_t>(chunk->start);
+            if (!chunk->marked) {
+              chunk->marked = true;
+              worklist.erase(worklist.begin() + i);
+              auto new_stack_start = reinterpret_cast<uintptr_t *>(start);
+              mark(new_stack_start, end, worklist); //
+              return;
+            }
           }
         }
       }
@@ -202,6 +215,12 @@ namespace GC {
   // For testing purposes
   void Heap::print_line(Chunk *chunk) {
     cout << "Marked: " << chunk->marked << "\nStart adr: " << chunk->start << "\nSize: " << chunk->size << " B\n" << endl;
+  }
+
+  void Heap::print_worklist(std::vector<Chunk *> list) {
+    for (auto cp : list) {
+      cout << "Chunk at:\t" << cp->start << "\nSize:\t\t" << cp->size << endl;
+    }
   }
 
   void Heap::print_contents() {
