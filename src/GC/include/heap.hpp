@@ -32,6 +32,7 @@ namespace GC {
     // void compact();
     void mark(uintptr_t *start, const uintptr_t *end, std::vector<Chunk *> worklist);
     void print_line(Chunk *chunk);
+    void print_worklist(std::vector<Chunk *> list);
 
     inline static Heap *m_instance = nullptr;
     const char *m_heap;
