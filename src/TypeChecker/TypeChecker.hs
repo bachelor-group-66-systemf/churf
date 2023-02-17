@@ -18,7 +18,7 @@ import TypeChecker.TypeCheckerIr
 
 data Ctx = Ctx
     { vars :: Map Integer Type
-    , sigs :: Map Ident Type
+    , sigs :: Map Ident (RBind, Maybe Type)
     , nextFresh :: Int
     }
     deriving (Show)
@@ -52,12 +52,16 @@ inferPrg (RProgram xs) = do
     xs' <- mapM inferBind xs
     return $ TProgram xs'
 
+-- Binds are not correctly added to the context.
+-- Can't type check programs with more than one function currently
 inferBind :: RBind -> Infer TBind
-inferBind (RBind name e) = do
+inferBind b@(RBind name e) = do
+    insertSigs name b Nothing
     (t, e') <- inferExp e
-    insertSigs name t
     return $ TBind name t e'
 
+-- Have to figure out a way to coerce polymorphic types to monomorphic ones where necessary
+-- { \x. \y. x + y } will have the type { a -> b -> Int }
 inferExp :: RExp -> Infer (Type, TExp)
 inferExp = \case
     RAnn expr typ -> do
@@ -68,8 +72,14 @@ inferExp = \case
         t <- lookupVars num
         return (t, TBound num name t)
     RFree name -> do
-        t <- lookupSigs name
-        return (t, TFree name t)
+        (b@(RBind name _), t) <- lookupSigs name
+        t' <- case t of
+            Nothing -> do
+                (TBind _ a _) <- inferBind b
+                insertSigs name b (Just a)
+                return a
+            Just a -> return a
+        return (t', TFree name t')
     RConst (CInt i) -> return (TMono "Int", TConst (CInt i) (TMono "Int"))
     RConst (CStr str) -> return (TMono "Str", TConst (CStr str) (TMono "Str"))
     RAdd expr1 expr2 -> do
@@ -126,17 +136,17 @@ insertVars i t = do
     st <- St.get
     St.put (st {vars = M.insert i t st.vars})
 
-lookupSigs :: Ident -> Infer Type
+lookupSigs :: Ident -> Infer (RBind, Maybe Type)
 lookupSigs i = do
     st <- St.gets sigs
     case M.lookup i st of
         Just t -> return t
         Nothing -> throwError $ UnboundVar "lookupSigs"
 
-insertSigs :: Ident -> Type -> Infer ()
-insertSigs i t = do
+insertSigs :: Ident -> RBind -> Maybe Type -> Infer ()
+insertSigs i b t = do
     st <- St.get
-    St.put (st {sigs = M.insert i t st.sigs})
+    St.put (st {sigs = M.insert i (b, t) st.sigs})
 
 {-# WARNING todo "TODO IN CODE" #-}
 todo :: a
@@ -151,29 +161,3 @@ data Error
     | AnnotatedMismatch String
     | Default String
     deriving (Show)
-
--- Tests
-
--- (\x. x + 1) 1
-app_lambda :: RExp
-app_lambda = app lambda one
-
-lambda :: RExp
-lambda = RAbs 0 "x" $ add bound one
-
-add :: RExp -> RExp -> RExp
-add = RAdd
-
-bound = RBound 0 "x"
-
-app :: RExp -> RExp -> RExp
-app = RApp
-
-one :: RExp
-one = RConst (CInt 1)
-
-fn_t = TArrow (TPoly (Ident "0")) (TMono (Ident "Int"))
-
-arr_t = TArrow (TMono "Int") (TPoly "1")
-
-f_x = RAbs 0 "f" (RAbs 1 "x" (RApp (RBound 0 "f") (RBound 1 "x")))

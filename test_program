@@ -1,3 +1,1 @@
-apply w x = \y. \z. w + x + y + z ;
-
-main = apply 1 2 3 4 ;
+apply = \x. \y. (x : Mono Int)
