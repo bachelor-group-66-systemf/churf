@@ -67,7 +67,7 @@ namespace GC {
     // get the frame adress, whwere local variables and saved registers are located
     auto stack_start = reinterpret_cast<uintptr_t *>(__builtin_frame_address(0));
     // looking at 10 stack frames back
-    const uintptr_t *stack_end = (uintptr_t *)0;
+    const uintptr_t *stack_end = (uintptr_t *)0; // temporary
     
     // denna segfaultar om arg för __b_f_a är > 2
     // reinterpret_cast<const uintptr_t *>(__builtin_frame_address(10));
@@ -93,8 +93,9 @@ namespace GC {
     cout << "DEBUG COLLECT\nFLAGS: " << flags << endl;
     // get the frame adress, whwere local variables and saved registers are located
     auto stack_start = reinterpret_cast<uintptr_t *>(__builtin_frame_address(0));
+    cout << "Stack start:\t" << stack_start << endl;
 
-    const uintptr_t *stack_end = (uintptr_t *)0; // dummy value
+    const uintptr_t *stack_end = (uintptr_t *) stack_start - 40; // dummy value
     
     // denna segfaultar om arg för __b_f_a är > 2
     // reinterpret_cast<const uintptr_t *>(__builtin_frame_address(10));
@@ -136,9 +137,12 @@ namespace GC {
 
   // TODO: return the worklist filtered on mark = true
   void Heap::mark(uintptr_t *start, const uintptr_t *end, vector<Chunk*> work_list) {
-    for (; start < end; start++) { // to find adresses thats in the worklist
+    for (; start > end; start--) { // to find adresses thats in the worklist
+      cout << "Value of start pointer:\t" << start << endl;
       for (size_t i = 0; i < work_list.size(); i++) { // fix this
       auto chunk = work_list.at(i);
+      cout << "Chunk value:\t" << chunk->start << endl;
+      cout << "Chunk pointer value:\t" << &chunk << endl;
         if (chunk->start <= start && start < chunk->start + chunk->size) {
           if (!chunk->marked) {
             chunk->marked = true;
@@ -150,7 +154,30 @@ namespace GC {
       }
     }
   }
-  
+
+/*     void mark_test(vector<Chunk *> worklist) {
+        while (worklist.size() > 0) {
+            Chunk *ref = worklist.pop_back();
+            Chunk *child = (Chunk*) *ref;
+            if (child != NULL && !child->marked) {
+                child->marked = true;
+                worklist.push_back(child);
+                mark_test(worklist);
+            }
+    }
+  }
+
+  void mark_from_roots(uintptr_t *start, const uintptr_t *end) {
+    vector<Chunk *> worklist;
+    for (;start > end; start--) {
+        Chunk *ref = *start;
+        if (ref != NULL && !ref->marked) {
+            ref->marked = true;
+            worklist.push_back(ref);
+            mark_test(worklist);
+        }
+    }
+  } */
 
   /* Alternative marking, pseudocode
   mark_from_roots():
