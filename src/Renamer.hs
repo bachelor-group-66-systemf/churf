@@ -40,34 +40,33 @@ renameLocalBind old_names (Bind name t _ parms rhs) = do
 
 renameExp :: Names -> Exp -> Rn (Names, Exp)
 renameExp old_names = \case
+    EId  n     -> pure (old_names, EId . fromMaybe n $ Map.lookup n old_names)
 
-  EId  n     -> pure (old_names, EId . fromMaybe n $ Map.lookup n old_names)
+    EInt i1    -> pure (old_names, EInt i1)
 
-  EInt i1    -> pure (old_names, EInt i1)
+    EApp e1 e2 -> do
+        (env1, e1') <- renameExp old_names e1
+        (env2, e2') <- renameExp old_names e2
+        pure (Map.union env1 env2, EApp e1' e2')
 
-  EApp e1 e2 -> do
-      (env1, e1') <- renameExp old_names e1
-      (env2, e2') <- renameExp old_names e2
-      pure (Map.union env1 env2, EApp e1' e2')
+    EAdd e1 e2 -> do
+        (env1, e1') <- renameExp old_names e1
+        (env2, e2') <- renameExp old_names e2
+        pure (Map.union env1 env2, EAdd e1' e2')
 
-  EAdd e1 e2 -> do
-      (env1, e1') <- renameExp old_names e1
-      (env2, e2') <- renameExp old_names e2
-      pure (Map.union env1 env2, EAdd e1' e2')
+    ELet b e  -> do
+        (new_names, b)  <- renameLocalBind old_names b
+        (new_names', e') <- renameExp new_names e
+        pure (new_names', ELet b e')
 
-  ELet b e  -> do
-      (new_names, b)  <- renameLocalBind old_names b
-      (new_names', e') <- renameExp new_names e
-      pure (new_names', ELet b e')
+    EAbs par t e  -> do
+        (new_names, par') <- newName old_names par
+        (new_names', e')  <- renameExp new_names e
+        pure (new_names', EAbs par' t e')
 
-  EAbs par t e  -> do
-      (new_names, par') <- newName old_names par
-      (new_names', e')  <- renameExp new_names e
-      pure (new_names', EAbs par' t e')
-
-  EAnn e t -> do
-      (new_names, e') <- renameExp old_names e
-      pure (new_names, EAnn e' t)
+    EAnn e t -> do
+        (new_names, e') <- renameExp old_names e
+        pure (new_names, EAnn e' t)
 
 -- | Create a new name and add it to name environment.
 newName :: Names -> Ident -> Rn (Names, Ident)
