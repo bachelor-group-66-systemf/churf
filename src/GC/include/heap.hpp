@@ -31,9 +31,9 @@ namespace GC {
 
     void collect();
     void sweep();
+    uintptr_t *try_recycle_chunks(size_t size);
     void free();
     void free_overlap();
-    // void compact();
     void mark(uintptr_t *start, const uintptr_t *end, std::vector<Chunk *> worklist);
     void print_line(Chunk *chunk);
     void print_worklist(std::vector<Chunk *> list);
@@ -42,21 +42,14 @@ namespace GC {
     const char *m_heap;
     size_t m_size;
     size_t m_allocated_size;
+    uintptr_t *m_stack_end = nullptr;
 
     std::vector<Chunk *> m_allocated_chunks;
     std::vector<Chunk *> m_freed_chunks;
 
   public:
 
-    // Singleton
-    static Heap &the() {
-      if (m_instance)
-	      return *m_instance;
-      m_instance = new Heap();
-      return *m_instance;
-    }
-
-    static Heap *the2() {
+    static Heap *the() {
       if (m_instance)
         return m_instance;
       m_instance = new Heap();
@@ -64,10 +57,11 @@ namespace GC {
     }
 
     // BEWARE only for testing, this should be adressed
-/*     ~Heap() {
-      free((char *)m_heap);
-    } */
+    ~Heap() {
+      std::free((char *)m_heap);
+    }
 
+    void init();
     void *alloc(size_t size);
     void print_contents();
     void collect(uint flags); // DEBUG ONLY
