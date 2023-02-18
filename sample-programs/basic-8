@@ -1,2 +1,0 @@
-
-f x = let double = \y. y+y in (\x. x+y) 4;

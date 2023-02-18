@@ -1,5 +1,5 @@
 let
-  pkgs = import (fetchTarball https://github.com/NixOS/nixpkgs/archive/8c619a1f3cedd16ea172146e30645e703d21bfc1.tar.gz) { }; # pin the channel to ensure reproducibility!
+  pkgs = import (fetchTarball "https://github.com/NixOS/nixpkgs/archive/747927516efcb5e31ba03b7ff32f61f6d47e7d87.zip") { }; # pin the channel to ensure reproducibility!
 in
 pkgs.haskellPackages.developPackage {
   root = ./.;

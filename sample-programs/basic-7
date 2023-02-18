@@ -1,5 +1,0 @@
-add x y = x + y;
-
-apply f x = f x;
-
-main = apply (add 4) 6;

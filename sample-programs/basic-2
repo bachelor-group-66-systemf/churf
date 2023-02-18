@@ -1,4 +1,0 @@
-add x = \y. x+y;
-
-main = (\z. z+z) ((add 4) 6);
-
