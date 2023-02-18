@@ -7,7 +7,7 @@ Goal for next week (24/2):
 
 ## GC TODO:
 - Merge to main branch
-- Don't empty m_free_chunks, reuse in a better way **Victor fixes this**
+- Fix singleton references
 
 ## Tests TODO
 ### Library linking

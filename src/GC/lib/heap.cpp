@@ -12,45 +12,50 @@ using namespace std;
 
 namespace GC {
 
-  // alloc assumes that after the collect phase, the aligned memory in the heap is compacted from the start,
-  void *Heap::alloc(size_t size) { 
-    auto heap = Heap::the();
-    assert(size > 0 && "Heap: Cannot alloc less than 0B");
-    if (heap.m_size + size > HEAP_SIZE) {
-      // try collect
-      collect();
-      assert(heap.m_size + size <= HEAP_SIZE && "Heap: Out Of Memory");
+  /**
+   * Initialises the heap singleton and saves the address
+   * of the calling stack frame as the stack_end. Presumeably
+   * this address points to the stack frame of the compiled
+   * LLVM executable after linking. (NOT CONFIRMED)
+  */
+  void Heap::init() {
+    Heap *heap = Heap::the();
+    heap->m_stack_end = reinterpret_cast<uintptr_t *>(__builtin_frame_address(1));
+  }
+
+  /**
+   * Allocates a given amount of bytes on the heap.
+   * 
+   * @param size The amount of bytes to be allocated.
+   * 
+   * @return  A pointer to the address where the memory
+   *          has been allocated. This pointer is supposed
+   *          to be casted to and object pointer.
+  */
+  void *Heap::alloc(size_t size) {
+
+    // Singleton
+    Heap *heap = Heap::the();
+    
+    if (size < 0) {
+      cout << "Heap: Cannot alloc less than 0B. No bytes allocated." << endl;
+      return nullptr;
     }
 
-    // kolla freed chunks innan
-    // denna är helt onödig just nu, freed chunks kommer alltid va tom
-    for (size_t i = 0; i < m_freed_chunks.size(); i++) {
-      auto cp = m_freed_chunks.at(i);
-      if (cp->size > size)
-      {
-        // dela upp chunken och sno ena delen
-        size_t diff = cp->size - size;
-        
-        auto chunk_complement = new Chunk;
-        chunk_complement->size = diff;
-        chunk_complement->start = cp->start + cp->size;
+    if (heap->m_size + size > HEAP_SIZE) {
+      collect();
+      // If collect failed, crash with OOM error
+      assert(heap->m_size + size <= HEAP_SIZE && "Heap: Out Of Memory");
+    }
 
-        m_freed_chunks.erase(m_freed_chunks.begin() + i);
-        m_freed_chunks.push_back(chunk_complement);
-        m_allocated_chunks.push_back(cp);
-        
-        return cp->start;
-      }
-      else if (cp->size == size)
-      {
-        // sno hela chunken
-        m_freed_chunks.erase(m_freed_chunks.begin() + i);
-        m_allocated_chunks.push_back(cp);
-        return cp->start;
-      }
+    // If a chunk was recycled, return the old chunk address
+    uintptr_t *reused_chunk = try_recycle_chunks(size);
+    if (reused_chunk != nullptr) {
+      return (void *)reused_chunk;
     }
     
-    // Om inga free chunks finns, skapa ny chunk
+    // If no free chunks was found (reused_chunk is a nullptr),
+    // then create a new chunk
     auto new_chunk = new Chunk;
     new_chunk->size = size;
     new_chunk->start = (uintptr_t *)m_heap + m_size;
@@ -63,32 +68,55 @@ namespace GC {
     return new_chunk->start;
   }
 
-  void Heap::collect() {
+  uintptr_t *Heap::try_recycle_chunks(size_t size) {
+    auto heap = Heap::the();
+    // Check if there are any freed chunks large enough for current request
+    for (size_t i = 0; i < heap->m_freed_chunks.size(); i++) {
+      auto cp = heap->m_freed_chunks.at(i);
+      if (cp->size > size)
+      {
+        // Split the chunk, use one part and add the remaining part to
+        // the list of freed chunks
+        size_t diff = cp->size - size;
+        
+        auto chunk_complement = new Chunk;
+        chunk_complement->size = diff;
+        chunk_complement->start = cp->start + cp->size;
 
-    // get the frame adress, whwere local variables and saved registers are located
+        heap->m_freed_chunks.erase(m_freed_chunks.begin() + i);
+        heap->m_freed_chunks.push_back(chunk_complement);
+        heap->m_allocated_chunks.push_back(cp);
+        
+        return cp->start;
+      }
+      else if (cp->size == size)
+      {
+        // Reuse the whole chunk
+        m_freed_chunks.erase(m_freed_chunks.begin() + i);
+        m_allocated_chunks.push_back(cp);
+        return cp->start;
+      }
+    }
+  }
+
+  void Heap::collect() {
+    // Get the adress of the current stack frame
+    auto heap = Heap::the();
+
+    uintptr_t *stack_end;
+
     auto stack_start = reinterpret_cast<uintptr_t *>(__builtin_frame_address(0));
-    // looking at 10 stack frames back
-    const uintptr_t *stack_end = (uintptr_t *)0; // temporary
-    
-    // denna segfaultar om arg för __b_f_a är > 2
-    // reinterpret_cast<const uintptr_t *>(__builtin_frame_address(10));
+    if (heap->m_stack_end != nullptr)
+      stack_end = heap->m_stack_end;
+    else
+      stack_end = (uintptr_t *)0; // temporary
+
     auto work_list = m_allocated_chunks;
     mark(stack_start, stack_end, work_list);
 
     sweep();
 
-    // compact();
-
     free();
-
-    // We shouldn't do this, since then m_freed_chunks doesnt' have any real purpose,
-    // it should be used in alloc, it isn't if we delete *all* of its contentes
-    // release free chunks
-    // while (m_freed_chunks.size()) {
-    //   auto chunk_pointer = m_freed_chunks.back();
-    //   m_freed_chunks.pop_back();
-    //   delete chunk_pointer; // deletes chunk object, doesn't free memory to the OS
-    // }
   }
 
   void Heap::free() {
@@ -199,50 +227,6 @@ namespace GC {
       }
     }
   }
-
-/*     void mark_test(vector<Chunk *> worklist) {
-        while (worklist.size() > 0) {
-            Chunk *ref = worklist.pop_back();
-            Chunk *child = (Chunk*) *ref;
-            if (child != NULL && !child->marked) {
-                child->marked = true;
-                worklist.push_back(child);
-                mark_test(worklist);
-            }
-    }
-  }
-
-  void mark_from_roots(uintptr_t *start, const uintptr_t *end) {
-    vector<Chunk *> worklist;
-    for (;start > end; start--) {
-        Chunk *ref = *start;
-        if (ref != NULL && !ref->marked) {
-            ref->marked = true;
-            worklist.push_back(ref);
-            mark_test(worklist);
-        }
-    }
-  } */
-
-  /* Alternative marking, pseudocode
-  mark_from_roots():
-    worklist <- empty
-    for fld in Roots
-      ref <- *fld
-      if ref ≠ null && !marked(ref)
-        set_marked(ref)
-        worklist.add(ref)
-        mark()
-
-  mark():
-    while size(worklist) > 0
-      ref <- remove_first(worklist)
-      for fld in Pointers(ref)
-        child <- *fld
-        if child ≠ null && !marked(child)
-          set_marked(child)
-          worklist.add(child)
-  */
 
   // For testing purposes
   void Heap::print_line(Chunk *chunk) {
