@@ -79,14 +79,42 @@ namespace GC {
 
     // compact();
 
+    free();
+
     // We shouldn't do this, since then m_freed_chunks doesnt' have any real purpose,
     // it should be used in alloc, it isn't if we delete *all* of its contentes
     // release free chunks
-    while (m_freed_chunks.size()) {
-      auto chunk_pointer = m_freed_chunks.back();
-      m_freed_chunks.pop_back();
-      delete chunk_pointer; // deletes chunk object, doesn't free memory to the OS
+    // while (m_freed_chunks.size()) {
+    //   auto chunk_pointer = m_freed_chunks.back();
+    //   m_freed_chunks.pop_back();
+    //   delete chunk_pointer; // deletes chunk object, doesn't free memory to the OS
+    // }
+  }
+
+  void Heap::free() {
+    if (m_freed_chunks.size() > FREE_THRESH) {
+      while (m_freed_chunks.size()) {
+        auto chunk = m_freed_chunks.back();
+        m_freed_chunks.pop_back();
+        delete chunk;
+      }
+    } else {
+      free_overlap();
     }
+  }
+
+  void Heap::free_overlap() {
+    std::vector<Chunk *> filtered;
+    size_t i = 0;
+    filtered.push_back(m_freed_chunks.at(i++));
+    for (; i < m_freed_chunks.size(); i++) {
+      auto prev = filtered.back();
+      auto next = m_freed_chunks.at(i);
+      if (next->start > (prev->start + prev->size)) {
+        filtered.push_back(next);
+      }
+    }
+    m_freed_chunks.swap(filtered);
   }
 
   void Heap::collect(uint flags) {
@@ -119,14 +147,18 @@ namespace GC {
       sweep();
     }
     
-    //release free chunks
     if (flags & FREE) {
-      while (m_freed_chunks.size()) {
-        auto chunk_pointer = m_freed_chunks.back();
-        m_freed_chunks.pop_back();
-        delete chunk_pointer; // deletes chunk object, doesn't free heap memory to the OS
-      }
+      free();
     }
+
+    //release free chunks
+    // if (flags & FREE) {
+    //   while (m_freed_chunks.size()) {
+    //     auto chunk_pointer = m_freed_chunks.back();
+    //     m_freed_chunks.pop_back();
+    //     delete chunk_pointer; // deletes chunk object, doesn't free heap memory to the OS
+    //   }
+    // }
   }
 
   // Not optimal for now, it doesn't have to loop over all objects
