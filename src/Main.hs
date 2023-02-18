@@ -11,10 +11,13 @@ import           Grammar.Print               (printTree)
 
 import           Monomorphizer.Monomorphizer (monomorphize)
 
+import           Compiler                    (compile)
 import           Control.Monad               (when)
 import           Data.List.Extra             (isSuffixOf)
-
-import           Compiler                    (compile)
+import           GHC.IO.Handle.Text          (hPutStrLn)
+import           Grammar.ErrM                (Err)
+import           Grammar.Par                 (myLexer, pProgram)
+import           Grammar.Print               (printTree)
 import           Renamer.Renamer             (rename)
 import           System.Directory            (createDirectory, doesPathExist,
                                               getDirectoryContents,
@@ -28,12 +31,21 @@ import           System.Process.Extra        (readCreateProcess, shell,
                                               spawnCommand, waitForProcess)
 import           TypeChecker.TypeChecker     (typecheck)
 
+-- import           Interpreter        (interpret)
+import           LambdaLifter                (lambdaLift)
+import           Renamer.Renamer             (rename)
+import           System.Environment          (getArgs)
+import           System.Exit                 (exitFailure, exitSuccess)
+import           System.IO                   (stderr)
+import           TypeChecker.RemoveTEVar     (RemoveTEVar (rmTEVar))
+import           TypeChecker.TypeChecker     (typecheck)
+
 main :: IO ()
 main =
     getArgs >>= \case
-        [] -> print "Required file path missing"
+        []             -> print "Required file path missing"
         ("-d" : s : _) -> main' True s
-        (s : _) -> main' False s
+        (s : _)        -> main' False s
 
 main' :: Bool -> String -> IO ()
 main' debug s = do
@@ -51,10 +63,10 @@ main' debug s = do
     typechecked <- fromTypeCheckerErr $ typecheck renamed
     bool (printToErr $ printTree typechecked) (printToErr $ show typechecked) debug
 
-    -- printToErr "\n-- Lambda Lifter --"
-    -- let lifted = lambdaLift typechecked
-    -- printToErr $ printTree lifted
-    --
+    printToErr "\n-- Lambda Lifter --"
+    let lifted = lambdaLift typechecked
+    printToErr $ printTree lifted
+
     printToErr "\n -- Compiler --"
     generatedCode <- fromCompilerErr $ generateCode (monomorphize typechecked)
     putStrLn generatedCode
@@ -68,6 +80,8 @@ main' debug s = do
 
     compile generatedCode
     spawnWait "./hello_world"
+
+
     -- interpred <- fromInterpreterErr $ interpret lifted
     -- putStrLn "\n-- interpret"
     -- print interpred

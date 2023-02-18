@@ -11,8 +11,9 @@ module Codegen.LlvmIr (
     ToIr(..)
 ) where
 
-import           Data.List   (intercalate)
-import           Grammar.Abs (Ident (..))
+import           Data.List                 (intercalate)
+import           Grammar.Abs               (Character)
+import           TypeChecker.TypeCheckerIr (Ident (..))
 
 data CallingConvention = TailCC | FastCC | CCC | ColdCC
 instance ToIr CallingConvention where
@@ -85,7 +86,7 @@ instance ToIr Visibility where
 -- or a string contstant
 data LLVMValue
     = VInteger Integer
-    | VChar Char
+    | VChar Character
     | VIdent Ident LLVMType
     | VConstant String
     | VFunction Ident Visibility LLVMType

@@ -3,94 +3,94 @@
 -- * PROGRAM
 -------------------------------------------------------------------------------
 
-Program. Program ::= [Def] ;
+Program. Program ::= [Def];
 
 -------------------------------------------------------------------------------
 -- * TOP-LEVEL
 -------------------------------------------------------------------------------
 
-DBind. Def ::= Bind ;
-DSig.  Def ::= Sig ;
-DData. Def ::= Data ;
+DBind. Def ::= Bind;
+DSig.  Def ::= Sig;
+DData. Def ::= Data; 
 
-Sig. Sig ::= LIdent ":" Type ;
-
-Bind. Bind ::= LIdent [LIdent] "=" Exp ;
+Sig.   Sig ::= LIdent ":" Type;
+Bind. Bind ::= LIdent [LIdent] "=" Exp;
 
 -------------------------------------------------------------------------------
--- * TYPES
+-- * Types
 -------------------------------------------------------------------------------
 
-         TLit.     Type2 ::= UIdent ;
-         TVar.     Type2 ::= TVar ;
-         TAll.     Type1 ::= "forall" TVar "." Type ;
-         TData.    Type1 ::= UIdent "(" [Type] ")" ;
-internal TEVar.    Type1 ::= TEVar ;
-         TFun.     Type  ::= Type1 "->" Type ;
+         TLit.     Type1 ::= UIdent;                 -- τ
+         TVar.     Type1 ::= TVar;                   -- α
+internal TEVar.    Type1 ::= TEVar;                  -- ά
+         TData.    Type1 ::= UIdent "(" [Type] ")";  -- D ()
+         TFun.     Type  ::= Type1 "->" Type;        -- A → A
+         TAll.     Type  ::= "forall" TVar "." Type; -- ∀α. A 
 
-         MkTVar.  TVar  ::= LIdent ;
-internal MkTEVar. TEVar ::= LIdent ;
+         MkTVar.  TVar  ::= LIdent;
+internal MkTEVar. TEVar ::= LIdent;
 
 -------------------------------------------------------------------------------
 -- * DATA TYPES
 -------------------------------------------------------------------------------
 
-Constructor. Constructor ::= UIdent ":" Type ;
+Data. Data ::= "data" Type "where" "{" [Inj] "}" ;
 
-Data. Data ::= "data" Type "where" "{" [Constructor] "}" ;
+Inj. Inj ::= UIdent ":" Type ;
+separator nonempty Inj " " ;
 
 -------------------------------------------------------------------------------
--- * EXPRESSIONS
+-- * Expressions
 -------------------------------------------------------------------------------
 
-EAnn.   Exp4 ::= "(" Exp ":" Type ")" ;
-EVar.   Exp3 ::= LIdent ;
-EInj.   Exp3 ::= UIdent ;
-ELit.   Exp3 ::= Lit ;
-EApp.   Exp2 ::= Exp2 Exp3 ;
-EAdd.   Exp1 ::= Exp1 "+" Exp2 ;
-ELet.   Exp  ::= "let" Bind "in" Exp ; 
-EAbs.   Exp  ::= "\\" LIdent "." Exp ;
-ECase.  Exp  ::= "case" Exp "of" "{" [Branch] "}";
+EAnn.  Exp4 ::= "(" Exp ":" Type ")";
+EVar.  Exp3 ::= LIdent;
+EInj.  Exp3 ::= UIdent;
+ELit.  Exp3 ::= Lit;
+EApp.  Exp2 ::= Exp2 Exp3;
+EAdd.  Exp1 ::= Exp1 "+" Exp2;
+ELet.  Exp  ::= "let" Bind "in" Exp; 
+EAbs.  Exp  ::= "\\" LIdent "." Exp;
+ECase. Exp  ::= "case" Exp "of" "{" [Branch] "}";
 
 -------------------------------------------------------------------------------
 -- * LITERALS
 -------------------------------------------------------------------------------
 
-LInt.  Lit ::= Integer ;
-LChar. Lit ::= Char ;
+LInt.  Lit ::= Integer;
+LChar. Lit ::= Character;
 
 -------------------------------------------------------------------------------
--- * CASE
+-- * PATTERN MATCHING 
 -------------------------------------------------------------------------------
 
 Branch. Branch ::= Pattern "=>" Exp ;
 
-PVar.   Pattern1 ::= LIdent ;
-PLit.   Pattern1 ::= Lit ;
-PCatch. Pattern1 ::= "_" ;
-PEnum. Pattern1 ::= UIdent ;
-PInj.   Pattern ::= UIdent [Pattern1] ;
+PVar.        Pattern1 ::= LIdent;
+PLit.        Pattern1 ::= Lit;
+PCatch.      Pattern1 ::= "_";
+PEnum.       Pattern1 ::= UIdent;
+PInj.        Pattern  ::= UIdent [Pattern1];
 
 -------------------------------------------------------------------------------
 -- * AUX
 -------------------------------------------------------------------------------
 
-terminator Def ";" ;
-separator nonempty Constructor "" ;
-separator Type " " ;
-separator nonempty Pattern1 " " ;
+terminator Def ";";
 terminator Branch ";" ;
-separator Ident " ";
-separator LIdent " ";
-separator TVar " " ;
 
-coercions Exp 4 ;
-coercions Type 2 ;
-coercions Pattern 1 ;
+separator LIdent "";
+separator Type " ";
+separator TVar " ";
+separator nonempty Pattern1 " ";
 
+coercions Pattern 1;
+coercions Exp 4;
+coercions Type 1 ;
+
+token Character '\''(char)'\'' ;
 token UIdent (upper (letter | digit | '_')*) ;
 token LIdent (lower (letter | digit | '_')*) ;
 
-comment "--" ;
-comment "{-" "-}" ;
+comment "--";
+comment "{-" "-}";

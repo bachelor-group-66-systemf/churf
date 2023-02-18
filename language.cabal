@@ -31,13 +31,18 @@ executable language
       Grammar.Skel
       Grammar.ErrM
       Auxiliary
+      Renamer.Renamer
       TypeChecker.TypeChecker
+      TypeChecker.TypeCheckerHm
+      TypeChecker.TypeCheckerBidir
       TypeChecker.TypeCheckerIr
+      TypeChecker.RemoveTEVar
+      LambdaLifter
       Monomorphizer.Monomorphizer
       Monomorphizer.MonomorphizerIr
-      Renamer.Renamer
       Codegen.Codegen
       Codegen.LlvmIr
+      Compiler
 
     hs-source-dirs:   src
 
@@ -60,6 +65,9 @@ Test-suite language-testsuite
     main-is: Tests.hs
 
     other-modules:
+      TestTypeCheckerBidir
+      TestTypeCheckerHm
+
       Grammar.Abs
       Grammar.Lex
       Grammar.Par
@@ -67,9 +75,11 @@ Test-suite language-testsuite
       Grammar.Skel
       Grammar.ErrM
       Auxiliary
-      TypeChecker.TypeChecker
-      TypeChecker.TypeCheckerIr
       Renamer.Renamer
+      TypeChecker.TypeCheckerHm
+      TypeChecker.TypeCheckerBidir
+      TypeChecker.RemoveTEVar
+      TypeChecker.TypeCheckerIr
       Compiler
 
     hs-source-dirs: src, tests
@@ -87,3 +97,4 @@ Test-suite language-testsuite
       , bytestring
 
     default-language: GHC2021
+

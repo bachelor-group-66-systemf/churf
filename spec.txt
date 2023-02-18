@@ -1,0 +1,121 @@
+---------------------------------------------------------------------------
+-- * Parser
+---------------------------------------------------------------------------
+
+data Program = Program [Def]
+
+data Def = DSig Ident Type | DBind Bind
+
+data Bind = Bind Ident [Ident] Exp
+
+data Exp
+    = EId Ident
+    | ELit Lit
+    | EAnn Exp Type
+    | ELet Ident Exp Exp
+    | EApp Exp Exp
+    | EAdd Exp Exp
+    | EAbs Ident Exp
+
+data Lit = LInt Integer 
+         | LChar Character
+
+data Type
+    = TLit Ident      -- τ
+    | TVar TVar       -- α
+    | TFun Type Type  -- A → A
+    | TAll TVar Type  -- ∀α. A
+    | TEVar TEVar     -- ά (internal)
+
+data TVar = MkTVar Ident
+data TEVar = MkTEVar Ident
+
+---------------------------------------------------------------------------
+-- * Type checker
+---------------------------------------------------------------------------
+
+-- • Def and DSig are removed in favor on just Bind 
+-- • Typed expressions
+-- • TEVar is removed (NOT IMPLEMENTED)
+
+newtype Program = Program [Bind]
+
+data Bind = Bind Id [Id] ExpT
+
+data Exp
+    = EId  Ident
+    | ELit Lit
+    | ELet Bind ExpT
+    | EApp ExpT ExpT
+    | EAdd ExpT ExpT
+    | EAbs Ident ExpT
+
+type Id  = (Ident, Type)
+type ExpT = (Exp, Type)
+
+
+data Lit = LInt Integer 
+         | LChar Character
+
+data Type
+    = TLit Ident      -- τ
+    | TVar TVar       -- α
+    | TFun Type Type  -- A → A
+    | TAll TVar Type  -- ∀α. A
+
+data TVar = MkTVar Ident
+
+---------------------------------------------------------------------------
+-- * Lambda lifter
+---------------------------------------------------------------------------
+--  • EAbs are removed (NOT IMPLEMENTED)
+--  • ELet only allow constant expressions (NOT IMPLEMENTED)
+
+newtype Program = Program [Bind]
+
+data Bind = Bind Id [Id] ExpT
+
+data Exp
+    = EId  Ident
+    | ELit Lit
+    | ELet Ident ExpT ExpT 
+    | EApp ExpT ExpT
+    | EAdd ExpT ExpT
+
+type Id  = (Ident, Type)
+type ExpT = (Exp, Type)
+
+data Lit = LInt Integer 
+         | LChar Character
+
+data Type
+    = TLit Ident      -- τ
+    | TVar TVar       -- α
+    | TFun Type Type  -- A → A
+    | TAll TVar Type  -- ∀α. A
+
+data TVar = MkTVar Ident
+
+---------------------------------------------------------------------------
+-- * Monomorpher
+---------------------------------------------------------------------------
+--  • Polymorphic types are removed (NOT IMPLEMENTED)
+
+newtype Program = Program [Bind]
+
+data Bind = Bind Id [Id] ExpT
+
+data Exp
+    = EId  Ident
+    | ELit Lit
+    | ELet Ident ExpT ExpT 
+    | EApp ExpT ExpT
+    | EAdd ExpT ExpT
+
+type Id  = (Ident, Type)
+type ExpT = (Exp, Type)
+
+data Lit = LInt Integer 
+         | LChar Character
+
+data Type = Type Ident
