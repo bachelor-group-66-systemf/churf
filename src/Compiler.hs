@@ -3,12 +3,12 @@
 
 module Compiler (compile) where
 
+import           Auxiliary           (snoc)
 import           Control.Monad.State (StateT, execStateT, gets, modify)
 import           Data.Map            (Map)
 import qualified Data.Map            as Map
-import           Data.Tuple.Extra    (second)
+import           Data.Tuple.Extra    (dupe, first, second)
 import           Grammar.ErrM        (Err)
-import           Grammar.Print       (printTree)
 import           LlvmIr              (LLVMIr (..), LLVMType (..),
                                       LLVMValue (..), Visibility (..),
                                       llvmIrToString)
@@ -32,11 +32,11 @@ data FunctionInfo = FunctionInfo
 
 -- | Adds a instruction to the CodeGenerator state
 emit :: LLVMIr -> CompilerState ()
-emit l = modify (\t -> t{instructions = instructions t ++ [l]})
+emit l = modify $ \t -> t { instructions = snoc l $ instructions t }
 
 -- | Increases the variable counter in the CodeGenerator state
 increaseVarCount :: CompilerState ()
-increaseVarCount = modify (\t -> t{variableCount = variableCount t + 1})
+increaseVarCount = modify $ \t -> t { variableCount = variableCount t + 1 }
 
 -- | Returns the variable count from the CodeGenerator state
 getVarCount :: CompilerState Integer
@@ -46,212 +46,198 @@ getVarCount = gets variableCount
 getNewVar :: CompilerState Integer
 getNewVar = increaseVarCount >> getVarCount
 
-{- | Produces a map of functions infos from a list of binds,
-  which contains useful data for code generation.
--}
+-- | Produces a map of functions infos from a list of binds,
+-- which contains useful data for code generation.
 getFunctions :: [Bind] -> Map Id FunctionInfo
-getFunctions xs =
-    Map.fromList $
-        map
-            ( \(Bind id args _) ->
-                ( id
-                , FunctionInfo
-                    { numArgs = length args
-                    , arguments = args
-                    }
-                )
-            )
-            xs
-
-{- | Compiles an AST and produces a LLVM Ir string.
-  An easy way to actually "compile" this output is to
-  Simply pipe it to LLI
--}
-compile :: Program -> Err String
-compile (Program prg) = do
-    let s =
-            CodeGenerator
-                { instructions = defaultStart
-                , functions = getFunctions prg
-                , variableCount = 0
-                }
-    ins <- instructions <$> execStateT (goDef prg) s
-    pure $ llvmIrToString ins
+getFunctions bs = Map.fromList $ map go bs
   where
-    mainContent :: LLVMValue -> [LLVMIr]
-    mainContent var =
-        [ UnsafeRaw $
-            "call i32 (ptr, ...) @printf(ptr noundef @.str, i64 noundef " <> show var <> ")\n"
-        , -- , SetVariable (Ident "p") (Icmp LLEq I64 (VInteger 2) (VInteger 2))
-          -- , BrCond (VIdent (Ident "p")) (Ident "b_1") (Ident "b_2")
-          -- , Label (Ident "b_1")
-          -- , UnsafeRaw
-          --     "call i32 (ptr, ...) @printf(ptr noundef @.str, i64 noundef 1)\n"
-          -- , Br (Ident "end")
-          -- , Label (Ident "b_2")
-          -- , UnsafeRaw
-          --     "call i32 (ptr, ...) @printf(ptr noundef @.str, i64 noundef 2)\n"
-          -- , Br (Ident "end")
-          -- , Label (Ident "end")
-          Ret I64 (VInteger 0)
-        ]
+    go (Bind id args _) =
+        (id, FunctionInfo { numArgs=length args, arguments=args })
 
-    defaultStart :: [LLVMIr]
-    defaultStart =
-        [ Comment (show $ printTree (Program prg))
-        , UnsafeRaw "@.str = private unnamed_addr constant [3 x i8] c\"%i\n\", align 1\n"
-        , UnsafeRaw "declare i32 @printf(ptr noalias nocapture, ...)\n"
-        ]
 
-    goDef :: [Bind] -> CompilerState ()
-    goDef [] = return ()
-    goDef (Bind (name, t) args exp : xs) = do
-        emit $ UnsafeRaw "\n"
-        emit $ Comment $ show name <> ": " <> show exp
-        emit $ Define (type2LlvmType t_return) name (map (second type2LlvmType) args)
-        functionBody <- exprToValue exp
-        if name == "main"
-            then mapM_ emit (mainContent functionBody)
-            else emit $ Ret I64 functionBody
-        emit DefineEnd
-        modify (\s -> s{variableCount = 0})
-        goDef xs
-      where
-        t_return = snd $ partitionType (length args) t
 
-    go :: Exp -> CompilerState ()
-    go (EInt int)      = emitInt int
-    go (EAdd t e1 e2)  = emitAdd t e1 e2
-    go (EId (name, _)) = emitIdent name
-    go (EApp t e1 e2)  = emitApp t e1 e2
-    go (EAbs t ti e)   = emitAbs t ti e
-    go (ELet bind e)   = emitLet bind e
-    -- go (ESub e1 e2)  = emitSub e1 e2
-    -- go (EMul e1 e2)  = emitMul e1 e2
-    -- go (EDiv e1 e2)  = emitDiv e1 e2
-    -- go (EMod e1 e2)  = emitMod e1 e2
+initCodeGenerator :: [Bind] -> CodeGenerator
+initCodeGenerator scs = CodeGenerator { instructions = defaultStart
+                                      , functions = getFunctions scs
+                                      , variableCount = 0
+                                      }
 
-    --- aux functions ---
-    emitAbs :: Type -> Id -> Exp -> CompilerState ()
-    emitAbs _t tid e = do
-        emit . Comment $
-            "Lambda escaped previous stages: \\" <> show tid <> " . " <> show e
-    emitLet :: Bind -> Exp -> CompilerState ()
-    emitLet b e = do
-        emit $
-            Comment $
-                concat
-                    [ "ELet ("
-                    , show b
-                    , " = "
-                    , show e
-                    , ") is not implemented!"
-                    ]
+-- | Compiles an AST and produces a LLVM Ir string.
+-- An easy way to actually "compile" this output is to
+-- Simply pipe it to lli
+compile :: Program -> Err String
+compile (Program scs) = do
+    let codegen = initCodeGenerator scs
+    llvmIrToString . instructions <$> execStateT (compileScs scs) codegen
 
-    emitApp :: Type -> Exp -> Exp -> CompilerState ()
-    emitApp t e1 e2 = appEmitter t e1 e2 []
-      where
-        appEmitter :: Type -> Exp -> Exp -> [Exp] -> CompilerState ()
-        appEmitter t e1 e2 stack = do
-            let newStack = e2 : stack
-            case e1 of
-                EApp _ e1' e2' -> appEmitter t e1' e2' newStack
-                EId id@(name, _) -> do
-                    args <- traverse exprToValue newStack
-                    vs <- getNewVar
-                    funcs <- gets functions
-                    let vis = case Map.lookup id funcs of
-                            Nothing -> Local
-                            Just _  -> Global
-                    let call = Call (type2LlvmType t) vis name ((\x -> (valueGetType x, x)) <$> args)
-                    emit $ SetVariable (Ident $ show vs) call
-                x -> do
-                    emit . Comment $ "The unspeakable happened: "
-                    emit . Comment $ show x
+compileScs :: [Bind] -> CompilerState ()
+compileScs []                             = pure ()
+compileScs (Bind (name, t) args exp : xs) = do
+    emit $ UnsafeRaw "\n"
+    emit . Comment $ show name <> ": " <> show exp
+    let args' = map (second type2LlvmType) args
+    emit $ Define (type2LlvmType t_return) name args'
+    functionBody <- exprToValue exp
+    if name == "main"
+        then mapM_ emit $ mainContent functionBody
+        else emit $ Ret I64 functionBody
+    emit DefineEnd
+    modify $ \s -> s { variableCount = 0 }
+    compileScs xs
+  where
+    t_return = snd $ partitionType (length args) t
 
-    emitIdent :: Ident -> CompilerState ()
-    emitIdent id = do
-        -- !!this should never happen!!
-        emit $ Comment "This should not have happened!"
-        emit $ Variable id
-        emit $ UnsafeRaw "\n"
+mainContent :: LLVMValue -> [LLVMIr]
+mainContent var =
+    [ UnsafeRaw $
+        "call i32 (ptr, ...) @printf(ptr noundef @.str, i64 noundef " <> show var <> ")\n"
+    , -- , SetVariable (Ident "p") (Icmp LLEq I64 (VInteger 2) (VInteger 2))
+      -- , BrCond (VIdent (Ident "p")) (Ident "b_1") (Ident "b_2")
+      -- , Label (Ident "b_1")
+      -- , UnsafeRaw
+      --     "call i32 (ptr, ...) @printf(ptr noundef @.str, i64 noundef 1)\n"
+      -- , Br (Ident "end")
+      -- , Label (Ident "b_2")
+      -- , UnsafeRaw
+      --     "call i32 (ptr, ...) @printf(ptr noundef @.str, i64 noundef 2)\n"
+      -- , Br (Ident "end")
+      -- , Label (Ident "end")
+      Ret I64 (VInteger 0)
+    ]
 
-    emitInt :: Integer -> CompilerState ()
-    emitInt i = do
-        -- !!this should never happen!!
-        varCount <- getNewVar
-        emit $ Comment "This should not have happened!"
-        emit $ SetVariable (Ident (show varCount)) (Add I64 (VInteger i) (VInteger 0))
+defaultStart :: [LLVMIr]
+defaultStart = [ UnsafeRaw "@.str = private unnamed_addr constant [3 x i8] c\"%i\n\", align 1\n"
+               , UnsafeRaw "declare i32 @printf(ptr noalias nocapture, ...)\n"
+               ]
 
-    emitAdd :: Type -> Exp -> Exp -> CompilerState ()
-    emitAdd t e1 e2 = do
-        v1 <- exprToValue e1
-        v2 <- exprToValue e2
-        v <- getNewVar
-        emit $ SetVariable (Ident $ show v) (Add (type2LlvmType t) v1 v2)
+compileExp :: Exp -> CompilerState ()
+compileExp = \case
+  EInt i        -> emitInt i
+  EAdd t e1 e2  -> emitAdd t e1 e2
+  EId (name, _) -> emitIdent name
+  EApp t e1 e2  -> emitApp t e1 e2
+  EAbs t ti e   -> emitAbs t ti e
+  ELet bind e   -> emitLet bind e
 
-    -- emitMul :: Exp -> Exp -> CompilerState ()
-    -- emitMul e1 e2 = do
-    --     (v1,v2) <- binExprToValues e1 e2
-    --     increaseVarCount
-    --     v <- gets variableCount
-    --     emit $ SetVariable $ Ident $ show v
-    --     emit $ Mul I64 v1 v2
+--- aux functions ---
+emitAbs :: Type -> Id -> Exp -> CompilerState ()
+emitAbs _t tid e = emit . Comment $ "Lambda escaped previous stages: \\" <> show tid <> " . " <> show e
 
-    -- emitMod :: Exp -> Exp -> CompilerState ()
-    -- emitMod e1 e2 = do
-    --     -- `let m a b = rem (abs $ b + a) b`
-    --     (v1,v2) <- binExprToValues e1 e2
-    --     increaseVarCount
-    --     vadd <- gets variableCount
-    --     emit $ SetVariable $ Ident $ show vadd
-    --     emit $ Add I64 v1 v2
-    --
-    --     increaseVarCount
-    --     vabs <- gets variableCount
-    --     emit $ SetVariable $ Ident $ show vabs
-    --     emit $ Call I64 (Ident "llvm.abs.i64")
-    --         [ (I64, VIdent (Ident $ show vadd))
-    --         , (I1, VInteger 1)
-    --         ]
-    --     increaseVarCount
-    --     v <- gets variableCount
-    --     emit $ SetVariable $ Ident $ show v
-    --     emit $ Srem I64 (VIdent (Ident $ show vabs)) v2
+emitLet :: Bind -> Exp -> CompilerState ()
+emitLet b e = emit . Comment $ concat [ "ELet ("
+                                      , show b
+                                      , " = "
+                                      , show e
+                                      , ") is not implemented!"
+                                      ]
 
-    -- emitDiv :: Exp -> Exp -> CompilerState ()
-    -- emitDiv e1 e2 = do
-    --     (v1,v2) <- binExprToValues e1 e2
-    --     increaseVarCount
-    --     v <- gets variableCount
-    --     emit $ SetVariable $ Ident $ show v
-    --     emit $ Div I64 v1 v2
+emitApp :: Type -> Exp -> Exp -> CompilerState ()
+emitApp t e1 e2 = appEmitter t e1 e2 []
+  where
+    appEmitter :: Type -> Exp -> Exp -> [Exp] -> CompilerState ()
+    appEmitter t e1 e2 stack = do
+        let newStack = e2 : stack
+        case e1 of
+            EApp _ e1' e2' -> appEmitter t e1' e2' newStack
+            EId id@(name, _) -> do
+                args <- traverse exprToValue newStack
+                vs <- getNewVar
+                funcs <- gets functions
+                let visibility = maybe Local (const Global) $ Map.lookup id funcs
+                    args'      = map (first valueGetType . dupe) args
+                    call       = Call (type2LlvmType t) visibility name args'
+                emit $ SetVariable (Ident $ show vs) call
+            x -> do
+                emit . Comment $ "The unspeakable happened: "
+                emit . Comment $ show x
 
-    -- emitSub :: Exp -> Exp -> CompilerState ()
-    -- emitSub e1 e2 = do
-    --     (v1,v2) <- binExprToValues e1 e2
-    --     increaseVarCount
-    --     v <- gets variableCount
-    --     emit $ SetVariable $ Ident $ show v
-    --     emit $ Sub I64 v1 v2
+emitIdent :: Ident -> CompilerState ()
+emitIdent id = do
+    -- !!this should never happen!!
+    emit $ Comment "This should not have happened!"
+    emit $ Variable id
+    emit $ UnsafeRaw "\n"
 
-    exprToValue :: Exp -> CompilerState LLVMValue
-    exprToValue (EInt i) = return $ VInteger i
-    exprToValue (EId id@(name, t)) = do
+emitInt :: Integer -> CompilerState ()
+emitInt i = do
+    -- !!this should never happen!!
+    varCount <- getNewVar
+    emit $ Comment "This should not have happened!"
+    emit $ SetVariable (Ident (show varCount)) (Add I64 (VInteger i) (VInteger 0))
+
+emitAdd :: Type -> Exp -> Exp -> CompilerState ()
+emitAdd t e1 e2 = do
+    v1 <- exprToValue e1
+    v2 <- exprToValue e2
+    v <- getNewVar
+    emit $ SetVariable (Ident $ show v) (Add (type2LlvmType t) v1 v2)
+
+-- emitMul :: Exp -> Exp -> CompilerState ()
+-- emitMul e1 e2 = do
+--     (v1,v2) <- binExprToValues e1 e2
+--     increaseVarCount
+--     v <- gets variableCount
+--     emit $ SetVariable $ Ident $ show v
+--     emit $ Mul I64 v1 v2
+
+-- emitMod :: Exp -> Exp -> CompilerState ()
+-- emitMod e1 e2 = do
+--     -- `let m a b = rem (abs $ b + a) b`
+--     (v1,v2) <- binExprToValues e1 e2
+--     increaseVarCount
+--     vadd <- gets variableCount
+--     emit $ SetVariable $ Ident $ show vadd
+--     emit $ Add I64 v1 v2
+--
+--     increaseVarCount
+--     vabs <- gets variableCount
+--     emit $ SetVariable $ Ident $ show vabs
+--     emit $ Call I64 (Ident "llvm.abs.i64")
+--         [ (I64, VIdent (Ident $ show vadd))
+--         , (I1, VInteger 1)
+--         ]
+--     increaseVarCount
+--     v <- gets variableCount
+--     emit $ SetVariable $ Ident $ show v
+--     emit $ Srem I64 (VIdent (Ident $ show vabs)) v2
+
+-- emitDiv :: Exp -> Exp -> CompilerState ()
+-- emitDiv e1 e2 = do
+--     (v1,v2) <- binExprToValues e1 e2
+--     increaseVarCount
+--     v <- gets variableCount
+--     emit $ SetVariable $ Ident $ show v
+--     emit $ Div I64 v1 v2
+
+-- emitSub :: Exp -> Exp -> CompilerState ()
+-- emitSub e1 e2 = do
+--     (v1,v2) <- binExprToValues e1 e2
+--     increaseVarCount
+--     v <- gets variableCount
+--     emit $ SetVariable $ Ident $ show v
+--     emit $ Sub I64 v1 v2
+
+exprToValue :: Exp -> CompilerState LLVMValue
+exprToValue = \case
+    EInt i -> pure $ VInteger i
+
+    EId id@(name, t) -> do
         funcs <- gets functions
         case Map.lookup id funcs of
             Just fi -> do
                 if numArgs fi == 0
                     then do
                         vc <- getNewVar
-                        emit $ SetVariable (Ident $ show vc) (Call (type2LlvmType t) Global name [])
-                        return $ VIdent (Ident $ show vc) (type2LlvmType t)
-                    else return $ VFunction name Global (type2LlvmType t)
-            Nothing -> return $ VIdent name (type2LlvmType t)
-    exprToValue e = do
-        go e
+                        emit $ SetVariable (Ident $ show vc)
+                            (Call (type2LlvmType t) Global name [])
+                        pure $ VIdent (Ident $ show vc) (type2LlvmType t)
+                    else pure $ VFunction name Global (type2LlvmType t)
+            Nothing -> pure $ VIdent name (type2LlvmType t)
+
+    e -> do
+        compileExp e
         v <- getVarCount
-        return $ VIdent (Ident $ show v) (getType e)
+        pure $ VIdent (Ident $ show v) (getType e)
 
 type2LlvmType :: Type -> LLVMType
 type2LlvmType = \case
