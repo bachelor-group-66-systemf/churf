@@ -9,8 +9,8 @@ module LlvmIr (
     Visibility (..),
 ) where
 
-import Data.List (intercalate)
-import TypeCheckerIr
+import           Data.List     (intercalate)
+import           TypeCheckerIr
 
 -- | A datatype which represents some basic LLVM types
 data LLVMType
@@ -65,7 +65,7 @@ instance Show LLVMComp where
 data Visibility = Local | Global
 instance Show Visibility where
     show :: Visibility -> String
-    show Local = "%"
+    show Local  = "%"
     show Global = "@"
 
 {- | Represents a LLVM "value", as in an integer, a register variable,
@@ -80,10 +80,10 @@ data LLVMValue
 instance Show LLVMValue where
     show :: LLVMValue -> String
     show v = case v of
-        VInteger i -> show i
-        VIdent (Ident n) _ -> "%" <> n
+        VInteger i                -> show i
+        VIdent (Ident n) _        -> "%" <> n
         VFunction (Ident n) vis _ -> show vis <> n
-        VConstant s -> "c" <> show s
+        VConstant s               -> "c" <> show s
 
 type Params = [(Ident, LLVMType)]
 type Args = [(LLVMType, LLVMValue)]
@@ -106,7 +106,8 @@ data LLVMIr
     | Label Ident
     | Call LLVMType Visibility Ident Args
     | Alloca LLVMType
-    | Store LLVMType Ident LLVMType Ident
+    | Store LLVMType LLVMValue LLVMType Ident
+    | Load LLVMType LLVMType Ident
     | Bitcast LLVMType Ident LLVMType
     | Ret LLVMType LLVMValue
     | Comment String
@@ -122,9 +123,9 @@ llvmIrToString = go 0
     go _ [] = mempty
     go i (x : xs) = do
         let (i', n) = case x of
-                Define{} -> (i + 1, 0)
+                Define{}  -> (i + 1, 0)
                 DefineEnd -> (i - 1, 0)
-                _ -> (i, i)
+                _         -> (i, i)
         insToString n x <> go i' xs
 
 {- | Converts a LLVM inststruction to a String, allowing for printing etc.
@@ -175,10 +176,15 @@ llvmIrToString = go 0
                     , ")\n"
                     ]
             (Alloca t) -> unwords ["alloca", show t, "\n"]
-            (Store t1 (Ident id1) t2 (Ident id2)) ->
+            (Store t1 val t2 (Ident id2)) ->
                 concat
-                    [ "store ", show t1, " %", id1
+                    [ "store ", show t1, " ", show val
                     , ", ", show t2 , " %", id2, "\n"
+                    ]
+            (Load t1 t2 (Ident addr)) ->
+                concat
+                    [ "load ", show t1, ", "
+                    , show t2, " %", addr, "\n"
                     ]
             (Bitcast t1 (Ident i) t2) ->
                 concat
@@ -196,13 +202,16 @@ llvmIrToString = go 0
                     , show v, "\n"
                     ]
             (UnsafeRaw s) -> s
-            (Label (Ident s)) -> "\nlabel_" <> s <> ":\n"
-            (Br (Ident s)) -> "br label %label_" <> s <> "\n"
+            (Label (Ident s)) -> "\n" <> lblPfx <> s <> ":\n"
+            (Br (Ident s)) -> "br label %" <> lblPfx <> s <> "\n"
             (BrCond val (Ident s1) (Ident s2)) ->
                 concat
                     [ "br i1 ", show val, ", ", "label %"
-                    , "label_", s1, ", ", "label %", "label_", s2, "\n"
+                    , lblPfx, s1, ", ", "label %", lblPfx, s2, "\n"
                     ]
             (Comment s) -> "; " <> s <> "\n"
             (Variable (Ident id)) -> "%" <> id
 {- FOURMOLU_ENABLE -}
+
+lblPfx :: String
+lblPfx = "lbl_"
