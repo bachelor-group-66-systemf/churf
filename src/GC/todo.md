@@ -2,9 +2,8 @@
 
 ## Project
 
-Goal for next week (17/2):
-- Functioning garbage collector
-- Test it with valgrind
+Goal for next week (24/2):
+- Debug 
 
 ## GC TODO:
 - Merge to main branch
@@ -30,7 +29,7 @@ and evalutate the following:
         global stack_end = __builtin_frame_address(1)
 
     collect()
-        global stack_start = __builtin_frame_address(1)
+        local stack_start = __builtin_frame_address(1)
 
     sweep()
         for all addr in range(stack_end, stack_start)

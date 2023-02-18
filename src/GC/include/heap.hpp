@@ -15,6 +15,8 @@
 #define FREE        (uint) 0x4
 #define COLLECT_ALL (uint) 0x7
 
+#define FREE_THRESH (uint) 20
+
 namespace GC {
 
   class Heap {
@@ -29,6 +31,8 @@ namespace GC {
 
     void collect();
     void sweep();
+    void free();
+    void free_overlap();
     // void compact();
     void mark(uintptr_t *start, const uintptr_t *end, std::vector<Chunk *> worklist);
     void print_line(Chunk *chunk);
