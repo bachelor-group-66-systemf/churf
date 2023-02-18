@@ -41,8 +41,8 @@ checkBind cxt b =
             (rhs', t_rhs) <- infer cxt rhs
             unless (typeEq t_rhs t) . throwError $ typeErr name t t_rhs
             pure $ T.Bind (name, t) (zip parms ts_parms) rhs'
-        where
-          ts_parms = fst $ partitionType (length parms) t
+          where
+            ts_parms = fst $ partitionType (length parms) t
 
 -- | @ f x y = rhs ⇒ f = \x.\y. rhs @
 expandLambdas :: Bind -> Bind
