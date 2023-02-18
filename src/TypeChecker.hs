@@ -87,18 +87,17 @@ infer cxt = \case
     let t_abs = TFun t t1
     pure (T.EAbs t_abs (x, t) e', t_abs)
 
-  ELet bs e -> do
-    bs''    <- mapM (checkBind cxt') bs'
+  ELet b e -> do
+    let cxt' = insertBind b cxt
+    b'    <- checkBind cxt' b
     (e', t) <- infer cxt' e
-    pure (T.ELet bs'' e', t)
-    where
-      bs'  = map expandLambdas bs
-      cxt' = foldr (\(Bind n t _ _ _) -> insertEnv n t) cxt bs'
+    pure (T.ELet b' e', t)
 
   EAnn e t -> do
-    e' <- check cxt e t
-    pure (T.EAnn e' t, t)
-
+      (e', t1) <- infer cxt e
+      unless (typeEq t t1) $
+        throwError "Inferred type and type annotation doesn't match"
+      pure (e', t1)
 
 check :: Cxt -> Exp -> Type -> Err T.Exp
 check cxt exp typ = case exp of
@@ -137,19 +136,19 @@ check cxt exp typ = case exp of
     unless (typeEq t1 typ) $ throwError "Wrong lamda type!"
     pure $ T.EAbs t1 (x, t) e'
 
-  ELet bs e -> do
-    bs'' <- mapM (checkBind cxt') bs'
+  ELet b e -> do
+    let cxt' = insertBind b cxt
+    b' <- checkBind cxt' b
     e' <- check cxt' e typ
-    pure $ T.ELet bs'' e'
-    where
-      bs'  = map expandLambdas bs
-      cxt' = foldr (\(Bind n t _ _ _) -> insertEnv n t) cxt bs'
+    pure $ T.ELet b' e'
 
   EAnn e t -> do
     unless (typeEq t typ) $
       throwError "Inferred type and type annotation doesn't match"
-    e' <- check cxt e t
-    pure $ T.EAnn e' typ
+    check cxt e t
+
+insertBind :: Bind -> Cxt -> Cxt
+insertBind (Bind n t _ _ _) = insertEnv n t
 
 typeEq :: Type -> Type -> Bool
 typeEq (TFun t t1) (TFun q q1) = typeEq t q && typeEq t1 q1

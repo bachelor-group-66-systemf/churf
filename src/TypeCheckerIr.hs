@@ -16,11 +16,10 @@ newtype Program = Program [Bind]
 data Exp
     = EId  Id
     | EInt Integer
-    | ELet [Bind] Exp
+    | ELet Bind Exp
     | EApp Type Exp Exp
     | EAdd Type Exp Exp
     | EAbs Type Id  Exp
-    | EAnn Exp Type
   deriving (C.Eq, C.Ord, C.Show, C.Read)
 
 type Id = (Ident, Type)
@@ -96,13 +95,6 @@ instance Print Exp where
                       , prtIdP 0 n
                       , doc $ showString "."
                       , prt 0 e
-                      ]
-    EAnn e t     -> prPrec i 3 $ concatD
-                      [ doc $ showString "("
-                      , prt 0 e
-                      , doc $ showString ":"
-                      , prt 0 t
-                      , doc $ showString ")"
                       ]
 
 

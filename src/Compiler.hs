@@ -1,28 +1,24 @@
-{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Compiler (compile) where
 
-import Control.Monad.State (StateT, execStateT, gets, modify)
-import Data.Map (Map)
-import qualified Data.Map as Map
-import Data.Tuple.Extra (second)
-import Grammar.ErrM (Err)
-import Grammar.Print (printTree)
-import LlvmIr (
-    LLVMIr (..),
-    LLVMType (..),
-    LLVMValue (..),
-    Visibility (..),
-    llvmIrToString,
- )
-import TypeChecker (partitionType)
-import TypeCheckerIr
+import           Control.Monad.State (StateT, execStateT, gets, modify)
+import           Data.Map            (Map)
+import qualified Data.Map            as Map
+import           Data.Tuple.Extra    (second)
+import           Grammar.ErrM        (Err)
+import           Grammar.Print       (printTree)
+import           LlvmIr              (LLVMIr (..), LLVMType (..),
+                                      LLVMValue (..), Visibility (..),
+                                      llvmIrToString)
+import           TypeChecker         (partitionType)
+import           TypeCheckerIr
 
 -- | The record used as the code generator state
 data CodeGenerator = CodeGenerator
-    { instructions :: [LLVMIr]
-    , functions :: Map Id FunctionInfo
+    { instructions  :: [LLVMIr]
+    , functions     :: Map Id FunctionInfo
     , variableCount :: Integer
     }
 
@@ -30,7 +26,7 @@ data CodeGenerator = CodeGenerator
 type CompilerState a = StateT CodeGenerator Err a
 
 data FunctionInfo = FunctionInfo
-    { numArgs :: Int
+    { numArgs   :: Int
     , arguments :: [Id]
     }
 
@@ -124,33 +120,29 @@ compile (Program prg) = do
         t_return = snd $ partitionType (length args) t
 
     go :: Exp -> CompilerState ()
-    go (EInt int) = emitInt int
-    go (EAdd t e1 e2) = emitAdd t e1 e2
+    go (EInt int)      = emitInt int
+    go (EAdd t e1 e2)  = emitAdd t e1 e2
     go (EId (name, _)) = emitIdent name
-    go (EApp t e1 e2) = emitApp t e1 e2
-    go (EAbs t ti e) = emitAbs t ti e
-    go (ELet binds e) = emitLet binds e
-    go (EAnn _ _) = emitEAnn
+    go (EApp t e1 e2)  = emitApp t e1 e2
+    go (EAbs t ti e)   = emitAbs t ti e
+    go (ELet bind e)   = emitLet bind e
     -- go (ESub e1 e2)  = emitSub e1 e2
     -- go (EMul e1 e2)  = emitMul e1 e2
     -- go (EDiv e1 e2)  = emitDiv e1 e2
     -- go (EMod e1 e2)  = emitMod e1 e2
 
     --- aux functions ---
-    emitEAnn :: CompilerState ()
-    emitEAnn = emit . UnsafeRaw $ "why?"
-
     emitAbs :: Type -> Id -> Exp -> CompilerState ()
     emitAbs _t tid e = do
         emit . Comment $
             "Lambda escaped previous stages: \\" <> show tid <> " . " <> show e
-    emitLet :: [Bind] -> Exp -> CompilerState ()
-    emitLet xs e = do
+    emitLet :: Bind -> Exp -> CompilerState ()
+    emitLet b e = do
         emit $
             Comment $
                 concat
                     [ "ELet ("
-                    , show xs
+                    , show b
                     , " = "
                     , show e
                     , ") is not implemented!"
@@ -170,7 +162,7 @@ compile (Program prg) = do
                     funcs <- gets functions
                     let vis = case Map.lookup id funcs of
                             Nothing -> Local
-                            Just _ -> Global
+                            Just _  -> Global
                     let call = Call (type2LlvmType t) vis name ((\x -> (valueGetType x, x)) <$> args)
                     emit $ SetVariable (Ident $ show vs) call
                 x -> do
@@ -271,19 +263,18 @@ type2LlvmType = \case
   where
     function2LLVMType :: Type -> [LLVMType] -> (LLVMType, [LLVMType])
     function2LLVMType (TFun t xs) s = function2LLVMType xs (type2LlvmType t : s)
-    function2LLVMType x s = (type2LlvmType x, s)
+    function2LLVMType x s           = (type2LlvmType x, s)
 
 getType :: Exp -> LLVMType
-getType (EInt _) = I64
+getType (EInt _)     = I64
 getType (EAdd t _ _) = type2LlvmType t
 getType (EId (_, t)) = type2LlvmType t
 getType (EApp t _ _) = type2LlvmType t
 getType (EAbs t _ _) = type2LlvmType t
-getType (ELet _ e) = getType e
-getType (EAnn _ t) = type2LlvmType t
+getType (ELet _ e)   = getType e
 
 valueGetType :: LLVMValue -> LLVMType
-valueGetType (VInteger _) = I64
-valueGetType (VIdent _ t) = t
-valueGetType (VConstant s) = Array (length s) I8
+valueGetType (VInteger _)      = I64
+valueGetType (VIdent _ t)      = t
+valueGetType (VConstant s)     = Array (length s) I8
 valueGetType (VFunction _ _ t) = t

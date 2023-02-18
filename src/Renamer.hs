@@ -2,82 +2,84 @@
 
 module Renamer (module Renamer) where
 
-import           Data.List   (mapAccumL, unzip4, zipWith4)
-import           Data.Map    (Map)
-import qualified Data.Map    as Map
-import           Data.Maybe  (fromMaybe)
+import           Auxiliary           (mapAccumM)
+import           Control.Monad.State (MonadState, State, evalState, gets,
+                                      modify)
+import           Data.Map            (Map)
+import qualified Data.Map            as Map
+import           Data.Maybe          (fromMaybe)
+import           Data.Tuple.Extra    (dupe)
 import           Grammar.Abs
 
 
--- | Rename all supercombinators and variables
+-- | Rename all variables and local binds
 rename :: Program -> Program
-rename (Program sc) = Program $ map (renameSc 0) sc
+rename (Program bs) = Program $ evalState (runRn $ mapM (renameSc initNames) bs) 0
   where
-    renameSc i (Bind n t _ xs e) = Bind n t n xs' e'
-      where
-        (i1, xs', env) = newNames i xs
-        e'             = snd $ renameExp env i1 e
-
-renameExp :: Map Ident Ident -> Int -> Exp -> (Int, Exp)
-renameExp env i = \case
-
-  EId  n     -> (i, EId . fromMaybe n $ Map.lookup n env)
-
-  EInt i1    -> (i, EInt i1)
-
-  EApp e1 e2 -> (i2, EApp e1' e2')
-    where
-      (i1, e1') = renameExp env i e1
-      (i2, e2') = renameExp env i1 e2
-
-  EAdd e1 e2 -> (i2, EAdd e1' e2')
-    where
-      (i1, e1') = renameExp env i e1
-      (i2, e2') = renameExp env i1 e2
-
-  ELet bs e  -> (i3, ELet (zipWith4 mkBind names' types pars' es') e')
-    where
-      mkBind name t              = Bind name t name
-      (i1, e')                   = renameExp e_env i e
-      (names, types, pars, rhss) = fromBinders bs
-      (i2, names', env')         = newNames i1 (names ++ concat pars)
-      pars'                      = (map . map) renamePar pars
-      e_env                      = Map.union env' env
-      (i3, es')                  = mapAccumL (renameExp e_env) i2 rhss
-
-      renamePar p = case Map.lookup p env' of
-                     Just p' -> p'
-                     Nothing -> error ("Can't find name for " ++ show p)
+    initNames = Map.fromList $ map (\(Bind name _ _ _ _) -> dupe name) bs
+    renameSc :: Names -> Bind -> Rn Bind
+    renameSc old_names (Bind name t _ parms rhs) = do
+        (new_names, parms') <- newNames old_names parms
+        rhs'                <- snd <$> renameExp new_names rhs
+        pure $ Bind name t name parms' rhs'
 
 
-  EAbs par t e  -> (i2, EAbs par' t e')
-    where
-      (i1, par', env') = newName par
-      (i2, e')         = renameExp (Map.union env' env ) i1 e
+-- | Rename monad. State holds the number of renamed names.
+newtype Rn a = Rn { runRn :: State Int a }
+  deriving (Functor, Applicative, Monad, MonadState Int)
 
-  EAnn e t -> (i1, EAnn e' t)
-    where
-      (i1, e') = renameExp env i e
+-- | Maps old to new name
+type Names = Map Ident Ident
 
+renameLocalBind :: Names -> Bind -> Rn (Names, Bind)
+renameLocalBind old_names (Bind name t _ parms rhs) = do
+    (new_names, name')   <- newName old_names name
+    (new_names', parms') <- newNames new_names parms
+    (new_names'', rhs')  <- renameExp new_names' rhs
+    pure (new_names'', Bind name' t name' parms' rhs')
 
-newName :: Ident -> (Int, Ident, Map Ident Ident)
-newName old_name = (i, head names, env)
-  where (i, names, env) = newNames 1 [old_name]
+renameExp :: Names -> Exp -> Rn (Names, Exp)
+renameExp old_names = \case
 
-newNames :: Int -> [Ident] -> (Int, [Ident], Map Ident Ident)
-newNames i old_names = (i', new_names, env)
-  where
-    (i', new_names) = getNames i old_names
-    env = Map.fromList $ zip old_names new_names
+  EId  n     -> pure (old_names, EId . fromMaybe n $ Map.lookup n old_names)
 
-getNames :: Int -> [Ident] -> (Int, [Ident])
-getNames i ns = (i + length ss, zipWith makeName ss [i..])
-  where
-    ss = map (\(Ident s) -> s) ns
+  EInt i1    -> pure (old_names, EInt i1)
 
-makeName :: String -> Int -> Ident
-makeName prefix i = Ident (prefix ++ "_" ++ show i)
+  EApp e1 e2 -> do
+      (env1, e1') <- renameExp old_names e1
+      (env2, e2') <- renameExp old_names e2
+      pure (Map.union env1 env2, EApp e1' e2')
 
+  EAdd e1 e2 -> do
+      (env1, e1') <- renameExp old_names e1
+      (env2, e2') <- renameExp old_names e2
+      pure (Map.union env1 env2, EAdd e1' e2')
 
-fromBinders :: [Bind] -> ([Ident], [Type], [[Ident]], [Exp])
-fromBinders bs = unzip4 [ (name, t, parms, rhs) | Bind name t _ parms rhs <- bs ]
+  ELet b e  -> do
+      (new_names, b)  <- renameLocalBind old_names b
+      (new_names', e') <- renameExp new_names e
+      pure (new_names', ELet b e')
+
+  EAbs par t e  -> do
+      (new_names, par') <- newName old_names par
+      (new_names', e')  <- renameExp new_names e
+      pure (new_names', EAbs par' t e')
+
+  EAnn e t -> do
+      (new_names, e') <- renameExp old_names e
+      pure (new_names, EAnn e' t)
+
+-- | Create a new name and add it to name environment.
+newName :: Names -> Ident -> Rn (Names, Ident)
+newName env old_name = do
+    new_name <- makeName old_name
+    pure (Map.insert old_name new_name env, new_name)
+
+-- | Create multiple names and add them to the name environment
+newNames :: Names -> [Ident] -> Rn (Names, [Ident])
+newNames = mapAccumM newName
+
+-- | Annotate name with number and increment the number @prefix ⇒ prefix_number@.
+makeName :: Ident -> Rn Ident
+makeName (Ident prefix) = gets (\i -> Ident $ prefix ++ "_" ++ show i) <* modify succ
+
