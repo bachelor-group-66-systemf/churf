@@ -51,8 +51,8 @@ data LLVMComp
 instance Show LLVMComp where
     show :: LLVMComp -> String
     show = \case
-        LLEq -> "eq"
-        LLNe -> "ne"
+        LLEq  -> "eq"
+        LLNe  -> "ne"
         LLUgt -> "ugt"
         LLUge -> "uge"
         LLUlt -> "ult"
@@ -68,9 +68,8 @@ instance Show Visibility where
     show Local  = "%"
     show Global = "@"
 
-{- | Represents a LLVM "value", as in an integer, a register variable,
-  or a string contstant
--}
+-- | Represents a LLVM "value", as in an integer, a register variable,
+-- or a string contstant
 data LLVMValue
     = VInteger Integer
     | VIdent Ident LLVMType
