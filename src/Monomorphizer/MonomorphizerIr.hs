@@ -11,14 +11,14 @@ newtype Program = Program [Def]
 data Def = DBind Bind | DData Data
     deriving (Show, Ord, Eq)
 
-data Data = Data Type [Constructor]
+data Data = Data Type [Inj]
     deriving (Show, Ord, Eq)
 
 data Bind = Bind Id [Id] ExpT
     deriving (Show, Ord, Eq)
 
 data Exp
-    = EId Ident
+    = EVar Ident
     | ELit Lit
     | ELet Bind ExpT
     | EApp ExpT ExpT
@@ -35,12 +35,12 @@ data Branch = Branch (Pattern, Type) ExpT
 
 type ExpT = (Exp, Type)
 
-data Constructor = Constructor Ident Type
+data Inj = Inj Ident Type
     deriving (Show, Ord, Eq)
 
 data Lit
     = LInt Integer
-    | LChar Char
+    | LChar Character
     deriving (Show, Ord, Eq)
 
 data Type = TLit Ident | TFun Type Type

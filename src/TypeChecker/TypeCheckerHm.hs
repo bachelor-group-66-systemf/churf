@@ -1,36 +1,31 @@
-{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 -- | A module for type checking and inference using algorithm W, Hindley-Milner
 module TypeChecker.TypeChecker where
 
-import Auxiliary
-import Control.Monad.Except
-import Control.Monad.Identity (runIdentity)
-import Control.Monad.Reader
-import Control.Monad.State
-import Data.Bifunctor (second)
-import Data.Coerce (coerce)
-import Data.Foldable (traverse_)
-import Data.Function (on)
-import Data.List (foldl')
-import Data.List.Extra (unsnoc)
-import Data.Map (Map)
-import Data.Map qualified as M
-import Data.Maybe (fromJust)
-import Data.Set (Set)
-import Data.Set qualified as S
-import Debug.Trace (trace)
-import Grammar.Abs
-import Grammar.Print (printTree)
-import TypeChecker.TypeCheckerIr (
-    Ctx (..),
-    Env (..),
-    Error,
-    Infer,
-    Subst,
- )
-import TypeChecker.TypeCheckerIr qualified as T
+import           Auxiliary
+import           Control.Monad.Except
+import           Control.Monad.Identity    (runIdentity)
+import           Control.Monad.Reader
+import           Control.Monad.State
+import           Data.Bifunctor            (second)
+import           Data.Coerce               (coerce)
+import           Data.Foldable             (traverse_)
+import           Data.Function             (on)
+import           Data.List                 (foldl')
+import           Data.List.Extra           (unsnoc)
+import           Data.Map                  (Map)
+import qualified Data.Map                  as M
+import           Data.Maybe                (fromJust)
+import           Data.Set                  (Set)
+import qualified Data.Set                  as S
+import           Debug.Trace               (trace)
+import           Grammar.Abs
+import           Grammar.Print             (printTree)
+import qualified TypeChecker.TypeCheckerIr as T
+import           TypeChecker.TypeCheckerIr (Ctx (..), Env (..), Error, Infer,
+                                            Subst)
 
 initCtx = Ctx mempty
 initEnv = Env 0 'a' mempty mempty mempty
@@ -78,7 +73,7 @@ checkData d = do
 
 retType :: Type -> Type
 retType (TFun _ t2) = retType t2
-retType a = a
+retType a           = a
 
 checkPrg :: Program -> Infer T.Program
 checkPrg (Program bs) = do
@@ -105,7 +100,7 @@ preRun (x : xs) = case x of
         s <- gets sigs
         case M.lookup (coerce n) s of
             Nothing -> insertSig (coerce n) Nothing >> preRun xs
-            Just _ -> preRun xs
+            Just _  -> preRun xs
     DData d@(Data t _) -> collect (collectTypeVars t) >> checkData d >> preRun xs
 
 checkDef :: [Def] -> Infer [T.Def]
@@ -152,9 +147,9 @@ typeEq _ _ = False
 
 skolem :: T.Type -> T.Type
 skolem (T.TVar (T.MkTVar a)) = T.TLit a
-skolem (T.TAll x t) = T.TAll x (skolem t)
-skolem (T.TFun t1 t2) = (T.TFun `on` skolem) t1 t2
-skolem t = t
+skolem (T.TAll x t)          = T.TAll x (skolem t)
+skolem (T.TFun t1 t2)        = (T.TFun `on` skolem) t1 t2
+skolem t                     = t
 
 isMoreSpecificOrEq :: T.Type -> T.Type -> Bool
 isMoreSpecificOrEq t1 (T.TAll _ t2) = isMoreSpecificOrEq t1 t2
@@ -169,8 +164,8 @@ isMoreSpecificOrEq a b = a == b
 
 isPoly :: Type -> Bool
 isPoly (TAll _ _) = True
-isPoly (TVar _) = True
-isPoly _ = False
+isPoly (TVar _)   = True
+isPoly _          = False
 
 inferExp :: Exp -> Infer T.ExpT
 inferExp e = do
@@ -183,7 +178,7 @@ class CollectTVars a where
 
 instance CollectTVars Exp where
     collectTypeVars (EAnn e t) = collectTypeVars t `S.union` collectTypeVars e
-    collectTypeVars _ = S.empty
+    collectTypeVars _          = S.empty
 
 instance CollectTVars Type where
     collectTypeVars (TVar (MkTVar i)) = S.singleton (coerce i)
@@ -200,15 +195,15 @@ class NewType a b where
 
 instance NewType Type T.Type where
     toNew = \case
-        TLit i -> T.TLit $ coerce i
-        TVar v -> T.TVar $ toNew v
+        TLit i     -> T.TLit $ coerce i
+        TVar v     -> T.TVar $ toNew v
         TFun t1 t2 -> (T.TFun `on` toNew) t1 t2
-        TAll b t -> T.TAll (toNew b) (toNew t)
+        TAll b t   -> T.TAll (toNew b) (toNew t)
         TData i ts -> T.TData (coerce i) (map toNew ts)
-        TEVar _ -> error "Should not exist after typechecker"
+        TEVar _    -> error "Should not exist after typechecker"
 
 instance NewType Lit T.Lit where
-    toNew (LInt i) = T.LInt i
+    toNew (LInt i)  = T.LInt i
     toNew (LChar i) = T.LChar i
 
 instance NewType Data T.Data where
@@ -422,12 +417,12 @@ generalize :: Map T.Ident T.Type -> T.Type -> T.Type
 generalize env t = go (S.toList $ free t S.\\ free env) (removeForalls t)
   where
     go :: [T.Ident] -> T.Type -> T.Type
-    go [] t = t
+    go [] t       = t
     go (x : xs) t = T.TAll (T.MkTVar x) (go xs t)
     removeForalls :: T.Type -> T.Type
-    removeForalls (T.TAll _ t) = removeForalls t
+    removeForalls (T.TAll _ t)   = removeForalls t
     removeForalls (T.TFun t1 t2) = T.TFun (removeForalls t1) (removeForalls t2)
-    removeForalls t = t
+    removeForalls t              = t
 
 {- | Instantiate a polymorphic type. The free type variables are substituted
 with fresh ones.
@@ -477,10 +472,10 @@ instance SubstType T.Type where
             T.TLit a -> T.TLit a
             T.TVar (T.MkTVar a) -> case M.lookup a sub of
                 Nothing -> T.TVar (T.MkTVar $ coerce a)
-                Just t -> t
+                Just t  -> t
             T.TAll (T.MkTVar i) t -> case M.lookup i sub of
                 Nothing -> T.TAll (T.MkTVar i) (apply sub t)
-                Just _ -> apply sub t
+                Just _  -> apply sub t
             T.TFun a b -> T.TFun (apply sub a) (apply sub b)
             T.TData name a -> T.TData name (map (apply sub) a)
 instance FreeVars (Map T.Ident T.Type) where
@@ -513,10 +508,10 @@ instance SubstType T.Pattern where
     apply :: Subst -> T.Pattern -> T.Pattern
     apply s = \case
         T.PVar (iden, t) -> T.PVar (iden, apply s t)
-        T.PLit (lit, t) -> T.PLit (lit, apply s t)
-        T.PInj i ps -> T.PInj i $ apply s ps
-        T.PCatch -> T.PCatch
-        T.PEnum i -> T.PEnum i
+        T.PLit (lit, t)  -> T.PLit (lit, apply s t)
+        T.PInj i ps      -> T.PInj i $ apply s ps
+        T.PCatch         -> T.PCatch
+        T.PEnum i        -> T.PEnum i
 
 instance SubstType a => SubstType [a] where
     apply s = map (apply s)
@@ -555,7 +550,7 @@ fresh = do
 
 next :: Char -> Char
 next 'z' = 'a'
-next a = succ a
+next a   = succ a
 
 -- | Run the monadic action with an additional binding
 withBinding :: (Monad m, MonadReader Ctx m) => T.Ident -> T.Type -> m a -> m a
@@ -608,10 +603,10 @@ inferBranch (Branch pat expr) = do
 withPattern :: T.Pattern -> Infer a -> Infer a
 withPattern p ma = case p of
     T.PVar (x, t) -> withBinding x t ma
-    T.PInj _ ps -> foldl' (flip withPattern) ma ps
-    T.PLit _ -> ma
-    T.PCatch -> ma
-    T.PEnum _ -> ma
+    T.PInj _ ps   -> foldl' (flip withPattern) ma ps
+    T.PLit _      -> ma
+    T.PCatch      -> ma
+    T.PEnum _     -> ma
 
 inferPattern :: Pattern -> Infer (T.Pattern, T.Type)
 inferPattern = \case
@@ -659,14 +654,14 @@ inferPattern = \case
 
 flattenType :: T.Type -> [T.Type]
 flattenType (T.TFun a b) = flattenType a <> flattenType b
-flattenType a = [a]
+flattenType a            = [a]
 
 typeLength :: T.Type -> Int
 typeLength (T.TFun a b) = typeLength a + typeLength b
-typeLength _ = 1
+typeLength _            = 1
 
 litType :: Lit -> T.Type
-litType (LInt _) = int
+litType (LInt _)  = int
 litType (LChar _) = char
 
 int = T.TLit "Int"
@@ -681,8 +676,8 @@ partitionType = go []
     go acc 0 t = (acc, t)
     go acc i t = case t of
         TAll tvar t' -> second (TAll tvar) $ go acc i t'
-        TFun t1 t2 -> go (acc <> [t1]) (i - 1) t2
-        _ -> error "Number of parameters and type doesn't match"
+        TFun t1 t2   -> go (acc <> [t1]) (i - 1) t2
+        _            -> error "Number of parameters and type doesn't match"
 
 exprErr :: Infer a -> Exp -> Infer a
 exprErr ma exp =
@@ -695,3 +690,4 @@ unzip4 =
             (as ++ [a], bs ++ [b], cs ++ [c], ds ++ [d])
         )
         ([], [], [], [])
+

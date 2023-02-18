@@ -3,6 +3,7 @@ module Auxiliary (module Auxiliary) where
 import           Control.Monad.Error.Class (liftEither)
 import           Control.Monad.Except      (MonadError)
 import           Data.Either.Combinators   (maybeToRight)
+import           TypeChecker.TypeCheckerIr (Type (TFun))
 
 snoc :: a -> [a] -> [a]
 snoc x xs = xs ++ [x]
@@ -19,3 +20,4 @@ mapAccumM f = go
         (acc', x') <- f acc x
         (acc'', xs') <- go acc' xs
         pure (acc'', x':xs')
+
