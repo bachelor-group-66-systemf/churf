@@ -2,14 +2,14 @@
 
 module Main where
 
-import           Grammar.Par             (myLexer, pProgram)
+import           Grammar.Par        (myLexer, pProgram)
 -- import           TypeChecker.TypeChecker (typecheck)
 
-import           Grammar.Print           (printTree)
-import           Renamer.Renamer         (rename)
-import           System.Environment      (getArgs)
-import           System.Exit             (exitFailure, exitSuccess)
-import           TypeChecker.TypeChecker (typecheck)
+import           Grammar.Print      (printTree)
+import           Renamer.RenamerM   (rename)
+import           System.Environment (getArgs)
+import           System.Exit        (exitFailure, exitSuccess)
+import           TypeChecker.HM     (typecheck)
 
 main :: IO ()
 main =
@@ -27,24 +27,18 @@ main =
                     putStrLn " ----- PARSER ----- "
                     putStrLn ""
                     putStrLn . printTree $ prg
-                    case rename prg of
+                    case typecheck (rename prg) of
                         Left err -> do
-                            putStrLn "FAILED RENAMING"
+                            putStrLn "TYPECHECK ERROR"
                             print err
                             exitFailure
                         Right prg -> do
                             putStrLn ""
-                            putStrLn " ----- RENAMER ----- "
+                            putStrLn " ----- RAW ----- "
                             putStrLn ""
-                            putStrLn . printTree $ prg
-                            case typecheck prg of
-                                Left err -> do
-                                    putStrLn "TYPECHECK ERROR"
-                                    print err
-                                    exitFailure
-                                Right prg -> do
-                                    putStrLn ""
-                                    putStrLn " ----- TYPECHECKER ----- "
-                                    putStrLn ""
-                                    print prg
-                                    exitSuccess
+                            print prg
+                            putStrLn ""
+                            putStrLn " ----- TYPECHECKER ----- "
+                            putStrLn ""
+                            putStrLn $ printTree prg
+                            exitSuccess

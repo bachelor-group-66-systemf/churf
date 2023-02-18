@@ -31,11 +31,15 @@ executable language
       Grammar.Print
       Grammar.Skel
       Grammar.ErrM
-      TypeChecker.TypeChecker
-      TypeChecker.TypeCheckerIr
-      TypeChecker.Unification
-      Renamer.Renamer
-      Renamer.RenamerIr
+      Auxiliary
+      -- TypeChecker.TypeChecker
+      -- TypeChecker.TypeCheckerIr
+      -- TypeChecker.Unification
+      TypeChecker.HM
+      TypeChecker.HMIr
+      Renamer.RenamerM
+      -- Renamer.Renamer
+      -- Renamer.RenamerIr
 
     hs-source-dirs:   src
 

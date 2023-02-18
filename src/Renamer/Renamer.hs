@@ -38,7 +38,7 @@ renamePrg (Old.Program xs) = do
     return $ RProgram xs'
 
 renameBind :: Old.Bind -> Rename RBind
-renameBind (Old.Bind i args e) = do
+renameBind (Old.Bind n t i args e) = do
     insertSig i
     e' <- renameExp (makeLambda (reverse args) e)
     return $ RBind i e'
@@ -53,12 +53,12 @@ renameExp = \case
     Old.EId i -> do
         st <- get
         case M.lookup i st.env of
-            Just n -> return $ RBound n i
+            Just n -> return $ RId i
             Nothing -> case S.member i st.sig of
-                         True -> return $ RFree i
+                         True -> return $ RId i
                          False -> throwError $ UnboundVar (show i)
 
-    Old.EConst c -> return $ RConst c
+    Old.EInt c -> return $ RInt c
 
     Old.EAnn e t -> flip RAnn t <$> renameExp e
 

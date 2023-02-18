@@ -1,3 +1,4 @@
-test = \x. (x : Mono String) ;
+main : Mono Int ;
+main = let f = \x. x in f 5 ;
 
-apply x y = x + y ;
+
