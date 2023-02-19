@@ -29,11 +29,11 @@ namespace GC {
       m_allocated_size = 0;
     }
 
-    void collect();
-    void sweep();
-    uintptr_t *try_recycle_chunks(size_t size);
-    void free();
-    void free_overlap();
+    void collect(Heap *heap);
+    void sweep(Heap *heap);
+    uintptr_t *try_recycle_chunks(Heap *heap, size_t size);
+    void free(Heap *heap);
+    void free_overlap(Heap *heap);
     void mark(uintptr_t *start, const uintptr_t *end, std::vector<Chunk *> worklist);
     void print_line(Chunk *chunk);
     void print_worklist(std::vector<Chunk *> list);
@@ -61,9 +61,12 @@ namespace GC {
       std::free((char *)m_heap);
     }
 
-    void init();
     void *alloc(size_t size);
+    void init();
+    
+    // DEBUG ONLY
+    void check_init();
+    void collect(uint flags);
     void print_contents();
-    void collect(uint flags); // DEBUG ONLY
   };
 }
