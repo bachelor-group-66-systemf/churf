@@ -7,7 +7,7 @@
 #include <stdlib.h>
 #include <vector>
 
-#include "heap.hpp"
+#include "../include/heap.hpp"
 using namespace std;
 
 namespace GC {
@@ -18,6 +18,13 @@ namespace GC {
    * this address points to the stack frame of the compiled
    * LLVM executable after linking. (NOT CONFIRMED)
   */
+  void Heap::check_init() {
+    auto heap = Heap::the();
+    cout << "GC m_stack_end:\t" << heap->m_stack_end << endl;
+    auto stack_start = reinterpret_cast<uintptr_t *>(__builtin_frame_address(0));
+    cout << "GC stack_start:\t" << stack_start << endl;
+  }
+
   void Heap::init() {
     Heap *heap = Heap::the();
     heap->m_stack_end = reinterpret_cast<uintptr_t *>(__builtin_frame_address(1));
@@ -43,13 +50,13 @@ namespace GC {
     }
 
     if (heap->m_size + size > HEAP_SIZE) {
-      collect();
+      collect(heap);
       // If collect failed, crash with OOM error
       assert(heap->m_size + size <= HEAP_SIZE && "Heap: Out Of Memory");
     }
 
     // If a chunk was recycled, return the old chunk address
-    uintptr_t *reused_chunk = try_recycle_chunks(size);
+    uintptr_t *reused_chunk = try_recycle_chunks(heap, size);
     if (reused_chunk != nullptr) {
       return (void *)reused_chunk;
     }
@@ -58,18 +65,17 @@ namespace GC {
     // then create a new chunk
     auto new_chunk = new Chunk;
     new_chunk->size = size;
-    new_chunk->start = (uintptr_t *)m_heap + m_size;
+    new_chunk->start = (uintptr_t *)(heap->m_heap + m_size);
 
-    m_size += size;
+    heap->m_size += size;
 
-    m_allocated_chunks.push_back(new_chunk);
+    heap->m_allocated_chunks.push_back(new_chunk);
 
     // new_chunk should probably be a unique pointer, if that isn't implicit already 
     return new_chunk->start;
   }
 
-  uintptr_t *Heap::try_recycle_chunks(size_t size) {
-    auto heap = Heap::the();
+  uintptr_t *Heap::try_recycle_chunks(Heap *heap, size_t size) {
     // Check if there are any freed chunks large enough for current request
     for (size_t i = 0; i < heap->m_freed_chunks.size(); i++) {
       auto cp = heap->m_freed_chunks.at(i);
@@ -92,16 +98,16 @@ namespace GC {
       else if (cp->size == size)
       {
         // Reuse the whole chunk
-        m_freed_chunks.erase(m_freed_chunks.begin() + i);
-        m_allocated_chunks.push_back(cp);
+        heap->m_freed_chunks.erase(m_freed_chunks.begin() + i);
+        heap->m_allocated_chunks.push_back(cp);
         return cp->start;
       }
     }
+    return nullptr;
   }
 
-  void Heap::collect() {
+  void Heap::collect(Heap *heap) {
     // Get the adress of the current stack frame
-    auto heap = Heap::the();
 
     uintptr_t *stack_end;
 
@@ -111,38 +117,38 @@ namespace GC {
     else
       stack_end = (uintptr_t *)0; // temporary
 
-    auto work_list = m_allocated_chunks;
+    auto work_list = heap->m_allocated_chunks;
     mark(stack_start, stack_end, work_list);
 
-    sweep();
+    sweep(heap);
 
-    free();
+    free(heap);
   }
 
-  void Heap::free() {
-    if (m_freed_chunks.size() > FREE_THRESH) {
-      while (m_freed_chunks.size()) {
-        auto chunk = m_freed_chunks.back();
-        m_freed_chunks.pop_back();
+  void Heap::free(Heap *heap) {
+    if (heap->m_freed_chunks.size() > FREE_THRESH) {
+      while (heap->m_freed_chunks.size()) {
+        auto chunk = heap->m_freed_chunks.back();
+        heap->m_freed_chunks.pop_back();
         delete chunk;
       }
     } else {
-      free_overlap();
+      free_overlap(heap);
     }
   }
 
-  void Heap::free_overlap() {
+  void Heap::free_overlap(Heap *heap) {
     std::vector<Chunk *> filtered;
     size_t i = 0;
-    filtered.push_back(m_freed_chunks.at(i++));
-    for (; i < m_freed_chunks.size(); i++) {
+    filtered.push_back(heap->m_freed_chunks.at(i++));
+    for (; i < heap->m_freed_chunks.size(); i++) {
       auto prev = filtered.back();
-      auto next = m_freed_chunks.at(i);
+      auto next = heap->m_freed_chunks.at(i);
       if (next->start > (prev->start + prev->size)) {
         filtered.push_back(next);
       }
     }
-    m_freed_chunks.swap(filtered);
+    heap->m_freed_chunks.swap(filtered);
   }
 
   void Heap::collect(uint flags) {
@@ -155,16 +161,20 @@ namespace GC {
     if (flags & FREE)
       cout << "\n - FREE";
     cout << endl;
+    
+    auto heap = Heap::the();
+
     // get the frame adress, whwere local variables and saved registers are located
     auto stack_start = reinterpret_cast<uintptr_t *>(__builtin_frame_address(0));
     cout << "Stack start:\t" << stack_start << endl;
+    uintptr_t *stack_end;
 
-    const uintptr_t *stack_end = (uintptr_t *) stack_start - 40; // dummy value
-    
-    // denna segfaultar om arg för __b_f_a är > 2
-    // reinterpret_cast<const uintptr_t *>(__builtin_frame_address(10));
+    if (heap->m_stack_end != nullptr)
+      stack_end = heap->m_stack_end;
+    else
+      stack_end = (uintptr_t *) stack_start - 40; // dummy value
 
-    auto work_list = m_allocated_chunks;
+    auto work_list = heap->m_allocated_chunks;
     // print_worklist(work_list);
 
     if (flags & MARK) {
@@ -172,31 +182,22 @@ namespace GC {
     }
 
     if (flags & SWEEP) {
-      sweep();
+      sweep(heap);
     }
     
     if (flags & FREE) {
-      free();
+      free(heap);
     }
-
-    //release free chunks
-    // if (flags & FREE) {
-    //   while (m_freed_chunks.size()) {
-    //     auto chunk_pointer = m_freed_chunks.back();
-    //     m_freed_chunks.pop_back();
-    //     delete chunk_pointer; // deletes chunk object, doesn't free heap memory to the OS
-    //   }
-    // }
   }
 
   // Not optimal for now, it doesn't have to loop over all objects
   // but mark needs some refinements before this can be optimised
-  void Heap::sweep() {
-    for (auto it = m_allocated_chunks.begin(); it != m_allocated_chunks.end();) {
+  void Heap::sweep(Heap *heap) {
+    for (auto it = heap->m_allocated_chunks.begin(); it != heap->m_allocated_chunks.end();) {
         auto chunk = *it;
         if (!chunk->marked) {
-            m_freed_chunks.push_back(chunk);
-            it = m_allocated_chunks.erase(it);
+            heap->m_freed_chunks.push_back(chunk);
+            it = heap->m_allocated_chunks.erase(it);
         }
         else { 
             ++it;
@@ -240,17 +241,18 @@ namespace GC {
   }
 
   void Heap::print_contents() {
-    if (m_allocated_chunks.size()) {
-      cout << "\nALLOCATED CHUNKS #" << m_allocated_chunks.size() << endl;
-      for (auto chunk : m_allocated_chunks) {
+    auto heap = Heap::the();
+    if (heap->m_allocated_chunks.size()) {
+      cout << "\nALLOCATED CHUNKS #" << heap->m_allocated_chunks.size() << endl;
+      for (auto chunk : heap->m_allocated_chunks) {
           print_line(chunk);
       }
     } else {
       cout << "NO ALLOCATIONS\n" << endl;
     }
-    if (m_freed_chunks.size()) {
-      cout << "\nFREED CHUNKS #" <<  m_freed_chunks.size() << endl;
-      for (auto fchunk : m_freed_chunks) {
+    if (heap->m_freed_chunks.size()) {
+      cout << "\nFREED CHUNKS #" <<  heap->m_freed_chunks.size() << endl;
+      for (auto fchunk : heap->m_freed_chunks) {
           print_line(fchunk);
       }
     } else {

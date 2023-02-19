@@ -1,6 +1,6 @@
 #include "../include/heap.hpp"
 
-GC::Heap *gc = GC::Heap::the2();
+GC::Heap *gc = GC::Heap::the();
 
 void init() {
 
