@@ -1,4 +1,5 @@
-main : Mono Int ;
-main = let f = \x. x in f 5 ;
+id : Mono Int -> Mono Int ;
+id = \x. x ;
 
-
+main : Poly a ;
+main = id 3 ;

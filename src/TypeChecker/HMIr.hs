@@ -20,7 +20,15 @@ data Exp
     | EApp Type Exp Exp
     | EAdd Type Exp Exp
     | EAbs Type Ident Exp
-      deriving (C.Eq, C.Ord, C.Show, C.Read)
+      deriving (C.Eq, C.Ord, C.Read)
+
+instance Show Exp where
+    show (EId t (Ident i))    = i ++ " : " ++ show t
+    show (EInt _ i)           = show i
+    show (ELet t i e1 e2)     = error "Show for let not implemented"
+    show (EApp t e1 e2)       = show e1 ++ " " ++ show e2 ++ " : " ++ show t
+    show (EAdd _ e1 e2)       = show e1 ++ " + " ++ show e2
+    show (EAbs t (Ident i) e) = "\\ " ++ i ++ ". " ++ show e ++ " : " ++ show t
 
 type Id = (Type, Ident)
 
