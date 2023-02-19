@@ -1,5 +1,2 @@
-id : Mono Int -> Mono Int ;
-id = \x. x ;
-
-main : Poly a ;
-main = id 3 ;
+fun : Mono Int -> Mono Int ;
+fun = \x. x ;
