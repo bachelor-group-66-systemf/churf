@@ -55,6 +55,11 @@ renameExp old_names = \case
         (env2, e2') <- renameExp old_names e2
         pure (Map.union env1 env2, EAdd e1' e2')
 
+    ESub e1 e2 -> do
+        (env1, e1') <- renameExp old_names e1
+        (env2, e2') <- renameExp old_names e2
+        pure (Map.union env1 env2, ESub e1' e2')
+
     ELet b e  -> do
         (new_names, b)   <- renameLocalBind old_names b
         (new_names', e') <- renameExp new_names e

@@ -156,12 +156,12 @@ defaultStart = [ UnsafeRaw "@.str = private unnamed_addr constant [3 x i8] c\"%i
 compileExp :: Exp -> CompilerState ()
 compileExp (EInt int)      = emitInt int
 compileExp (EAdd t e1 e2)  = emitAdd t e1 e2
+compileExp (ESub t e1 e2)  = emitSub t e1 e2
 compileExp (EId (name, _)) = emitIdent name
 compileExp (EApp t e1 e2)  = emitApp t e1 e2
 compileExp (EAbs t ti e)   = emitAbs t ti e
 compileExp (ELet binds e)  = emitLet binds e
 compileExp (ECase t e cs)  = emitECased t e cs
-    -- go (ESub e1 e2)  = emitSub e1 e2
     -- go (EMul e1 e2)  = emitMul e1 e2
     -- go (EDiv e1 e2)  = emitDiv e1 e2
     -- go (EMod e1 e2)  = emitMod e1 e2
@@ -258,6 +258,13 @@ emitAdd t e1 e2 = do
     v <- getNewVar
     emit $ SetVariable (Ident $ show v) (Add (type2LlvmType t) v1 v2)
 
+emitSub :: Type -> Exp -> Exp -> CompilerState ()
+emitSub t e1 e2 = do
+    v1 <- exprToValue e1
+    v2 <- exprToValue e2
+    v <- getNewVar
+    emit $ SetVariable (Ident $ show v) (Sub (type2LlvmType t) v1 v2)
+
 -- emitMul :: Exp -> Exp -> CompilerState ()
 -- emitMul e1 e2 = do
 --     (v1,v2) <- binExprToValues e1 e2
@@ -294,14 +301,6 @@ emitAdd t e1 e2 = do
 --     v <- gets variableCount
 --     emit $ SetVariable $ Ident $ show v
 --     emit $ Div I64 v1 v2
-
--- emitSub :: Exp -> Exp -> CompilerState ()
--- emitSub e1 e2 = do
---     (v1,v2) <- binExprToValues e1 e2
---     increaseVarCount
---     v <- gets variableCount
---     emit $ SetVariable $ Ident $ show v
---     emit $ Sub I64 v1 v2
 
 exprToValue :: Exp -> CompilerState LLVMValue
 exprToValue = \case
@@ -340,6 +339,7 @@ type2LlvmType = \case
 getType :: Exp -> LLVMType
 getType (EInt _)      = I64
 getType (EAdd t _ _)  = type2LlvmType t
+getType (ESub t _ _)  = type2LlvmType t
 getType (EId (_, t))  = type2LlvmType t
 getType (EApp t _ _)  = type2LlvmType t
 getType (EAbs t _ _)  = type2LlvmType t

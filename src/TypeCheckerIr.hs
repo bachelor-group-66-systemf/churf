@@ -20,6 +20,7 @@ data Exp
     | ELet Bind Exp
     | EApp Type Exp Exp
     | EAdd Type Exp Exp
+    | ESub Type Exp Exp
     | EAbs Type Id  Exp
     | ECase Type Exp [(Type, Case)]
   deriving (C.Eq, C.Ord, C.Show, C.Read)
@@ -91,6 +92,13 @@ instance Print Exp where
                           , prt 0 t
                           , prt 1 e1
                           , doc $ showString "+"
+                          , prt 2 e2
+                          ]
+      ESub t e1 e2 -> prPrec i 1 $ concatD
+                          [ doc $ showString "@"
+                          , prt 0 t
+                          , prt 1 e1
+                          , doc $ showString "-"
                           , prt 2 e2
                           ]
       EAbs t n  e  -> prPrec i 0 $ concatD

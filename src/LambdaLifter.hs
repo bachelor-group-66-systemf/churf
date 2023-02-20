@@ -47,6 +47,12 @@ freeVarsExp localVars = \case
         e1' = freeVarsExp localVars e1
         e2' = freeVarsExp localVars e2
 
+    ESub t e1 e2 -> (Set.union (freeVarsOf e1') (freeVarsOf e2'), ASub t e1' e2')
+      where
+        e1' = freeVarsExp localVars e1
+        e2' = freeVarsExp localVars e2
+
+
     EAbs t par e -> (Set.delete par $ freeVarsOf e', AAbs t par e')
       where
         e' = freeVarsExp (Set.insert par localVars) e
@@ -89,6 +95,7 @@ data AnnExp' = AId  Id
              | ALet ABind AnnExp
              | AApp Type    AnnExp  AnnExp
              | AAdd Type    AnnExp  AnnExp
+             | ASub Type    AnnExp  AnnExp
              | AAbs Type    Id      AnnExp
              | ACase Type   AnnExp  [AnnCase]
              deriving Show
@@ -125,6 +132,7 @@ abstractExp (free, exp) = case exp of
     AInt i       -> pure $ EInt i
     AApp t e1 e2 -> liftA2 (EApp t) (abstractExp e1) (abstractExp e2)
     AAdd t e1 e2 -> liftA2 (EAdd t) (abstractExp e1) (abstractExp e2)
+    ASub t e1 e2 -> liftA2 (ESub t) (abstractExp e1) (abstractExp e2)
     ALet b e     -> liftA2 ELet (go b) (abstractExp e)
       where
         go (ABind name parms rhs) = do
@@ -184,6 +192,11 @@ collectScsExp = \case
         (scs2, e2') = collectScsExp e2
 
     EAdd t e1 e2 -> (scs1 ++ scs2, EAdd t e1' e2')
+      where
+        (scs1, e1') = collectScsExp e1
+        (scs2, e2') = collectScsExp e2
+
+    ESub t e1 e2 -> (scs1 ++ scs2, ESub t e1' e2')
       where
         (scs1, e1') = collectScsExp e1
         (scs2, e2') = collectScsExp e2

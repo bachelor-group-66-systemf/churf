@@ -78,6 +78,11 @@ infer cxt = \case
         e1' <- check cxt e1 T.TInt
         pure (T.EAdd T.TInt e' e1', T.TInt)
 
+    ESub e e1 -> do
+        e'  <- check cxt e T.TInt
+        e1' <- check cxt e1 T.TInt
+        pure (T.ESub T.TInt e' e1', T.TInt)
+
     EAbs x t e  -> do
         (e', t1) <- infer (insertEnv x t cxt) e
         let t_abs = TFun t t1
@@ -137,6 +142,11 @@ check cxt exp typ = case exp of
         e'  <- check cxt e T.TInt
         e1' <- check cxt e1 T.TInt
         pure $ T.EAdd T.TInt e' e1'
+
+    ESub e e1 -> do
+        e'  <- check cxt e T.TInt
+        e1' <- check cxt e1 T.TInt
+        pure $ T.ESub T.TInt e' e1'
 
     EAbs x t e  -> do
         (e', t_e) <- infer (insertEnv x t cxt) e
