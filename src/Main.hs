@@ -2,28 +2,35 @@
 
 module Main where
 
-import Compiler (compile)
-import GHC.IO.Handle.Text (hPutStrLn)
-import Grammar.ErrM (Err)
-import Grammar.Par (myLexer, pProgram)
-import Grammar.Print (printTree)
+import           Compiler             (compile)
+import           GHC.IO.Handle.Text   (hPutStrLn)
+import           Grammar.ErrM         (Err)
+import           Grammar.Par          (myLexer, pProgram)
+import           Grammar.Print        (printTree)
 
 -- import           Interpreter        (interpret)
-import LambdaLifter (lambdaLift)
-import Renamer (rename)
-import System.Environment (getArgs)
-import System.Exit (exitFailure, exitSuccess)
-import System.IO (stderr)
-import TypeChecker (typecheck)
+import           Control.Monad        (unless, when)
+import           Data.List.Extra      (isSuffixOf)
+import           LambdaLifter         (lambdaLift)
+import           Renamer              (rename)
+import           System.Directory     (createDirectory, doesPathExist,
+                                       getDirectoryContents,
+                                       setCurrentDirectory)
+import           System.Environment   (getArgs)
+import           System.Exit          (exitFailure, exitSuccess)
+import           System.IO            (stderr)
+import           System.Process.Extra (spawnCommand, waitForProcess)
+import           TypeChecker          (typecheck)
 
 main :: IO ()
 main =
     getArgs >>= \case
         [] -> print "Required file path missing"
-        (s : _) -> main' s
+        ("-d": s : _) -> main' True s
+        (s : _) -> main' False s
 
-main' :: String -> IO ()
-main' s = do
+main' :: Bool -> String -> IO ()
+main' debug s = do
     file <- readFile s
 
     printToErr "-- Parse Tree -- "
@@ -44,8 +51,13 @@ main' s = do
 
     printToErr "\n -- Printing compiler output to stdout --"
     compiled <- fromCompilerErr $ compile lifted
-    putStrLn compiled
-    writeFile "llvm.ll" compiled
+    --putStrLn compiled
+
+    check <- doesPathExist "output"
+    unless check (createDirectory "output")
+    writeFile "output/llvm.ll" compiled
+    if debug then debugDotViz else putStrLn compiled
+
 
     -- interpred <- fromInterpreterErr $ interpret lifted
     -- putStrLn "\n-- interpret"
@@ -53,6 +65,17 @@ main' s = do
 
     exitSuccess
 
+debugDotViz :: IO ()
+debugDotViz = do
+    setCurrentDirectory "output"
+    spawnWait "opt -dot-cfg llvm.ll -disable-output"
+    content <- filter (isSuffixOf ".dot") <$> getDirectoryContents "."
+    let commands = (\p -> "dot " <> p <> " -Tpng -o" <> p <> ".png") <$> content
+    mapM_ spawnWait commands
+    setCurrentDirectory ".."
+    return ()
+    where
+        spawnWait s = spawnCommand s >>= waitForProcess
 printToErr :: String -> IO ()
 printToErr = hPutStrLn stderr
 
