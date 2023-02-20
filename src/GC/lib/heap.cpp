@@ -192,49 +192,51 @@ namespace GC {
     }
   }
 
-  // Not optimal for now, it doesn't have to loop over all objects
-  // but mark needs some refinements before this can be optimised
+  /**
+   * Sweeps the heap, unmarks the marked chunks for the next cycle,
+   * adds the unmarked nodes to the vector of freed chunks; to be freed.
+   * 
+   * @param *heap The heap to oporate on.
+  */
   void Heap::sweep(Heap *heap) {
     for (auto it = heap->m_allocated_chunks.begin(); it != heap->m_allocated_chunks.end();) {
         auto chunk = *it;
-        if (!chunk->marked) {
+
+        // Unmark the marked chunks for the next iteration.
+        if (chunk->marked) {
+            chunk->marked = false;
+            ++it;
+        }
+        else {
+            // Add the unmarked chunks to freed chunks and remove from
+            // the list of allocated chunks 
             heap->m_freed_chunks.push_back(chunk);
             it = heap->m_allocated_chunks.erase(it);
-        }
-        else { 
-            ++it;
         }
     }
   }
 
-  // TODO: return the worklist filtered on mark = true
   // This assumes that there are no chains of pointers, will be fixed later on
   void Heap::mark(uintptr_t *start, const uintptr_t *end, vector<Chunk*> worklist) {
     for (; start > end; start--) { // to find adresses thats in the worklist
       if (*start % 8 == 0) { // all pointers must be aligned as double words
         for (auto it = worklist.begin(); it != worklist.end();) {
-        //for (size_t i = 0; i < worklist.size(); i++) { // fix this
-          //auto chunk = worklist.at(i);
           auto chunk = *it;
           uintptr_t c_start = reinterpret_cast<uintptr_t>(chunk->start);
           uintptr_t c_end = reinterpret_cast<uintptr_t>(chunk->start + chunk->size);
-          if (c_start <= *start && *start < c_end) {
-            uintptr_t c_start = reinterpret_cast<uintptr_t>(chunk->start);
-            if (!chunk->marked) {
+          // Check if the stack pointer aligns with the chunk
+          if ((c_start <= *start && *start < c_end) && chunk != nullptr) {
+          cout << "Chunk start:\t" << c_start << endl;
+          cout << "Chunk end:\t" << c_end << endl;           
+          if (!chunk->marked) {
               chunk->marked = true;
-              //worklist.erase(worklist.begin() + i);
               it = worklist.erase(it);
-              //auto new_stack_start = reinterpret_cast<uintptr_t *>(start);
-              //mark(new_stack_start, end, worklist); //
-              //return;
             }
-            else {
+            else 
               ++it;
-            }
           }
-          else {
+          else
             ++it;
-          }
         }
       }
     }
