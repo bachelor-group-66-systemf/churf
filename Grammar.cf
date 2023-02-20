@@ -7,11 +7,13 @@ ELet. Exp3 ::= "let" Bind "in" Exp;
 EApp. Exp2 ::= Exp2 Exp3;
 EAdd. Exp1 ::= Exp1 "+" Exp2;
 EAbs. Exp  ::= "\\" Ident ":" Type "." Exp;
-ECase. Exp ::= "case" Exp "of" "{" [CaseMatch] "}";
+ECase. Exp ::= "case" Exp "of" "{" [CaseMatch] "}" ":" Type;
 CaseMatch. CaseMatch ::= Case "=>" Exp ;
 separator CaseMatch ",";
 
-CInt. Case ::= Integer ;
+
+CInt.     Case ::= Integer ;
+CatchAll. Case ::= "_" ;
 
 Bind. Bind ::= Ident ":" Type ";"
                Ident [Ident] "=" Exp;
