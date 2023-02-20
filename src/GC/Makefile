@@ -4,7 +4,8 @@ CC 			= clang++
 
 PWD_V 		= /Users/valtermiari/Desktop/DV/Bachelors/code/language/src/GC/include
 LIB_INCL 	= -I/home/virre/dev/systemF/org/language/src/GC/include
-LIB_SO 		= -L/home/virre/dev/systemF/org/language/src/GC/lib/libheap.so
+LIB_SO 		= -L/home/virre/dev/systemF/org/language/src/GC/lib
+LIB_LINK	= /home/virre/dev/systemF/org/language/src/GC/lib
 
 CFLAGS 		= -Wall -Wextra -v -g -std=gnu++20 -stdlib=libc++ -I
 VGFLAGS 	= --leak-check=full --show-leak-kinds=all
@@ -39,4 +40,6 @@ extern_lib:
 	rm -f lib/heap.o lib/libheap.so tests/extern_lib.out
 	$(CC) $(STDFLAGS) -c -fPIC -o lib/heap.o lib/heap.cpp
 	$(CC) $(STDFLAGS) -shared -o lib/libheap.so lib/heap.o
-	$(CC) $(LIB_INCL) $(LIB_SO) -v -Wall -o tests/extern_lib.out tests/extern_lib.cpp
+	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -v tests/extern_lib.cpp lib/heap.cpp -o tests/extern_lib.out
+	$(CC) $(STDFLAGS) $(LIB_INCL) $(LIB_SO) -v -Wall -o tests/extern_lib.out tests/extern_lib.cpp -lheap
+	LD_LIBRARY_PATH=$(LIB_LINK) tests/extern_lib.out
