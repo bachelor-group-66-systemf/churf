@@ -136,7 +136,7 @@ llvmIrToString = go 0
         replicate i '\t' <> case l of
             (Define t (Ident i) params) ->
                 concat
-                    [ "define ", show t, " @", i
+                    [ "define fastcc ", show t, " @", i
                     , "(", intercalate ", " (map (\(Ident y, x) -> unwords [show x, "%" <> y]) params)
                     , ") {\n"
                     ]
@@ -170,7 +170,7 @@ llvmIrToString = go 0
                     ]
             (Call t vis (Ident i) arg) ->
                 concat
-                    [ "call ", show t, " ", show vis, i, "("
+                    [ "call fastcc ", show t, " ", show vis, i, "("
                     , intercalate ", " $ Prelude.map (\(x, y) -> show x <> " " <> show y) arg
                     , ")\n"
                     ]

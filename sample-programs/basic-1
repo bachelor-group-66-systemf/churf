@@ -31,20 +31,36 @@
 -- main = fibbonaci 10;
 -- answer: 55
 
-succ : Int -> Int;
-succ x = x - 1;
+-- succ : Int -> Int;
+-- succ x = x - 1;
+-- 
+-- isZero : Int -> Int;
+-- isZero x = case x of {
+--     0 => 1,
+--     _ => 0
+-- } : Int;
+-- 
+-- minimization : (Int -> Int) -> Int -> Int;
+-- minimization p x = case p x of { 
+--     1 => 0,
+--     _ => minimization p (succ x)
+-- } : Int;
+-- 
+-- main : Int;
+-- main = minimization isZero 10;
+-- answer: 0
 
-isZero : Int -> Int;
-isZero x = case x of {
-    0 => 1,
-    _ => 0
+posMul : Int -> Int -> Int;
+posMul a b = case b of {
+    0 => 0,
+    _ => a + posMul a (b - 1)
 } : Int;
 
-minimization : (Int -> Int) -> Int -> Int;
-minimization p x = case p x of { 
-    1 => 0,
-    _ => minimization p (succ x)
+facc : Int -> Int;
+facc a = case a of {
+    1 => 1,
+    _ => posMul a (facc (a - 1))
 } : Int;
 
 main : Int;
-main = minimization isZero 10;
+main = facc 27
