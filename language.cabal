@@ -36,6 +36,7 @@ executable language
       -- TypeChecker.TypeCheckerIr
       -- TypeChecker.Unification
       TypeChecker.HM
+      TypeChecker.AlgoW
       TypeChecker.HMIr
       Renamer.RenamerM
       -- Renamer.Renamer

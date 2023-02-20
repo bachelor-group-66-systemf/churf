@@ -47,7 +47,14 @@ inferPrg (Program bs) = do
 inferBind :: Bind -> Infer T.Bind
 inferBind (Bind i t _ params rhs) = do
     (t',e') <- inferExp (makeLambda rhs (reverse params))
-    when (t /= t') (throwError $ "Signature of function " ++ show i ++ " with type: " ++ show t ++ " does not match inferred type " ++ show t' ++ " of expression: " ++ show e')
+    when (t /= t') (throwError . unwords $ [ "Signature of function"
+                                           , show i
+                                           , "with type:"
+                                           , show t
+                                           , "does not match inferred type"
+                                           , show t'
+                                           , "of expression:"
+                                           , show e'])
     return $ T.Bind (t,i) [] e'
 
 makeLambda :: Exp -> [Ident] -> Exp
@@ -126,7 +133,6 @@ fresh = do
 --      b = int
 -- thus when solving constraints it must be the case that
 --      a = int -> int
---
 addConstraint :: Type -> Type -> Infer ()
 addConstraint t1 t2 = do
     modify (\st -> st { constr = M.insert t1 t2 (constr st) })
