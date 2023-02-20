@@ -14,7 +14,8 @@ import           Data.List.Extra      (isSuffixOf)
 import           LambdaLifter         (lambdaLift)
 import           Renamer              (rename)
 import           System.Directory     (createDirectory, doesPathExist,
-                                       getDirectoryContents,
+                                       getDirectoryContents, removeDirectory,
+                                       removeDirectoryRecursive,
                                        setCurrentDirectory)
 import           System.Environment   (getArgs)
 import           System.Exit          (exitFailure, exitSuccess)
@@ -54,7 +55,8 @@ main' debug s = do
     --putStrLn compiled
 
     check <- doesPathExist "output"
-    unless check (createDirectory "output")
+    when check (removeDirectoryRecursive "output")
+    createDirectory "output"
     writeFile "output/llvm.ll" compiled
     if debug then debugDotViz else putStrLn compiled
 

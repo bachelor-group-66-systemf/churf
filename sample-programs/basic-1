@@ -19,16 +19,32 @@
 -- main = apply (krimp) 2 3;
 -- answer: 5
 
-fibbonaci : Int -> Int;
-fibbonaci x = case x of {
-    0 => 0,
-    1 => 1,
-    -- abusing overflows to represent negatives like a boss
-    _ =>   (fibbonaci (x - 2))
-         + (fibbonaci (x - 1))
+-- fibbonaci : Int -> Int;
+-- fibbonaci x = case x of {
+--     0 => 0,
+--     1 => 1,
+--     -- abusing overflows to represent negatives like a boss
+--     _ =>   (fibbonaci (x - 2))
+--          + (fibbonaci (x - 1))
+-- } : Int;
+-- main : Int;
+-- main = fibbonaci 10;
+-- answer: 55
+
+succ : Int -> Int;
+succ x = x - 1;
+
+isZero : Int -> Int;
+isZero x = case x of {
+    0 => 1,
+    _ => 0
 } : Int;
 
+minimization : (Int -> Int) -> Int -> Int;
+minimization p x = case p x of { 
+    1 => 0,
+    _ => minimization p (succ x)
+} : Int;
 
 main : Int;
-main = fibbonaci 10;
--- answer: 55
+main = minimization isZero 10;
