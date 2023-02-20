@@ -1,7 +1,9 @@
 {-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Use traverse_" #-}
 
-module TypeChecker.AlgoW where
+module TypeChecker.AlgoW  where
 
 import           Control.Monad.Except
 import           Control.Monad.Reader
@@ -16,65 +18,119 @@ import           Data.Set              (Set)
 import qualified Data.Set              as S
 
 import           Grammar.Abs
-import           Grammar.Print         (printTree)
+import           Grammar.Print         (Print, printTree)
 import qualified TypeChecker.HMIr      as T
 
 data Poly = Forall [Ident] Type
     deriving Show
 
-data Ctx = Ctx { vars :: Map Ident Poly
-               , sigs :: Map Ident Type }
+newtype Ctx = Ctx { vars  :: Map Ident Poly }
+
+data Env = Env { count :: Int
+               , sigs  :: Map Ident Type
+               }
 
 type Error = String
 type Subst = Map Ident Type
 
-type Infer = StateT Int (ReaderT Ctx (ExceptT Error Identity))
+type Infer = StateT Env (ReaderT Ctx (ExceptT Error Identity))
 
-initCtx = Ctx mempty mempty
+int = TMono "Int"
+a = TPol "a"
+b = TPol "b"
+arr = TArr
+
+initCtx = Ctx mempty
+initEnv = Env 0 mempty
+
+runPretty :: Print a => Infer a -> Either Error String
+runPretty = fmap printTree . run
 
 run :: Infer a -> Either Error a
-run = runC initCtx 0
+run = runC initEnv initCtx
 
-runC :: Ctx -> Int -> Infer a -> Either Error a
-runC c e = runIdentity . runExceptT . flip runReaderT c . flip evalStateT e
+runC :: Env -> Ctx -> Infer a -> Either Error a
+runC e c = runIdentity . runExceptT . flip runReaderT c . flip evalStateT e
 
-inferExp :: Exp -> Infer Type
-inferExp e = snd <$> w nullSubst e
+typecheck :: Program -> Either Error T.Program
+typecheck = run . checkPrg
 
-w :: Subst -> Exp -> Infer (Subst, Type)
-w s = \case
+checkPrg :: Program -> Infer T.Program
+checkPrg (Program bs) = do
+    traverse (\(Bind n t _ _ _) -> insertSig n t) bs
+    bs' <- mapM checkBind bs
+    return $ T.Program bs'
+
+checkBind :: Bind -> Infer T.Bind
+checkBind (Bind n t _ args e) = do
+    (t', e') <- inferExp $ makeLambda e (reverse args)
+    -- when (t /= t') (throwError "Signature of function and inferred type of body do not match")
+    s <- unify t t'
+    let t'' = apply s t
+    return $ T.Bind (t'',n) [] e'
+  where
+    makeLambda :: Exp -> [Ident] -> Exp
+    makeLambda = foldl (flip EAbs)
+
+inferExp :: Exp -> Infer (Type, T.Exp)
+inferExp e = do
+    (s, t, e') <- w e
+    let subbed = apply s t
+    return (subbed, replace subbed e')
+
+replace :: Type -> T.Exp -> T.Exp
+replace t = \case
+    T.EInt t' e -> T.EInt t e
+    T.EId t' i -> T.EId t i
+    T.EAbs t' name e -> T.EAbs t name e
+    T.EApp t' e1 e2 -> T.EApp t e1 e2
+    T.EAdd t' e1 e2 -> T.EAdd t e1 e2
+    T.ELet t' name e1 e2 -> T.ELet t name e1 e2
+
+w :: Exp -> Infer (Subst, Type, T.Exp)
+w = \case
     EAnn e t -> do
-        (s1, t') <- w nullSubst e
-        let t'' = apply s1 t
-        return (s1, t'')
-    EInt n -> return (nullSubst, TMono "Int")
+        (s1, t', e') <- w e
+        applySt s1 $ do
+            s2 <- unify (apply s1 t) t'
+            return (s2 `compose` s1, t, e')
+    EInt n -> return (nullSubst, TMono "Int", T.EInt (TMono "Int") n)
     EId i -> do
         var <- asks vars
         case M.lookup i var of
           Nothing -> throwError $ "Unbound variable: " ++ show i
-          Just t  -> (nullSubst,) <$> inst t
-    EAbs var e -> do
+          Just t  ->  inst t >>= \x -> return (nullSubst, x, T.EId x i)
+    EAbs name e -> do
         fr <- fresh
-        withBinding var (Forall [] fr) $ do
-            (s1, t') <- w s e
-            return (s, TArr (apply s1 fr) t')
+        withBinding name (Forall [] fr) $ do
+            (s1, t', e') <- w e
+            let newArr = TArr (apply s1 fr) t'
+            return (s1, newArr, T.EAbs newArr name e')
     EAdd e0 e1 -> do
-        (s1, t1) <- w s e0
-        (s2, t2) <- w s1 e1
-        return (s2, TMono "Int")
+        (s1, t0, e0') <- w e0
+        applySt s1 $ do
+            (s2, t1, e1') <- w e1
+            applySt s2 $ do
+                s3 <- unify (subst s2 t0) (TMono "Int")
+                s4 <- unify (subst s3 t1) (TMono "Int")
+                return (s4 `compose` s3 `compose` s2 `compose` s1, TMono "Int", T.EAdd (TMono "Int") e0' e1')
     EApp e0 e1 -> do
         fr <- fresh
-        (s1, t0) <- w s e0
-        (s2, t1) <- w s1 e1
-        s3 <- unify (subst s2 t0) (TArr t1 fr)
-        return (s3 `compose` s2 `compose` s1, apply s3 fr)
+        (s1, t0, e0') <- w e0
+        applySt s1 $ do
+            (s2, t1, e1') <- w e1
+            applySt s2 $ do
+                s3 <- unify (subst s2 t0) (TArr t1 fr)
+                let t = apply s3 fr
+                return (s3 `compose` s2 `compose` s1, t, T.EApp t e0' e1')
     ELet name e0 e1 -> do
-        (s1, t1) <- w s e0
-        env <- asks vars
-        let t' = generalize (apply s1 env) t1
-        withBinding name t' $ do
-            (s2, t2) <- w s1 e1
-            return (s1 `compose` s2, t2)
+        (s1, t1, e0') <- w e0
+        applySt s1 $ do
+            env <- asks vars
+            let t' = generalize (apply s1 env) t1
+            withBinding name t' $ do
+                (s2, t2, e1') <- w e1
+                return (s2 `compose` s1, t2, T.ELet t2 name e0' e1' )
 
 unify :: Type -> Type -> Infer Subst
 unify t0 t1 = case (t0, t1) of
@@ -85,6 +141,7 @@ unify t0 t1 = case (t0, t1) of
     (TPol a, b) -> occurs a b
     (a, TPol b) -> occurs b a
     (TMono a, TMono b) -> if a == b then return M.empty else throwError "Types do not unify"
+    (a, b) -> throwError . unwords $ ["Type:", printTree a, "can't be unified with:", printTree b]
 
 occurs :: Ident -> Type -> Infer Subst
 occurs i (TPol a) = return nullSubst
@@ -104,8 +161,11 @@ inst (Forall xs t) = do
 compose :: Subst -> Subst -> Subst
 compose m1 m2 = M.map (subst m1) m2 `M.union` m1
 
+-- | A class representing free variables functions
 class FreeVars t where
+  -- | Get all free variables from t
   free :: t -> Set Ident
+  -- | Apply a substitution to t, generating a new t
   apply :: Subst -> t -> t
 
 instance FreeVars Type where
@@ -134,9 +194,14 @@ instance FreeVars (Map Ident Poly) where
   apply :: Subst -> Map Ident Poly -> Map Ident Poly
   apply s = M.map (apply s)
 
+applySt :: Subst -> Infer a -> Infer a
+applySt s = local (\st -> st { vars = apply s (vars st) })
+
+-- | Represents the empty substition set
 nullSubst :: Subst
 nullSubst = M.empty
 
+-- | Substitute type variables with their mappings from the substitution set.
 subst :: Subst -> Type -> Type
 subst m t = do
     case t of
@@ -144,23 +209,23 @@ subst m t = do
         TMono a  -> TMono a
         TArr a b -> TArr (subst m a) (subst m b)
 
--- | Generate a new fresh variable and increment the state
+-- | Generate a new fresh variable and increment the state counter
 fresh :: Infer Type
 fresh = do
-    n <- get
-    put (n + 1)
+    n <- gets count
+    modify (\st -> st { count = n + 1 })
     return . TPol . Ident $ "t" ++ show n
 
-withBinding :: Ident -> Poly -> Infer (Subst, Type) -> Infer (Subst, Type)
-withBinding i t = local (\re -> re { vars = M.insert i t (vars re) })
+withBinding :: (Monad m, MonadReader Ctx m) => Ident -> Poly -> m a -> m a
+withBinding i p = local (\st -> st { vars = M.insert i p (vars st) })
 
+insertSig :: Ident -> Type -> Infer ()
+insertSig i t = modify (\st -> st { sigs = M.insert i t (sigs st) })
+
+-- | Lookup a variable in the context
 lookupVar :: Ident -> Infer Poly
 lookupVar i = do
     m <- asks vars
     case M.lookup i m of
-      Just t  -> return t
-      Nothing -> throwError $ "Unbound variable: " ++ show i
-
-{-# WARNING todo "TODO IN CODE" #-}
-todo :: a
-todo = error "TODO in code"
+        Just t  -> return t
+        Nothing -> throwError $ "Unbound variable: " ++ show i

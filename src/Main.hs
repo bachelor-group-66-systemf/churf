@@ -9,7 +9,7 @@ import           Grammar.Print      (printTree)
 import           Renamer.RenamerM   (rename)
 import           System.Environment (getArgs)
 import           System.Exit        (exitFailure, exitSuccess)
-import           TypeChecker.HM     (typecheck)
+import           TypeChecker.AlgoW  (typecheck)
 
 main :: IO ()
 main =
