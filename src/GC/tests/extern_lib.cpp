@@ -3,11 +3,9 @@
 
 #include "heap.hpp"
 
-// using namespace std;
-
-// GC::Heap *singleton_test();
-// void init_gc(GC::Heap *heap);
-// void frame_test(GC::Heap *heap);
+GC::Heap *singleton_test();
+void init_gc(GC::Heap *heap);
+void frame_test(GC::Heap *heap);
 
 GC::Heap *singleton_test() {
     std::cout << "TESTING SINGLETON INSTANCES" << std::endl;
@@ -38,11 +36,13 @@ void frame_test(GC::Heap *heap) {
     std::cout << "Previous stack frame:\t" << prev_frame << std::endl;
 
     heap->check_init();
+    // auto alloced = heap->alloc(sizeof(unsigned long));
     
     std::cout << "===========================" << std::endl;
 }
 
 int main() {
+    std::cout << "in main" << std::endl;
     auto heap = singleton_test();
 
     init_gc(heap);

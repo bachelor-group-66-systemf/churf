@@ -36,8 +36,7 @@ linker_vg:
 	valgrind $(VGFLAGS) tests/linker.out
 
 extern_lib:
-	rm -f lib/heap.o
-	rm -f lib/libheap.so
+	rm -f lib/heap.o lib/libheap.so tests/extern_lib.out
 	$(CC) $(STDFLAGS) -c -fPIC -o lib/heap.o lib/heap.cpp
 	$(CC) $(STDFLAGS) -shared -o lib/libheap.so lib/heap.o
 	$(CC) $(LIB_INCL) $(LIB_SO) -v -Wall -o tests/extern_lib.out tests/extern_lib.cpp

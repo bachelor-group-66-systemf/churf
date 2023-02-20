@@ -20,6 +20,7 @@ namespace GC {
   */
   void Heap::check_init() {
     auto heap = Heap::the();
+    cout << "Heap addr:\t" << heap << endl;
     cout << "GC m_stack_end:\t" << heap->m_stack_end << endl;
     auto stack_start = reinterpret_cast<uintptr_t *>(__builtin_frame_address(0));
     cout << "GC stack_start:\t" << stack_start << endl;
@@ -172,10 +173,11 @@ namespace GC {
     if (heap->m_stack_end != nullptr)
       stack_end = heap->m_stack_end;
     else
-      stack_end = (uintptr_t *) stack_start - 40; // dummy value
+      stack_end = (uintptr_t *) stack_start - 80; // dummy value
 
+    cout << "Stack end in collect: " << stack_end << endl;
     auto work_list = heap->m_allocated_chunks;
-    // print_worklist(work_list);
+    //print_worklist(work_list);
 
     if (flags & MARK) {
       mark(stack_start, stack_end, work_list);
@@ -210,20 +212,58 @@ namespace GC {
   void Heap::mark(uintptr_t *start, const uintptr_t *end, vector<Chunk*> worklist) {
     for (; start > end; start--) { // to find adresses thats in the worklist
       if (*start % 8 == 0) { // all pointers must be aligned as double words
-        for (size_t i = 0; i < worklist.size(); i++) { // fix this
-          auto chunk = worklist.at(i);
+        for (auto it = worklist.begin(); it != worklist.end();) {
+        //for (size_t i = 0; i < worklist.size(); i++) { // fix this
+          //auto chunk = worklist.at(i);
+          auto chunk = *it;
           uintptr_t c_start = reinterpret_cast<uintptr_t>(chunk->start);
           uintptr_t c_end = reinterpret_cast<uintptr_t>(chunk->start + chunk->size);
           if (c_start <= *start && *start < c_end) {
             uintptr_t c_start = reinterpret_cast<uintptr_t>(chunk->start);
             if (!chunk->marked) {
               chunk->marked = true;
-              worklist.erase(worklist.begin() + i);
-              auto new_stack_start = reinterpret_cast<uintptr_t *>(start);
-              mark(new_stack_start, end, worklist); //
-              return;
+              //worklist.erase(worklist.begin() + i);
+              it = worklist.erase(it);
+              //auto new_stack_start = reinterpret_cast<uintptr_t *>(start);
+              //mark(new_stack_start, end, worklist); //
+              //return;
+            }
+            else {
+              ++it;
             }
           }
+          else {
+            ++it;
+          }
+        }
+      }
+    }
+  }
+
+  // Mark child references from the root references
+  void mark_test(vector<Chunk *> worklist) {
+    while (worklist.size() > 0) {
+      Chunk *ref = worklist.back();
+      worklist.pop_back();
+      Chunk *child = (Chunk*) ref; // this is probably not correct
+      if (child != nullptr && !child->marked) {
+        child->marked = true;
+        worklist.push_back(child);
+        mark_test(worklist);
+      }
+    }
+  }
+
+  // Mark the root references and look for child references to them
+  void mark_from_roots(uintptr_t *start, const uintptr_t *end) {
+    vector<Chunk *> worklist;
+    for (;start > end; start --) {
+      if (*start % 8 == 0) { // all pointers must be aligned as double words
+        Chunk *ref = (Chunk*) *start;
+        if (ref != nullptr && !ref->marked) {
+          ref->marked = true;
+          worklist.push_back(ref);
+          //mark_test(worklist)
         }
       }
     }
