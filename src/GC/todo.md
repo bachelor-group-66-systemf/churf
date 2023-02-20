@@ -8,6 +8,7 @@ Goal for next week (24/2):
 ## GC TODO:
 - Merge to main branch
 - Fix singleton references
+- Think about how we want to determine if some object is a pointer or not, probably will have to discuss that with Samuel. Since it is not ideal to determine in the GC if an object is a pointer or not. It should preferably be done in a previous stage.
 
 ## Tests TODO
 ### Library linking
