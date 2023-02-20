@@ -95,10 +95,23 @@ infer cxt = \case
             throwError "Inferred type and type annotation doesn't match"
         pure (e', t1)
 
+    ECase e cs t -> do
+        (e',t1) <- infer cxt e
+        unless (typeEq t t1) $
+            throwError "Inferred type and type annotation doesn't match"
+        case traverse (\(CaseMatch c e) -> do
+            -- //TODO check c as well
+            e' <- check cxt e t
+            unless (typeEq t t1) $
+                throwError "Inferred type and type annotation doesn't match"
+            pure (t1, T.Case c e')
+            ) cs of
+                Right cs -> pure (T.ECase t1 e' cs,t1)
+                Left e   -> throwError e
+
 -- | Check infered type matches the supplied type.
 check :: Cxt -> Exp -> Type -> Err T.Exp
 check cxt exp typ = case exp of
-
     EId x     -> do
         t <- case lookupEnv x cxt of
             Nothing -> maybeToRightM
@@ -138,6 +151,11 @@ check cxt exp typ = case exp of
         pure $ T.ELet b' e'
 
     EAnn e t -> do
+        unless (typeEq t typ) $
+            throwError "Inferred type and type annotation doesn't match"
+        check cxt e t
+
+    ECase e _ t -> do
         unless (typeEq t typ) $
             throwError "Inferred type and type annotation doesn't match"
         check cxt e t

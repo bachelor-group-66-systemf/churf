@@ -11,11 +11,25 @@
 -- main = apply (\x : Int . x + 5) 5
 -- answer: 10
 
-apply : (Int -> Int -> Int) -> Int -> Int -> Int;
-apply f x y = f x y;
-krimp: Int -> Int -> Int;
-krimp x y = x + y;
-main : Int;
-main = apply (krimp) 2 3;
+-- apply : (Int -> Int -> Int) -> Int -> Int -> Int;
+-- apply f x y = f x y;
+-- krimp: Int -> Int -> Int;
+-- krimp x y = x + y;
+-- main : Int;
+-- main = apply (krimp) 2 3;
 -- answer: 5
 
+fibbonaci : Int -> Int;
+fibbonaci x = case x of {
+    0 => 0,
+    1 => 1,
+    -- abusing overflows to represent negatives like a boss
+    _ =>   (fibbonaci (x + 9223372036854775807 + 9223372036854775807))
+         + (fibbonaci (x + 9223372036854775807 + 9223372036854775807 + 1))
+} : Int;
+
+faccer : Int -> Int;
+
+main : Int;
+main = fibbonaci 10;
+-- answer: 55

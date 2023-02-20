@@ -5,19 +5,18 @@ module Compiler (compile) where
 
 import           Auxiliary           (snoc)
 import           Control.Monad.State (StateT, execStateT, gets, modify)
---import           Data.List.Extra      (trim)
 import           Data.Map            (Map)
 import qualified Data.Map            as Map
 import           Data.Tuple.Extra    (dupe, first, second)
+import qualified Grammar.Abs         as GA
 import           Grammar.ErrM        (Err)
 import           LlvmIr              (LLVMComp (..), LLVMIr (..), LLVMType (..),
                                       LLVMValue (..), Visibility (..),
                                       llvmIrToString)
---import           System.Process.Extra (readCreateProcess, shell)
 import           TypeChecker         (partitionType)
-import           TypeCheckerIr       (Bind (..), CLit (CInt, CatchAll),
-                                      Case (..), Exp (..), Id, Ident (..),
-                                      Program (..), Type (TFun, TInt))
+import           TypeCheckerIr       (Bind (..), Case (..), Exp (..), Id,
+                                      Ident (..), Program (..),
+                                      Type (TFun, TInt))
 
 -- | The record used as the code generator state
 data CodeGenerator = CodeGenerator
@@ -73,38 +72,38 @@ initCodeGenerator scs = CodeGenerator { instructions = defaultStart
                                       , variableCount = 0
                                       , labelCount = 0
                                       }
+{-
+run :: Err String -> IO ()
+run s = do
+    let s' = case s of
+            Right s -> s
+            Left _  -> error "yo"
+    writeFile "llvm.ll" s'
+    putStrLn . trim =<< readCreateProcess (shell "lli") s'
 
---run :: Err String -> IO ()
---run s = do
---    let s' = case s of
---            Right s -> s
---            Left _  -> error "yo"
---    writeFile "llvm.ll" s'
---    putStrLn . trim =<< readCreateProcess (shell "lli") s'
---
---test :: Integer -> Program
---test v = Program [
---    Bind (Ident "fibonacci", TInt) [(Ident "x", TInt)] (
---        ECased (EId ("x", TInt)) [
---            Case (CInt 0) (EInt 0),
---            Case (CInt 1) (EInt 1),
---            Case CatchAll (EAdd TInt
---                (EApp TInt (EId (Ident "fibonacci", TInt)) (
---                    EAdd TInt (EId (Ident "x", TInt))
---                              (EInt (fromIntegral ((maxBound :: Int) * 2)))
---                ))
---                (EApp TInt (EId (Ident "fibonacci", TInt)) (
---                    EAdd TInt (EId (Ident "x", TInt))
---                    (EInt (fromIntegral ((maxBound :: Int) * 2 + 1)))
---                ))
---            )
---        ]
---    ),
---    Bind (Ident "main",TInt) [] (
---       EApp TInt (EId (Ident "fibonacci", TInt))  (EInt v) -- (EInt 92)
---    )
---    ]
-
+test :: Integer -> Program
+test v = Program [
+    Bind (Ident "fibonacci", TInt) [(Ident "x", TInt)] (
+        ECase TInt (EId ("x", TInt)) [
+            (TInt,Case (CInt 0) (EInt 0)),
+            Case (CInt 1) (EInt 1),
+            Case CatchAll (EAdd TInt
+                (EApp TInt (EId (Ident "fibonacci", TInt)) (
+                    EAdd TInt (EId (Ident "x", TInt))
+                              (EInt (fromIntegral ((maxBound :: Int) * 2)))
+                ))
+                (EApp TInt (EId (Ident "fibonacci", TInt)) (
+                    EAdd TInt (EId (Ident "x", TInt))
+                    (EInt (fromIntegral ((maxBound :: Int) * 2 + 1)))
+                ))
+            )
+        ]
+    ),
+    Bind (Ident "main", TInt) [] (
+       EApp TInt (EId (Ident "fibonacci", TInt))  (EInt v) -- (EInt 92)
+    )
+    ]
+-}
 {- | Compiles an AST and produces a LLVM Ir string.
   An easy way to actually "compile" this output is to
   Simply pipe it to LLI
@@ -120,7 +119,7 @@ compileScs (Bind (name, t) args exp : xs) = do
     emit $ UnsafeRaw "\n"
     emit . Comment $ show name <> ": " <> show exp
     let args' = map (second type2LlvmType) args
-    emit $ Define (type2LlvmType t_return) name args'
+    emit $ Define I64 {-(type2LlvmType t_return)-} name args'
     functionBody <- exprToValue exp
     if name == "main"
         then mapM_ emit $ mainContent functionBody
@@ -161,42 +160,44 @@ compileExp (EId (name, _)) = emitIdent name
 compileExp (EApp t e1 e2)  = emitApp t e1 e2
 compileExp (EAbs t ti e)   = emitAbs t ti e
 compileExp (ELet binds e)  = emitLet binds e
-compileExp (ECased e c)    = emitECased e c
+compileExp (ECase t e cs)  = emitECased t e cs
     -- go (ESub e1 e2)  = emitSub e1 e2
     -- go (EMul e1 e2)  = emitMul e1 e2
     -- go (EDiv e1 e2)  = emitDiv e1 e2
     -- go (EMod e1 e2)  = emitMod e1 e2
 
 --- aux functions ---
-emitECased :: Exp -> [Case] -> CompilerState ()
-emitECased e cs = do
+emitECased :: Type -> Exp -> [(Type, Case)] -> CompilerState ()
+emitECased t e cases = do
+    let cs = snd <$> cases
+    let ty = type2LlvmType t
     vs <- exprToValue e
     lbl <- getNewLabel
     let label = Ident $ "escape_" <> show lbl
     stackPtr <- getNewVar
-    emit $ SetVariable (Ident $ show stackPtr) (Alloca I64)
-    mapM_ (emitCases label stackPtr vs) cs
+    emit $ SetVariable (Ident $ show stackPtr) (Alloca ty)
+    mapM_ (emitCases ty label stackPtr vs) cs
     emit $ Label label
     res <- getNewVar
-    emit $ SetVariable (Ident $ show res) (Load I64 Ptr (Ident $ show stackPtr))
+    emit $ SetVariable (Ident $ show res) (Load ty Ptr (Ident $ show stackPtr))
     where
-    emitCases :: Ident -> Integer -> LLVMValue ->  Case -> CompilerState ()
-    emitCases label stackPtr vs (Case (CInt i) exp) = do
+    emitCases :: LLVMType -> Ident -> Integer -> LLVMValue -> Case -> CompilerState ()
+    emitCases ty label stackPtr vs (Case (GA.CInt i) exp) = do
         ns <- getNewVar
         lbl_fail <- getNewLabel
         lbl_succ <- getNewLabel
         let failed = Ident $ "failed_" <> show lbl_fail
         let success = Ident $ "success_" <> show lbl_succ
-        emit $ SetVariable (Ident $ show ns) (Icmp LLEq I64 vs (VInteger i))
-        emit $ BrCond (VIdent (Ident $ show ns) I64) success failed
+        emit $ SetVariable (Ident $ show ns) (Icmp LLEq ty vs (VInteger i))
+        emit $ BrCond (VIdent (Ident $ show ns) ty) success failed
         emit $ Label success
         val <- exprToValue exp
-        emit $ Store I64 val Ptr (Ident . show $ stackPtr)
+        emit $ Store ty val Ptr (Ident . show $ stackPtr)
         emit $ Br label
         emit $ Label failed
-    emitCases label stackPtr  _ (Case CatchAll exp) = do
+    emitCases ty label stackPtr  _ (Case GA.CatchAll exp) = do
         val <- exprToValue exp
-        emit $ Store I64 val Ptr (Ident . show $ stackPtr)
+        emit $ Store ty val Ptr (Ident . show $ stackPtr)
         emit $ Br label
 
 
@@ -343,7 +344,7 @@ getType (EId (_, t))  = type2LlvmType t
 getType (EApp t _ _)  = type2LlvmType t
 getType (EAbs t _ _)  = type2LlvmType t
 getType (ELet _ e)    = getType e
-getType (ECased e cs) = undefined
+getType (ECase t _ _) = type2LlvmType t
 
 valueGetType :: LLVMValue -> LLVMType
 valueGetType (VInteger _)      = I64

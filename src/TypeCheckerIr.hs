@@ -6,6 +6,7 @@ module TypeCheckerIr
   ) where
 
 import           Grammar.Abs   (Ident (..), Type (..))
+import qualified Grammar.Abs   as GA
 import           Grammar.Print
 import           Prelude
 import qualified Prelude       as C (Eq, Ord, Read, Show)
@@ -20,14 +21,12 @@ data Exp
     | EApp Type Exp Exp
     | EAdd Type Exp Exp
     | EAbs Type Id  Exp
-    | ECased Exp [Case]
+    | ECase Type Exp [(Type, Case)]
   deriving (C.Eq, C.Ord, C.Show, C.Read)
 
-data Case = Case CLit Exp
+data Case = Case GA.Case Exp
   deriving (C.Eq, C.Ord, C.Show, C.Read)
 
-data CLit = CInt Integer | CatchAll
-  deriving (C.Eq, C.Ord, C.Show, C.Read)
 type Id = (Ident, Type)
 
 data Bind = Bind Id [Id] Exp
@@ -102,5 +101,25 @@ instance Print Exp where
                           , doc $ showString "."
                           , prt 0 e
                           ]
+      ECase t e cs    -> prPrec i 0 $ concatD
+                          [ doc $ showString "@"
+                          , prt 0 t
+                          , doc $ showString "("
+                          , prt 0 e
+                          , doc $ showString ")"
+                          , prPrec i 0 $ concatD . printCases $ cs
+                          ]
 
-
+    where
+      printCases :: [(Type, Case)] -> [Doc]
+      printCases []          = []
+      printCases ((t, Case c e):xs) = concatD
+                                [ doc $ showString "@"
+                                , prt 0 t
+                                , doc $ showString "("
+                                , doc . showString . show $ c
+                                , doc $ showString ")"
+                                , doc $ showString "=>"
+                                , prt 0 e
+                                , doc $ showString "\n"
+                                ] : printCases xs

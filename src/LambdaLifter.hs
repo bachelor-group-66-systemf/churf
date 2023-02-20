@@ -9,6 +9,8 @@ import           Control.Applicative (Applicative (liftA2))
 import           Control.Monad.State (MonadState (get, put), State, evalState)
 import           Data.Set            (Set)
 import qualified Data.Set            as Set
+import           Debug.Trace         (trace)
+import qualified Grammar.Abs         as GA
 import           Prelude             hiding (exp)
 import           Renamer
 import           TypeCheckerIr
@@ -21,7 +23,6 @@ import           TypeCheckerIr
 -- @collectScs@ moves every non-constant let expression to a top-level function.
 lambdaLift :: Program -> Program
 lambdaLift = collectScs . abstract . freeVars
-
 
 -- | Annotate free variables
 freeVars :: Program -> AnnProgram
@@ -62,6 +63,16 @@ freeVarsExp localVars = \case
         e'          = freeVarsExp e_localVars e
         e_localVars = Set.insert name localVars
 
+    (ECase t e cs) -> do
+      let e' = freeVarsExp localVars e
+      let vars = freeVarsOf e'
+      let (vars', cs') = foldr (\(_, Case c e) (vars,acc) -> do
+            let e' = freeVarsExp vars e
+            let vars' = freeVarsOf e'
+            (Set.union vars vars', AnnCase c e' : acc)
+            ) (vars, []) cs
+      (vars', ACase t e' (reverse cs'))
+
 
 freeVarsOf :: AnnExp -> Set Id
 freeVarsOf = fst
@@ -79,7 +90,12 @@ data AnnExp' = AId  Id
              | AApp Type    AnnExp  AnnExp
              | AAdd Type    AnnExp  AnnExp
              | AAbs Type    Id      AnnExp
+             | ACase Type   AnnExp  [AnnCase]
              deriving Show
+data AnnCase = AnnCase GA.Case AnnExp
+  deriving Show
+
+
 -- | Lift lambdas to let expression of the form @let sc = \v₁ x₁ -> e₁@.
 -- Free variables are @v₁ v₂ .. vₙ@ are bound.
 abstract :: AnnProgram -> Program
@@ -119,6 +135,14 @@ abstractExp (free, exp) = case exp of
         skipLambdas f (free, ae) = case ae of
             AAbs t par ae1 -> EAbs t par <$> skipLambdas f ae1
             _              -> f (free, ae)
+
+
+    ACase t e cs -> do
+      e' <- abstractExp e
+      cs' <- mapM (\(AnnCase c e) -> do
+            e' <- abstractExp e
+            pure (t,Case c e')) cs
+      pure $ ECase t e' cs'
 
     -- Lift lambda into let and bind free variables
     AAbs t parm e -> do
@@ -179,6 +203,13 @@ collectScsExp = \case
         bind            = Bind name parms rhs'
         (rhs_scs, rhs') = collectScsExp rhs
         (e_scs, e')     = collectScsExp e
+    ECase t e cs -> do
+      let (scs, e') = collectScsExp e
+      let (scs',cs') = foldr (\(t, Case c e) (scs, acc) -> do
+            let (scs', e') = collectScsExp e
+            (scs ++ scs', (t,Case c e') : acc)
+            ) (scs,[]) cs
+      (scs', ECase t e' cs')
 
 
 -- @\x.\y.\z. e → (e, [x,y,z])@

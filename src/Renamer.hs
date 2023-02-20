@@ -3,6 +3,7 @@
 module Renamer (module Renamer) where
 
 import           Auxiliary           (mapAccumM)
+import           Control.Monad       (foldM)
 import           Control.Monad.State (MonadState, State, evalState, gets,
                                       modify)
 import           Data.Map            (Map)
@@ -67,6 +68,14 @@ renameExp old_names = \case
     EAnn e t -> do
         (new_names, e') <- renameExp old_names e
         pure (new_names, EAnn e' t)
+
+    ECase e cs t -> do
+        (new_names, e') <- renameExp old_names e
+        (new_names', cs') <- foldM (\(names, stack) (CaseMatch c exp) -> do
+            (nm,exp') <- renameExp names exp
+            pure (nm,CaseMatch c exp' : stack)
+            ) (new_names, []) cs
+        pure (new_names', ECase e' cs' t)
 
 -- | Create a new name and add it to name environment.
 newName :: Names -> Ident -> Rn (Names, Ident)

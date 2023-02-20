@@ -5,3 +5,4 @@ dist-newstyle
 src/Grammar
 language
 llvm.ll
+output
