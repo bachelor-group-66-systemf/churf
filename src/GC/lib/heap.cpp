@@ -200,46 +200,56 @@ namespace GC {
   */
   void Heap::sweep(Heap *heap) {
     for (auto it = heap->m_allocated_chunks.begin(); it != heap->m_allocated_chunks.end();) {
-        auto chunk = *it;
+      Chunk *chunk = *it;
 
-        // Unmark the marked chunks for the next iteration.
-        if (chunk->marked) {
-            chunk->marked = false;
-            ++it;
-        }
-        else {
-            // Add the unmarked chunks to freed chunks and remove from
-            // the list of allocated chunks 
-            heap->m_freed_chunks.push_back(chunk);
-            it = heap->m_allocated_chunks.erase(it);
-        }
+      // Unmark the marked chunks for the next iteration.
+      if (chunk->marked) {
+        chunk->marked = false;
+        ++it;
+      }
+      else {
+        // Add the unmarked chunks to freed chunks and remove from
+        // the list of allocated chunks 
+        heap->m_freed_chunks.push_back(chunk);
+        it = heap->m_allocated_chunks.erase(it);
+      }
     }
   }
 
   // This assumes that there are no chains of pointers, will be fixed later on
   void Heap::mark(uintptr_t *start, const uintptr_t *end, vector<Chunk*> worklist) {
-    for (; start > end; start--) { // to find adresses thats in the worklist
-      if (*start % 8 == 0) { // all pointers must be aligned as double words
+    int counter = 0;
+    // To find adresses thats in the worklist
+    for (; start > end; start--) { 
+      counter++;
+      // all pointers must be aligned as double words
+      if (*start % 8 == 0) { 
+
         for (auto it = worklist.begin(); it != worklist.end();) {
-          auto chunk = *it;
+          Chunk *chunk = *it;
           uintptr_t c_start = reinterpret_cast<uintptr_t>(chunk->start);
           uintptr_t c_end = reinterpret_cast<uintptr_t>(chunk->start + chunk->size);
+
           // Check if the stack pointer aligns with the chunk
-          if ((c_start <= *start && *start < c_end) && chunk != nullptr) {
-          cout << "Chunk start:\t" << c_start << endl;
-          cout << "Chunk end:\t" << c_end << endl;           
-          if (!chunk->marked) {
+          //if ((c_start <= *start && *start < c_end) && chunk != nullptr) {
+          if (c_start == *start) {
+            cout << "Start points to:\t" << hex << *start << endl;
+            cout << "Chunk start:\t\t" << hex << c_start << endl;
+            cout << "Chunk end:\t\t" << hex << c_end << "\n" << endl;           
+
+            if (!chunk->marked) {
               chunk->marked = true;
               it = worklist.erase(it);
             }
             else 
               ++it;
-          }
+            }
           else
             ++it;
-        }
+          }
       }
     }
+    cout << "Counter: " << counter << endl;
   }
 
   // Mark child references from the root references
@@ -265,7 +275,7 @@ namespace GC {
         if (ref != nullptr && !ref->marked) {
           ref->marked = true;
           worklist.push_back(ref);
-          //mark_test(worklist)
+          mark_test(worklist);
         }
       }
     }
