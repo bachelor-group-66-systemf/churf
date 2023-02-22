@@ -65,8 +65,25 @@ void test_some_types() {
 int main() {
     auto stack_start = reinterpret_cast<uintptr_t *>(__builtin_frame_address(0));
     std::cout << "Stack start from main:\t" << stack_start << std::endl;
-    test_chain(10, false);
-    gc->collect(MARK); // some bug in free (vector out of range)
+    // This is allocated outside of the scope of the GC, thus garbage
+    for (int i = 0; i < 10; i++) {
+        gc->alloc(sizeof(int));
+    }
+    /* int depth = 10;
+    Node* nodes[depth];
+    Node *last_node = static_cast<Node *>(gc->alloc(sizeof(Node)));
+    last_node->id = depth;
+    last_node->child = nullptr;
+    nodes[0] = last_node;
+    for (int i = 1; i < depth; i++) {
+        Node *node = static_cast<Node *>(gc->alloc(sizeof(Node)));
+        node->id = depth-i;
+        node->child = nodes[i-1];
+        nodes[i] = node;
+    } */
+    //test_chain(10, false);
+    //test_some_types();
+    gc->collect(MARK | SWEEP | FREE); // free misses some chunks
     gc->print_contents();
     return 0;
 }

@@ -133,18 +133,27 @@ namespace GC {
         heap->m_freed_chunks.pop_back();
         delete chunk;
       }
-    } else {
+    } 
+    else if (heap->m_freed_chunks.size()) {
       free_overlap(heap);
     }
+    // No freed chunks, nothing to free
+    else {
+      return;
+    } 
   }
 
   void Heap::free_overlap(Heap *heap) {
     std::vector<Chunk *> filtered;
     size_t i = 0;
     filtered.push_back(heap->m_freed_chunks.at(i++));
+    //cout << filtered.back()->start << endl;
     for (; i < heap->m_freed_chunks.size(); i++) {
       auto prev = filtered.back();
+      cout << "Previous start:\t" << prev->start << endl;
+      cout << "Previous end:\t" << prev->start + prev->size << endl;
       auto next = heap->m_freed_chunks.at(i);
+      cout << "Next start:\t" << next->start << endl;
       if (next->start > (prev->start + prev->size)) {
         filtered.push_back(next);
       }
@@ -167,7 +176,7 @@ namespace GC {
 
     // get the frame adress, whwere local variables and saved registers are located
     auto stack_start = reinterpret_cast<uintptr_t *>(__builtin_frame_address(0));
-    cout << "Stack start:\t" << stack_start << endl;
+    cout << "Stack start in collect:\t" << stack_start << endl;
     uintptr_t *stack_end;
 
     if (heap->m_stack_end != nullptr)
@@ -175,7 +184,7 @@ namespace GC {
     else
       stack_end = (uintptr_t *) stack_start - 80; // dummy value
 
-    cout << "Stack end in collect: " << stack_end << endl;
+    cout << "Stack end in collect:\t " << stack_end << endl;
     auto work_list = heap->m_allocated_chunks;
     //print_worklist(work_list);
 

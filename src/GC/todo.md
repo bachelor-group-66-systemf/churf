@@ -8,6 +8,9 @@ Goal for next week (24/2):
 ## GC TODO:
 - Merge to main branch
 - Fix singleton references
+- Get a good grasp of how the adressing of stack frames actually works.
+- Debug "free()", sometimes it skips chunks that should be freed.
+- Check alignment of chunks.
 - Think about how we want to determine if some object is a pointer or not, probably will have to discuss that with Samuel. Since it is not ideal to determine in the GC if an object is a pointer or not. It should preferably be done in a previous stage.
 
 ## Tests TODO
