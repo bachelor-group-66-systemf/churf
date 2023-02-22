@@ -21,6 +21,7 @@ import           Grammar.Abs
 import           Grammar.Print         (Print, printTree)
 import qualified TypeChecker.HMIr      as T
 
+-- | A data type representing type variables
 data Poly = Forall [Ident] Type
     deriving Show
 
@@ -34,11 +35,6 @@ type Error = String
 type Subst = Map Ident Type
 
 type Infer = StateT Env (ReaderT Ctx (ExceptT Error Identity))
-
-int = TMono "Int"
-a = TPol "a"
-b = TPol "b"
-arr = TArr
 
 initCtx = Ctx mempty
 initEnv = Env 0 mempty
@@ -64,7 +60,6 @@ checkPrg (Program bs) = do
 checkBind :: Bind -> Infer T.Bind
 checkBind (Bind n t _ args e) = do
     (t', e') <- inferExp $ makeLambda e (reverse args)
-    -- when (t /= t') (throwError "Signature of function and inferred type of body do not match")
     s <- unify t t'
     let t'' = apply s t
     return $ T.Bind (t'',n) [] e'
@@ -132,6 +127,7 @@ w = \case
                 (s2, t2, e1') <- w e1
                 return (s2 `compose` s1, t2, T.ELet t2 name e0' e1' )
 
+-- | Unify two types producing a new substitution (constraint)
 unify :: Type -> Type -> Infer Subst
 unify t0 t1 = case (t0, t1) of
     (TArr a b, TArr c d) -> do
@@ -143,15 +139,19 @@ unify t0 t1 = case (t0, t1) of
     (TMono a, TMono b) -> if a == b then return M.empty else throwError "Types do not unify"
     (a, b) -> throwError . unwords $ ["Type:", printTree a, "can't be unified with:", printTree b]
 
+-- | Check if a type is contained in another type.
+-- I.E. { a = a -> b } is an unsolvable constraint since there is no substitution such that these are equal
 occurs :: Ident -> Type -> Infer Subst
 occurs i (TPol a) = return nullSubst
 occurs i t = if S.member i (free t)
                 then throwError "Occurs check failed"
                 else return $ M.singleton i t
 
+-- | Generalize a type over all free variables in the substitution set
 generalize :: Map Ident Poly -> Type -> Poly
 generalize env t = Forall (S.toList $ free t S.\\ free env) t
 
+-- | Instantiate a polymorphic type. The free type variables are substituted with fresh ones.
 inst :: Poly -> Infer Type
 inst (Forall xs t) = do
     xs' <- mapM (const fresh) xs
@@ -165,7 +165,7 @@ compose m1 m2 = M.map (subst m1) m2 `M.union` m1
 class FreeVars t where
   -- | Get all free variables from t
   free :: t -> Set Ident
-  -- | Apply a substitution to t, generating a new t
+  -- | Apply a substitution to t
   apply :: Subst -> t -> t
 
 instance FreeVars Type where
@@ -216,9 +216,11 @@ fresh = do
     modify (\st -> st { count = n + 1 })
     return . TPol . Ident $ "t" ++ show n
 
+-- | Run the monadic action with an additional binding
 withBinding :: (Monad m, MonadReader Ctx m) => Ident -> Poly -> m a -> m a
 withBinding i p = local (\st -> st { vars = M.insert i p (vars st) })
 
+-- | Insert a function signature into the environment
 insertSig :: Ident -> Type -> Infer ()
 insertSig i t = modify (\st -> st { sigs = M.insert i t (sigs st) })
 
@@ -229,3 +231,9 @@ lookupVar i = do
     case M.lookup i m of
         Just t  -> return t
         Nothing -> throwError $ "Unbound variable: " ++ show i
+
+lett = let (Right (t,e)) = run $ inferExp $ ELet "x" (EAdd (EInt 5) (EInt 5)) (EAdd (EId "x") (EId "x"))
+        in t == TMono "Int"
+
+letty = let (Right (t,e)) = run $ inferExp $ ELet "f" (EAbs "x" (EId "x")) (EApp (EId "f") (EInt 3))
+         in e

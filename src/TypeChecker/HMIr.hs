@@ -25,7 +25,7 @@ data Exp
 instance Show Exp where
     show (EId t (Ident i))    = i ++ " : " ++ show t
     show (EInt _ i)           = show i
-    show (ELet t i e1 e2)     = error "Show for let not implemented"
+    show (ELet t i e1 e2)     = "let " ++ show t ++ " = " ++ show e1 ++ " in " ++ show e2
     show (EApp t e1 e2)       = show e1 ++ " " ++ show e2 ++ " : " ++ show t
     show (EAdd _ e1 e2)       = show e1 ++ " + " ++ show e2
     show (EAbs t (Ident i) e) = "\\ " ++ i ++ ". " ++ show e ++ " : " ++ show t
