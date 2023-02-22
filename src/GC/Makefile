@@ -1,17 +1,16 @@
-mkfile_path = $(abspath $(lastword $(MAKEFILE_LIST)))
-current_dir = $(notdir $(patsubst %/,%,$(dir $(mkfile_path))))
 CC 			= clang++
-
-PWD_V 		= /Users/valtermiari/Desktop/DV/Bachelors/code/language/src/GC/include
-LIB_INCL 	= -I/home/virre/dev/systemF/org/language/src/GC/include
-LIB_SO 		= -L/home/virre/dev/systemF/org/language/src/GC/lib
-LIB_LINK	= /home/virre/dev/systemF/org/language/src/GC/lib
-
+CWD			= $(shell pwd)
+LIB_INCL 	= -I$(CWD)/include
+LIB_SO 		= -L$(CWD)/lib
+LIB_LINK	= $(CWD)/lib
 CFLAGS 		= -Wall -Wextra -v -g -std=gnu++20 -stdlib=libc++ -I
 VGFLAGS 	= --leak-check=full --show-leak-kinds=all
 STDFLAGS 	= -std=gnu++20 -stdlib=libc++
 WFLAGS 		= -Wall -Wextra
 DBGFLAGS 	= -g
+
+test_test:
+	echo "$(shell pwd)"
 
 heap:
 	$(CC) $(WFLAGS) $(STDFLAGS) $(LIB_INCL) lib/heap.cpp
