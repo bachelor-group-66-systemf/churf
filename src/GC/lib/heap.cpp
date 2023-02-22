@@ -147,14 +147,14 @@ namespace GC {
     std::vector<Chunk *> filtered;
     size_t i = 0;
     filtered.push_back(heap->m_freed_chunks.at(i++));
-    //cout << filtered.back()->start << endl;
+    cout << filtered.back()->start << endl;
     for (; i < heap->m_freed_chunks.size(); i++) {
       auto prev = filtered.back();
-      cout << "Previous start:\t" << prev->start << endl;
-      cout << "Previous end:\t" << prev->start + prev->size << endl;
       auto next = heap->m_freed_chunks.at(i);
-      cout << "Next start:\t" << next->start << endl;
-      if (next->start > (prev->start + prev->size)) {
+      auto p_start = (uintptr_t)(prev->start);
+      auto p_size  = (uintptr_t)(prev->size);
+      auto n_start = (uintptr_t)(next->start);
+      if (n_start >= (p_start + p_size)) {
         filtered.push_back(next);
       }
     }
@@ -186,7 +186,6 @@ namespace GC {
 
     cout << "Stack end in collect:\t " << stack_end << endl;
     auto work_list = heap->m_allocated_chunks;
-    //print_worklist(work_list);
 
     if (flags & MARK) {
       mark(stack_start, stack_end, work_list);
@@ -229,33 +228,35 @@ namespace GC {
   void Heap::mark(uintptr_t *start, const uintptr_t *end, vector<Chunk*> worklist) {
     int counter = 0;
     // To find adresses thats in the worklist
-    for (; start > end; start--) { 
+    for (; start < end; start++) { 
       counter++;
       // all pointers must be aligned as double words
-      if (*start % 8 == 0) { 
 
-        for (auto it = worklist.begin(); it != worklist.end();) {
-          Chunk *chunk = *it;
-          uintptr_t c_start = reinterpret_cast<uintptr_t>(chunk->start);
-          uintptr_t c_end = reinterpret_cast<uintptr_t>(chunk->start + chunk->size);
-
-          // Check if the stack pointer aligns with the chunk
-          //if ((c_start <= *start && *start < c_end) && chunk != nullptr) {
-          if (c_start == *start) {
-            cout << "Start points to:\t" << hex << *start << endl;
-            cout << "Chunk start:\t\t" << hex << c_start << endl;
-            cout << "Chunk end:\t\t" << hex << c_end << "\n" << endl;           
-
-            if (!chunk->marked) {
-              chunk->marked = true;
-              it = worklist.erase(it);
-            }
-            else 
-              ++it;
-            }
-          else
+      for (auto it = worklist.begin(); it != worklist.end();) {
+        Chunk *chunk = *it;
+        if (chunk == nullptr) {
+          assert(false && "EPIC FAIL");
+        }
+        uintptr_t c_start = reinterpret_cast<uintptr_t>(chunk->start);
+        uintptr_t c_end = reinterpret_cast<uintptr_t>(chunk->start + chunk->size);
+        // Check if the stack pointer aligns with the chunk
+        if (c_start <= *start && *start < c_end) {
+        //if (c_start == *start) {
+          cout << "Start points to:\t" << hex << *start << endl;
+          cout << "Chunk start:\t\t" << hex << c_start << endl;
+          cout << "Chunk end:\t\t" << hex << c_end << "\n" << endl;           
+        
+          if (!chunk->marked) {
+            chunk->marked = true;
+            it = worklist.erase(it);
+          }
+          else {
             ++it;
           }
+        }
+        else {
+          ++it;
+        }
       }
     }
     cout << "Counter: " << counter << endl;

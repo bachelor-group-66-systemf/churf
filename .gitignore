@@ -9,4 +9,6 @@ llvm.ll
 /language
 .vscode/
 
+src/GC/lib/*.o
+src/GC/lib/*.so
 src/GC/tests/*.out

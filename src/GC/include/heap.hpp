@@ -44,6 +44,7 @@ namespace GC {
     size_t m_allocated_size;
     uintptr_t *m_stack_end = nullptr;
 
+    // maybe change to std::list
     std::vector<Chunk *> m_allocated_chunks;
     std::vector<Chunk *> m_freed_chunks;
 
