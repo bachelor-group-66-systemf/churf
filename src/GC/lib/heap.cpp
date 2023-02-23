@@ -182,6 +182,7 @@ namespace GC {
           if (!chunk->marked) {
             chunk->marked = true;
             it = worklist.erase(it);
+            mark((uintptr_t*) c_start, (uintptr_t*) c_end, worklist);
           }
           else {
             ++it;

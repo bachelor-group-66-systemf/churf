@@ -8,17 +8,20 @@ struct Node {
 };
 
 Node *create_chain(int depth) {
-    Node* nodes[depth]; 
+    std::vector<Node*> nodes;
     if (depth > 0) {
         Node *last_node = static_cast<Node *>(gc->alloc(sizeof(Node)));
         last_node->id = depth;
         last_node->child = nullptr;
-        nodes[0] = last_node;
-        for (int i = 1; i < depth; i++) {
+        nodes.push_back(last_node);
+        for (int i = 0; i < depth; i++) {
             Node *node = static_cast<Node *>(gc->alloc(sizeof(Node)));
             node->id = depth-i;
             node->child = nodes[i-1];
-            nodes[i] = node;
+            nodes.push_back(node);
+        }
+        for (size_t i = 0; i < nodes.size(); i++) {
+            std::cout << "Element at " << i << ":\t" << nodes.at(i) << std::endl;
         }
         return nodes[depth];
     }
@@ -55,7 +58,6 @@ void test_some_types() {
     std::cout << "l points to:\t\t" << l << std::endl;
     detach_pointer(&l);
     std::cout << "l points to:\t\t" << l << std::endl;
-    // l still gets marked, which is not supposed to happen
 
     // Some more dummy values of different sizes, to test stack pointer alignment
     int *i = static_cast<int *>(gc->alloc(sizeof(int)));
@@ -80,15 +82,14 @@ int main() {
     for (int i = 0; i < 21; i++) {
         longs[i] = static_cast<long *>(gc->alloc(sizeof(long)));
     } */
-    //Node *root;
-    Node *root = test_chain(3, false);
+
+    Node *root = static_cast<Node *>(gc->alloc(sizeof(Node)));
+    root = test_chain(3, false);
     std::cout << "Adress of root:\t" << &root << std::endl;
     std::cout << "Root points to:\t" << root << std::endl;
-    // 0x7ffdd7556bd8
-    int *i = static_cast<int *>(gc->alloc(sizeof(int)));
-    std::cout << "Adress of i:\t" << &i << std::endl;
+    std::cout << "Root child:\t" << root->child << std::endl;
 
-    gc->collect(MARK); // free misses some chunks
+    gc->collect(MARK);     
     gc->print_contents();
     return 0;
 }
