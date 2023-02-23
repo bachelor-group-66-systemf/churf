@@ -16,16 +16,8 @@ namespace GC {
    * Initialises the heap singleton and saves the address
    * of the calling stack frame as the stack_end. Presumeably
    * this address points to the stack frame of the compiled
-   * LLVM executable after linking. (NOT CONFIRMED)
+   * LLVM executable after linking.
   */
-  void Heap::check_init() {
-    auto heap = Heap::the();
-    cout << "Heap addr:\t" << heap << endl;
-    cout << "GC m_stack_end:\t" << heap->m_stack_end << endl;
-    auto stack_start = reinterpret_cast<uintptr_t *>(__builtin_frame_address(0));
-    cout << "GC stack_start:\t" << stack_start << endl;
-  }
-
   void Heap::init() {
     Heap *heap = Heap::the();
     heap->m_stack_end = reinterpret_cast<uintptr_t *>(__builtin_frame_address(1));
@@ -76,6 +68,24 @@ namespace GC {
     return new_chunk->start;
   }
 
+  /**
+   * Tries to recycle used and freed chunks that are
+   * already allocated objects by the OS but freed
+   * from our Heap. This reduces the amount of GC
+   * objects slightly which saves time from malloc'ing
+   * memory from the OS.
+   * 
+   * @param heap Pointer to the singleton Heap instance
+   * 
+   * @param size  Amount of bytes needed for the object
+   *              which is about to be allocated.
+   * 
+   * @returns If a chunk is found and recycled, a
+   *          pointer to the allocated memory for
+   *          the object is returned. If not, a
+   *          nullptr is returned to signify no
+   *          chunks were found.
+  */
   uintptr_t *Heap::try_recycle_chunks(Heap *heap, size_t size) {
     // Check if there are any freed chunks large enough for current request
     for (size_t i = 0; i < heap->m_freed_chunks.size(); i++) {
@@ -107,12 +117,23 @@ namespace GC {
     return nullptr;
   }
 
+  /**
+   * Collection phase of the garbage collector. When
+   * an allocation is requested and there is no space
+   * left on the heap, a collection is triggered. This
+   * function is private so that the user cannot trigger
+   * a collection unneccessarily.
+   * 
+   * @param heap  Heap singleton instance, only for avoiding
+   *              redundant calls to the singleton get
+  */
   void Heap::collect(Heap *heap) {
-    // Get the adress of the current stack frame
 
-    uintptr_t *stack_end;
-
+    // get current stack
     auto stack_start = reinterpret_cast<uintptr_t *>(__builtin_frame_address(0));
+
+    // fix this block, it's nästy
+    uintptr_t *stack_end;
     if (heap->m_stack_end != nullptr)
       stack_end = heap->m_stack_end;
     else
@@ -126,6 +147,87 @@ namespace GC {
     free(heap);
   }
 
+  /**
+    * Iterates through the stack, if an element on the stack points to a chunk
+    * that chunk is marked (i.e. reachable). It only marks element which are directly
+    * reachable from the chunk, so no chain of pointers from the stack are detected. 
+    * If a chunk is marked it is removed from the worklist, since it's no longer of
+    * concern for this method. 
+    * 
+    * @param start    Pointer to the start of the stack frame.
+    * @param end      Pointer to the end of the stack frame.
+    * @param worklist The currently allocated chunks. 
+  */ 
+  void Heap::mark(uintptr_t *start, const uintptr_t *end, vector<Chunk*> worklist) {
+    int counter = 0;
+    // To find adresses thats in the worklist
+    for (; start < end; start++) { 
+      counter++;
+      // all pointers must be aligned as double words
+
+      for (auto it = worklist.begin(); it != worklist.end();) {
+        Chunk *chunk = *it;
+
+        auto c_start = reinterpret_cast<uintptr_t>(chunk->start);
+        auto c_size = reinterpret_cast<uintptr_t>(chunk->size);
+        auto c_end = reinterpret_cast<uintptr_t>(c_start + c_size);
+
+        cout << "Start points to:\t" << hex << *start << endl;
+        cout << "Chunk start:\t\t" << hex << c_start << endl;
+        cout << "Chunk end:\t\t" << hex << c_end << "\n" << endl;           
+
+        // Check if the stack pointer aligns with the chunk
+        if (c_start <= *start && *start < c_end) {
+        
+          if (!chunk->marked) {
+            chunk->marked = true;
+            it = worklist.erase(it);
+          }
+          else {
+            ++it;
+          }
+        }
+        else {
+          ++it;
+        }
+      }
+    }
+    cout << "Counter: " << counter << endl;
+  }
+  
+  /**
+   * Sweeps the heap, unmarks the marked chunks for the next cycle,
+   * adds the unmarked nodes to the vector of freed chunks; to be freed.
+   * 
+   * @param heap Pointer to the heap to oporate on.
+  */
+  void Heap::sweep(Heap *heap) {
+    for (auto it = heap->m_allocated_chunks.begin(); it != heap->m_allocated_chunks.end();) {
+      Chunk *chunk = *it;
+
+      // Unmark the marked chunks for the next iteration.
+      if (chunk->marked) {
+        chunk->marked = false;
+        ++it;
+      }
+      else {
+        // Add the unmarked chunks to freed chunks and remove from
+        // the list of allocated chunks 
+        heap->m_freed_chunks.push_back(chunk);
+        it = heap->m_allocated_chunks.erase(it);
+      }
+    }
+  }
+
+  /**
+   * Frees chunks that was moved to the list m_freed_chunks
+   * by the sweep phase. If there are more than a certain
+   * amount of free chunks, delete the free chunks to
+   * avoid cluttering.
+   * 
+   * @param heap  Heap singleton instance, only for avoiding
+   *              redundant calls to the singleton get
+  */
   void Heap::free(Heap *heap) {
     if (heap->m_freed_chunks.size() > FREE_THRESH) {
       while (heap->m_freed_chunks.size()) {
@@ -134,15 +236,25 @@ namespace GC {
         delete chunk;
       }
     } 
+    // if there are chunks but not more than FREE_THRESH
     else if (heap->m_freed_chunks.size()) {
+      // essentially, always check for overlap between
+      // chunks before finishing the allocation
       free_overlap(heap);
     }
-    // No freed chunks, nothing to free
-    else {
-      return;
-    } 
   }
 
+  /**
+   * Checks for overlaps between freed chunks of memory
+   * and removes overlapping chunks while prioritizing
+   * the chunks at lower addresses.
+   * 
+   * @param heap  Heap singleton instance, only for avoiding
+   *              redundant calls to the singleton get
+   * 
+   * @note Maybe this should be changed to prioritizing
+   *       larger chunks.
+  */
   void Heap::free_overlap(Heap *heap) {
     std::vector<Chunk *> filtered;
     size_t i = 0;
@@ -161,6 +273,25 @@ namespace GC {
     heap->m_freed_chunks.swap(filtered);
   }
 
+  // ----- ONLY DEBUGGING -----------------------------------------------------------------------
+
+  /**
+   * Prints the result of Heap::init() and a dummy value
+   * for the current stack frame for reference.
+  */
+  void Heap::check_init() {
+    auto heap = Heap::the();
+    cout << "Heap addr:\t" << heap << endl;
+    cout << "GC m_stack_end:\t" << heap->m_stack_end << endl;
+    auto stack_start = reinterpret_cast<uintptr_t *>(__builtin_frame_address(0));
+    cout << "GC stack_start:\t" << stack_start << endl;
+  }
+  
+  /**
+   * Conditional collection, only to be used in debugging
+   * 
+   * @param flags Bitmap of flags
+  */
   void Heap::collect(uint flags) {
 
     cout << "DEBUG COLLECT\nFLAGS: ";
@@ -198,68 +329,6 @@ namespace GC {
     if (flags & FREE) {
       free(heap);
     }
-  }
-
-  /**
-   * Sweeps the heap, unmarks the marked chunks for the next cycle,
-   * adds the unmarked nodes to the vector of freed chunks; to be freed.
-   * 
-   * @param *heap The heap to oporate on.
-  */
-  void Heap::sweep(Heap *heap) {
-    for (auto it = heap->m_allocated_chunks.begin(); it != heap->m_allocated_chunks.end();) {
-      Chunk *chunk = *it;
-
-      // Unmark the marked chunks for the next iteration.
-      if (chunk->marked) {
-        chunk->marked = false;
-        ++it;
-      }
-      else {
-        // Add the unmarked chunks to freed chunks and remove from
-        // the list of allocated chunks 
-        heap->m_freed_chunks.push_back(chunk);
-        it = heap->m_allocated_chunks.erase(it);
-      }
-    }
-  }
-
-  // This assumes that there are no chains of pointers, will be fixed later on
-  void Heap::mark(uintptr_t *start, const uintptr_t *end, vector<Chunk*> worklist) {
-    int counter = 0;
-    // To find adresses thats in the worklist
-    for (; start < end; start++) { 
-      counter++;
-      // all pointers must be aligned as double words
-
-      for (auto it = worklist.begin(); it != worklist.end();) {
-        Chunk *chunk = *it;
-        if (chunk == nullptr) {
-          assert(false && "EPIC FAIL");
-        }
-        uintptr_t c_start = reinterpret_cast<uintptr_t>(chunk->start);
-        uintptr_t c_end = reinterpret_cast<uintptr_t>(chunk->start + chunk->size);
-        // Check if the stack pointer aligns with the chunk
-        if (c_start <= *start && *start < c_end) {
-        //if (c_start == *start) {
-          cout << "Start points to:\t" << hex << *start << endl;
-          cout << "Chunk start:\t\t" << hex << c_start << endl;
-          cout << "Chunk end:\t\t" << hex << c_end << "\n" << endl;           
-        
-          if (!chunk->marked) {
-            chunk->marked = true;
-            it = worklist.erase(it);
-          }
-          else {
-            ++it;
-          }
-        }
-        else {
-          ++it;
-        }
-      }
-    }
-    cout << "Counter: " << counter << endl;
   }
 
   // Mark child references from the root references
@@ -305,7 +374,7 @@ namespace GC {
   void Heap::print_contents() {
     auto heap = Heap::the();
     if (heap->m_allocated_chunks.size()) {
-      cout << "\nALLOCATED CHUNKS #" << heap->m_allocated_chunks.size() << endl;
+      cout << "\nALLOCATED CHUNKS #" << dec << heap->m_allocated_chunks.size() << endl;
       for (auto chunk : heap->m_allocated_chunks) {
           print_line(chunk);
       }
@@ -313,7 +382,7 @@ namespace GC {
       cout << "NO ALLOCATIONS\n" << endl;
     }
     if (heap->m_freed_chunks.size()) {
-      cout << "\nFREED CHUNKS #" <<  heap->m_freed_chunks.size() << endl;
+      cout << "\nFREED CHUNKS #" << dec <<  heap->m_freed_chunks.size() << endl;
       for (auto fchunk : heap->m_freed_chunks) {
           print_line(fchunk);
       }

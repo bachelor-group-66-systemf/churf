@@ -23,6 +23,7 @@ namespace GC {
 
   private:
 
+    //Private constructor according to the singleton pattern
     Heap() {
       m_heap = reinterpret_cast<char *>(malloc(HEAP_SIZE));
       m_size = 0;
@@ -50,8 +51,8 @@ namespace GC {
 
   public:
 
-    static Heap *the() {
-      if (m_instance)
+    static inline Heap *the() { // TODO: make private
+      if (m_instance) // if m_instance is not a nullptr
         return m_instance;
       m_instance = new Heap();
       return m_instance;
@@ -62,12 +63,19 @@ namespace GC {
       std::free((char *)m_heap);
     }
 
-    void *alloc(size_t size);
-    void init();
+    /**
+     * These are the only two functions which are exposed
+     * as the API for LLVM. At the absolute start of the
+     * program the developer has to call init() to ensure
+     * that the address of the topmost stack frame is
+     * saved as the limit for scanning the stack in collect.
+    */
+    void *alloc(size_t size); // TODO: make static
+    void init(); // TODO: make static
     
     // DEBUG ONLY
-    void check_init();
-    void collect(uint flags);
-    void print_contents();
+    void collect(uint flags); // conditional collection
+    void check_init();        // print dummy things
+    void print_contents();    // print dummy things
   };
 }
