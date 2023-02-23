@@ -12,8 +12,7 @@ import           System.Exit        (exitFailure, exitSuccess)
 import           TypeChecker.AlgoW  (typecheck)
 
 main :: IO ()
-main =
-    getArgs >>= \case
+main = getArgs >>= \case
         [] -> print "Required file path missing"
         (x : _) -> do
             file <- readFile x

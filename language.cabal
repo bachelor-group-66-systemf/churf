@@ -15,7 +15,6 @@ extra-doc-files:    CHANGELOG.md
 extra-source-files:
   Grammar.cf
 
-
 common warnings
     ghc-options: -Wdefault
 
@@ -51,6 +50,34 @@ executable language
       , either
       , extra
       , array
-      , unification-fd
 
     default-language: GHC2021
+
+test-suite test
+  hs-source-dirs: tests, src
+  main-is: Main.hs
+  type: exitcode-stdio-1.0
+
+  other-modules:
+    Grammar.Abs
+    Grammar.Lex
+    Grammar.Par
+    Grammar.Print
+    Grammar.Skel
+    Grammar.ErrM
+    Auxiliary
+    Renamer.RenamerM
+    TypeChecker.AlgoW
+    TypeChecker.HM
+    TypeChecker.HMIr
+
+  build-depends:  
+      base >=4.16
+    , mtl
+    , containers
+    , either
+    , array
+    , extra
+    , hspec
+
+  default-language: GHC2021

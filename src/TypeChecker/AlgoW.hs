@@ -120,12 +120,11 @@ w = \case
                 return (s3 `compose` s2 `compose` s1, t, T.EApp t e0' e1')
     ELet name e0 e1 -> do
         (s1, t1, e0') <- w e0
-        applySt s1 $ do
-            env <- asks vars
-            let t' = generalize (apply s1 env) t1
-            withBinding name t' $ do
-                (s2, t2, e1') <- w e1
-                return (s2 `compose` s1, t2, T.ELet t2 name e0' e1' )
+        env <- asks vars
+        let t' = generalize (apply s1 env) t1
+        withBinding name t' $ do
+            (s2, t2, e1') <- w e1
+            return (s2 `compose` s1, t2, T.ELet t2 name e0' e1' )
 
 -- | Unify two types producing a new substitution (constraint)
 unify :: Type -> Type -> Infer Subst
