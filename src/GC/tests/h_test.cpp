@@ -35,7 +35,7 @@ void detach_pointer(long **ptr) {
     *ptr = dummy_ptr;
 }
 
-void test_chain(int depth, bool detach) {
+Node *test_chain(int depth, bool detach) {
     auto stack_start = reinterpret_cast<uintptr_t *>(__builtin_frame_address(0));
     std::cout << "Stack start from test_chain:\t" << stack_start << std::endl;
 
@@ -43,6 +43,7 @@ void test_chain(int depth, bool detach) {
     // This generates a segmentation fault (should be investigated further)
     if (detach)
         node_chain->child = nullptr;
+    return node_chain;
 
 }
 
@@ -63,8 +64,8 @@ void test_some_types() {
 }
 
 int main() {
-    //gc->init();
-    //gc->check_init();
+    gc->init();
+    gc->check_init();
     auto stack_start = reinterpret_cast<uintptr_t *>(__builtin_frame_address(0));
     std::cout << "Stack start from main:\t" << stack_start << std::endl;
     
@@ -74,13 +75,20 @@ int main() {
     // long *l = static_cast<long *>(gc->alloc(sizeof(long))); // 0x6-0xd  | 0x
     
     // This is allocated outside of the scope of the GC (if gc->init() isn't called), thus garbage
-    long *longs[21];
+    /* long *longs[21];
     std::cout << "Pointer to ints:\t" << longs << std::endl;
     for (int i = 0; i < 21; i++) {
         longs[i] = static_cast<long *>(gc->alloc(sizeof(long)));
-    }
+    } */
+    //Node *root;
+    Node *root = test_chain(3, false);
+    std::cout << "Adress of root:\t" << &root << std::endl;
+    std::cout << "Root points to:\t" << root << std::endl;
+    // 0x7ffdd7556bd8
+    int *i = static_cast<int *>(gc->alloc(sizeof(int)));
+    std::cout << "Adress of i:\t" << &i << std::endl;
 
-    gc->collect(MARK | SWEEP | FREE); // free misses some chunks
+    gc->collect(MARK); // free misses some chunks
     gc->print_contents();
     return 0;
 }
