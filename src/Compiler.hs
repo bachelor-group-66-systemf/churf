@@ -5,6 +5,7 @@ module Compiler (compile) where
 
 import           Auxiliary            (snoc)
 import           Control.Monad.State  (StateT, execStateT, gets, modify)
+import qualified Data.Bifunctor       as BI
 import           Data.List.Extra      (trim)
 import           Data.Map             (Map)
 import qualified Data.Map             as Map
@@ -16,7 +17,6 @@ import           LlvmIr               (CallingConvention (..), LLVMComp (..),
                                        LLVMValue (..), Visibility (..),
                                        llvmIrToString)
 import           System.Process.Extra (readCreateProcess, shell)
-import           TypeChecker          (partitionType)
 import           TypeCheckerIr        (Bind (..), Case (..), Exp (..), Id,
                                        Ident (..), Program (..), Type (..))
 
@@ -24,7 +24,7 @@ import           TypeCheckerIr        (Bind (..), Case (..), Exp (..), Id,
 data CodeGenerator = CodeGenerator
     { instructions  :: [LLVMIr]
     , functions     :: Map Id FunctionInfo
-    , constructors  :: Map Id FunctionInfo
+    , constructors  :: Map Id ConstructorInfo
     , variableCount :: Integer
     , labelCount    :: Integer
     }
@@ -36,7 +36,12 @@ data FunctionInfo = FunctionInfo
     { numArgs   :: Int
     , arguments :: [Id]
     }
-    deriving Show
+data ConstructorInfo = ConstructorInfo
+    { numArgsCI   :: Int
+    , argumentsCI :: [Id]
+    , numCI       :: Integer
+    }
+
 
 -- | Adds a instruction to the CodeGenerator state
 emit :: LLVMIr -> CompilerState ()
@@ -80,14 +85,16 @@ createArgs xs = fst $ foldl (\(acc, l) t -> (acc ++ [(Ident ("arg_" <> show l) ,
 
 -- | Produces a map of functions infos from a list of binds,
 --  which contains useful data for code generation.
-getConstructors :: [Bind] -> Map Id FunctionInfo
+getConstructors :: [Bind] -> Map Id ConstructorInfo
 getConstructors bs = Map.fromList $ go bs
   where
     go [] = []
     go (DataStructure n cons : xs) = do
-        map (\(id, xs) -> ((id, TPol n), FunctionInfo {
-            numArgs=length xs, arguments=createArgs xs
-        })) cons
+        fst (foldl (\(acc,i) (id, xs) -> (((id, TPol n), ConstructorInfo {
+            numArgsCI=length xs,
+            argumentsCI=createArgs xs,
+            numCI=i
+        }) : acc, i+1)) ([],0) cons)
         <> go xs
     go (_: xs) = go xs
 
@@ -130,12 +137,25 @@ compile (Program scs) = do
 
 compileScs :: [Bind] -> CompilerState ()
 compileScs []                             = do
-    return ()
-    -- c <- gets (Map.toList . constructors)
-    -- mapM_ (\((id, t), fi) -> do
-    --         emit $ Define FastCC (type2LlvmType t) id []
-    --         emit DefineEnd
-    --     ) c
+    -- as a last step create all the constructors
+    c <- gets (Map.toList . constructors)
+    mapM_ (\((id, t), ci) -> do
+            let x = BI.second type2LlvmType <$> argumentsCI ci
+            emit $ Define FastCC (type2LlvmType t) id x
+            top <- Ident . show <$> getNewVar
+            ptr <- Ident . show <$> getNewVar
+            emit $ SetVariable top (Alloca (type2LlvmType t))
+            -- %0 = getelementptr inbounds %Foo, %Foo* %x, i32 0, i32 0
+            emit $ SetVariable ptr $
+                GetElementPtrInbounds (type2LlvmType t) (Ref $ type2LlvmType t)
+                                      (VIdent top I8) I32 (VInteger 0) I32 (VInteger 0)
+            emit $ Store I8 (VInteger $ numCI ci ) (Ref I8) ptr
+            -- store i8 1, i8* %0
+            emit $ Ret I64 (VInteger 0)
+            emit DefineEnd
+
+            modify $ \s -> s { variableCount = 0 }
+        ) c
 compileScs (Bind (name, _t) args exp : xs) = do
     emit $ UnsafeRaw "\n"
     emit . Comment $ show name <> ": " <> show exp

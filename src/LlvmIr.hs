@@ -104,6 +104,7 @@ data LLVMIr
     | Declare LLVMType Ident Params
     | SetVariable Ident LLVMIr
     | Variable Ident
+    | GetElementPtrInbounds LLVMType LLVMType LLVMValue LLVMType LLVMValue LLVMType LLVMValue
     | Add LLVMType LLVMValue LLVMValue
     | Sub LLVMType LLVMValue LLVMValue
     | Div LLVMType LLVMValue LLVMValue
@@ -144,6 +145,12 @@ llvmIrToString = go 0
     insToString :: Int -> LLVMIr -> String
     insToString i l =
         replicate i '\t' <> case l of
+            (GetElementPtrInbounds t1 t2 p t3 v1 t4 v2) -> do
+                -- getelementptr inbounds %Foo, %Foo* %x, i32 0, i32 0
+                concat
+                    [ "getelementptr inbounds ", show t1, ", " , show t2
+                    , " ", show p, ", ", show t3, " ", show v1,
+                    ", ", show t4, " ", show v2, "\n" ]
             (Type (Ident n) types) ->
                 concat
                     [ "%", n, " = type { "
