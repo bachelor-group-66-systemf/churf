@@ -7,10 +7,19 @@ module LlvmIr (
     LLVMValue (..),
     LLVMComp (..),
     Visibility (..),
+    CallingConvention (..)
 ) where
 
 import           Data.List     (intercalate)
 import           TypeCheckerIr
+
+data CallingConvention = TailCC | FastCC | CCC | ColdCC
+instance Show CallingConvention where
+    show :: CallingConvention -> String
+    show TailCC = "tailcc"
+    show FastCC = "fastcc"
+    show CCC    = "ccc"
+    show ColdCC = "coldcc"
 
 -- | A datatype which represents some basic LLVM types
 data LLVMType
@@ -89,7 +98,7 @@ type Args = [(LLVMType, LLVMValue)]
 
 -- | A datatype which represents different instructions in LLVM
 data LLVMIr
-    = Define LLVMType Ident Params
+    = Define CallingConvention LLVMType Ident Params
     | DefineEnd
     | Declare LLVMType Ident Params
     | SetVariable Ident LLVMIr
@@ -103,7 +112,7 @@ data LLVMIr
     | Br Ident
     | BrCond LLVMValue Ident Ident
     | Label Ident
-    | Call LLVMType Visibility Ident Args
+    | Call CallingConvention LLVMType Visibility Ident Args
     | Alloca LLVMType
     | Store LLVMType LLVMValue LLVMType Ident
     | Load LLVMType LLVMType Ident
@@ -134,9 +143,9 @@ llvmIrToString = go 0
     insToString :: Int -> LLVMIr -> String
     insToString i l =
         replicate i '\t' <> case l of
-            (Define t (Ident i) params) ->
+            (Define c t (Ident i) params) ->
                 concat
-                    [ "define fastcc ", show t, " @", i
+                    [ "define ", show c, " ", show t, " @", i
                     , "(", intercalate ", " (map (\(Ident y, x) -> unwords [show x, "%" <> y]) params)
                     , ") {\n"
                     ]
@@ -168,9 +177,9 @@ llvmIrToString = go 0
                     [ "srem ", show t, " ", show v1, ", "
                     , show v2, "\n"
                     ]
-            (Call t vis (Ident i) arg) ->
+            (Call c t vis (Ident i) arg) ->
                 concat
-                    [ "call fastcc ", show t, " ", show vis, i, "("
+                    [ "call ", show c, " ",  show t, " ", show vis, i, "("
                     , intercalate ", " $ Prelude.map (\(x, y) -> show x <> " " <> show y) arg
                     , ")\n"
                     ]

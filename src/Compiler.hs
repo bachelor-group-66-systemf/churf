@@ -10,7 +10,8 @@ import qualified Data.Map            as Map
 import           Data.Tuple.Extra    (dupe, first, second)
 import qualified Grammar.Abs         as GA
 import           Grammar.ErrM        (Err)
-import           LlvmIr              (LLVMComp (..), LLVMIr (..), LLVMType (..),
+import           LlvmIr              (CallingConvention (..), LLVMComp (..),
+                                      LLVMIr (..), LLVMType (..),
                                       LLVMValue (..), Visibility (..),
                                       llvmIrToString)
 import           TypeChecker         (partitionType)
@@ -119,7 +120,7 @@ compileScs (Bind (name, t) args exp : xs) = do
     emit $ UnsafeRaw "\n"
     emit . Comment $ show name <> ": " <> show exp
     let args' = map (second type2LlvmType) args
-    emit $ Define I64 {-(type2LlvmType t_return)-} name args'
+    emit $ Define FastCC I64 {-(type2LlvmType t_return)-} name args'
     functionBody <- exprToValue exp
     if name == "main"
         then mapM_ emit $ mainContent functionBody
@@ -182,19 +183,30 @@ emitECased t e cases = do
     emit $ SetVariable (Ident $ show res) (Load ty Ptr (Ident $ show stackPtr))
     where
     emitCases :: LLVMType -> Ident -> Integer -> LLVMValue -> Case -> CompilerState ()
-    emitCases ty label stackPtr vs (Case (GA.CInt i) exp) = do
+    emitCases ty label stackPtr vs (Case (GA.CInt 0) exp) = do
         ns <- getNewVar
-        lbl_fail <- getNewLabel
-        lbl_succ <- getNewLabel
-        let failed = Ident $ "failed_" <> show lbl_fail
-        let success = Ident $ "success_" <> show lbl_succ
-        emit $ SetVariable (Ident $ show ns) (Icmp LLEq ty vs (VInteger i))
-        emit $ BrCond (VIdent (Ident $ show ns) ty) success failed
-        emit $ Label success
+        lbl_failPos <- (\x -> Ident $ "failed_" <> show x) <$> getNewLabel
+        lbl_succPos <- (\x -> Ident $ "success_" <> show x) <$> getNewLabel
+        lbl_failNeg <- (\x -> Ident $ "failed_" <> show x) <$> getNewLabel
+        lbl_succNeg <- (\x -> Ident $ "success_" <> show x) <$> getNewLabel
+        emit $ SetVariable (Ident $ show ns) (Icmp LLEq ty vs (VInteger 0))
+        emit $ BrCond (VIdent (Ident $ show ns) ty) lbl_succPos lbl_failPos
+        emit $ Label lbl_succPos
         val <- exprToValue exp
         emit $ Store ty val Ptr (Ident . show $ stackPtr)
         emit $ Br label
-        emit $ Label failed
+        emit $ Label lbl_failPos
+    emitCases ty label stackPtr vs (Case (GA.CInt i) exp) = do
+        ns <- getNewVar
+        lbl_failPos <- (\x -> Ident $ "failed_" <> show x) <$> getNewLabel
+        lbl_succPos <- (\x -> Ident $ "success_" <> show x) <$> getNewLabel
+        emit $ SetVariable (Ident $ show ns) (Icmp LLEq ty vs (VInteger i))
+        emit $ BrCond (VIdent (Ident $ show ns) ty) lbl_succPos lbl_failPos
+        emit $ Label lbl_succPos
+        val <- exprToValue exp
+        emit $ Store ty val Ptr (Ident . show $ stackPtr)
+        emit $ Br label
+        emit $ Label lbl_failPos
     emitCases ty label stackPtr  _ (Case GA.CatchAll exp) = do
         val <- exprToValue exp
         emit $ Store ty val Ptr (Ident . show $ stackPtr)
@@ -231,7 +243,7 @@ emitApp t e1 e2 = appEmitter t e1 e2 []
                 funcs <- gets functions
                 let visibility = maybe Local (const Global) $ Map.lookup id funcs
                     args'      = map (first valueGetType . dupe) args
-                    call       = Call (type2LlvmType t) visibility name args'
+                    call       = Call FastCC (type2LlvmType t) visibility name args'
                 emit $ SetVariable (Ident $ show vs) call
             x -> do
                 emit . Comment $ "The unspeakable happened: "
@@ -314,7 +326,7 @@ exprToValue = \case
                     then do
                         vc <- getNewVar
                         emit $ SetVariable (Ident $ show vc)
-                            (Call (type2LlvmType t) Global name [])
+                            (Call FastCC (type2LlvmType t) Global name [])
                         pure $ VIdent (Ident $ show vc) (type2LlvmType t)
                     else pure $ VFunction name Global (type2LlvmType t)
             Nothing -> pure $ VIdent name (type2LlvmType t)

@@ -61,6 +61,27 @@ facc a = case a of {
     1 => 1,
     _ => posMul a (facc (a - 1))
 } : Int;
+-- main : Int;
+-- main = facc 5
+-- answer: 120
+
+-- pow : Int -> Int -> Int;
+-- pow a b = case b of {
+--     0 => 1,
+--     _ => posMul a (pow a (b-1))
+-- } : Int;
+
+minimization : (Int -> Int) -> Int -> Int;
+minimization p x = case p x of { 
+    1 => x,
+    _ => minimization p (x + 1)
+} : Int;
+
+checkFac : Int -> Int;
+checkFac x = case facc x of {
+    0 => 1,
+    _ => 0
+} : Int;
 
 main : Int;
-main = facc 27
+main = minimization checkFac 1
