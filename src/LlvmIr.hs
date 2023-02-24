@@ -98,7 +98,8 @@ type Args = [(LLVMType, LLVMValue)]
 
 -- | A datatype which represents different instructions in LLVM
 data LLVMIr
-    = Define CallingConvention LLVMType Ident Params
+    = Type Ident [LLVMType]
+    | Define CallingConvention LLVMType Ident Params
     | DefineEnd
     | Declare LLVMType Ident Params
     | SetVariable Ident LLVMIr
@@ -143,6 +144,12 @@ llvmIrToString = go 0
     insToString :: Int -> LLVMIr -> String
     insToString i l =
         replicate i '\t' <> case l of
+            (Type (Ident n) types) ->
+                concat
+                    [ "%", n, " = {"
+                    , intercalate " , " (map show types)
+                    , "}"
+                    ]
             (Define c t (Ident i) params) ->
                 concat
                     [ "define ", show c, " ", show t, " @", i
