@@ -2,9 +2,9 @@
 
 #include <assert.h>
 #include <iostream>
+#include <list>
 #include <setjmp.h>
 #include <stdlib.h>
-#include <vector>
 
 #include "chunk.hpp"
 
@@ -30,26 +30,10 @@ namespace GC {
       m_allocated_size = 0;
     }
 
-    void collect(Heap *heap);
-    void sweep(Heap *heap);
-    uintptr_t *try_recycle_chunks(Heap *heap, size_t size);
-    void free(Heap *heap);
-    void free_overlap(Heap *heap);
-    void mark(uintptr_t *start, const uintptr_t *end, std::vector<Chunk *> worklist);
-    void print_line(Chunk *chunk);
-    void print_worklist(std::vector<Chunk *> list);
-
-    inline static Heap *m_instance = nullptr;
-    const char *m_heap;
-    size_t m_size;
-    size_t m_allocated_size;
-    uintptr_t *m_stack_end = nullptr;
-
-    // maybe change to std::list
-    std::vector<Chunk *> m_allocated_chunks;
-    std::vector<Chunk *> m_freed_chunks;
-
-  public:
+    // BEWARE only for testing, this should be adressed
+    ~Heap() {
+      std::free((char *)m_heap);
+    }
 
     static inline Heap *the() { // TODO: make private
       if (m_instance) // if m_instance is not a nullptr
@@ -58,10 +42,34 @@ namespace GC {
       return m_instance;
     }
 
-    // BEWARE only for testing, this should be adressed
-    ~Heap() {
-      std::free((char *)m_heap);
+    static inline Chunk *getAt(std::list<Chunk *> list, size_t n) {
+      auto iter = list.begin();
+      if (!n)
+        return *iter;
+      std::advance(iter, n);
+      return *iter;
     }
+
+    void collect();
+    void sweep(Heap *heap);
+    uintptr_t *try_recycle_chunks(size_t size);
+    void free(Heap* heap);
+    void free_overlap(Heap *heap);
+    void mark(uintptr_t *start, const uintptr_t *end, std::list<Chunk *> worklist);
+    void print_line(Chunk *chunk);
+    void print_worklist(std::list<Chunk *> list);
+
+    inline static Heap *m_instance = nullptr;
+    const char *m_heap;
+    size_t m_size;
+    size_t m_allocated_size;
+    uintptr_t *m_stack_end = nullptr;
+
+    // maybe change to std::list
+    std::list<Chunk *> m_allocated_chunks;
+    std::list<Chunk *> m_freed_chunks;
+
+  public:
 
     /**
      * These are the only two functions which are exposed
@@ -70,8 +78,9 @@ namespace GC {
      * that the address of the topmost stack frame is
      * saved as the limit for scanning the stack in collect.
     */
-    void *alloc(size_t size); // TODO: make static
-    void init(); // TODO: make static
+    static void init();              // TODO: make static
+    static void dispose();           // -||-
+    static void *alloc(size_t size); // -||-
     
     // DEBUG ONLY
     void collect(uint flags); // conditional collection

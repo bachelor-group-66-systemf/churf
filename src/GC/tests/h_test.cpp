@@ -17,7 +17,7 @@ Node *create_chain(int depth) {
         for (int i = 0; i < depth; i++) {
             Node *node = static_cast<Node *>(gc->alloc(sizeof(Node)));
             node->id = depth-i;
-            node->child = nodes[i-1];
+            node->child = nodes[i];
             nodes.push_back(node);
         }
         for (size_t i = 0; i < nodes.size(); i++) {
@@ -83,8 +83,8 @@ int main() {
         longs[i] = static_cast<long *>(gc->alloc(sizeof(long)));
     } */
 
-    Node *root = static_cast<Node *>(gc->alloc(sizeof(Node)));
-    root = test_chain(3, false);
+    //Node *root = static_cast<Node *>(gc->alloc(sizeof(Node)));
+    Node *root = test_chain(100, true);
     std::cout << "Adress of root:\t" << &root << std::endl;
     std::cout << "Root points to:\t" << root << std::endl;
     std::cout << "Root child:\t" << root->child << std::endl;
