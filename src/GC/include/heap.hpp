@@ -42,7 +42,7 @@ namespace GC {
       return m_instance;
     }
 
-    static inline Chunk *getAt(std::list<Chunk *> list, size_t n) {
+    static inline Chunk *getAt(std::vector<Chunk *> list, size_t n) {
       auto iter = list.begin();
       if (!n)
         return *iter;
@@ -55,9 +55,9 @@ namespace GC {
     uintptr_t *try_recycle_chunks(size_t size);
     void free(Heap* heap);
     void free_overlap(Heap *heap);
-    void mark(uintptr_t *start, const uintptr_t *end, std::list<Chunk *> worklist);
+    void mark(uintptr_t *start, const uintptr_t *end, std::vector<Chunk *> worklist);
     void print_line(Chunk *chunk);
-    void print_worklist(std::list<Chunk *> list);
+    void print_worklist(std::vector<Chunk *> list);
 
     inline static Heap *m_instance = nullptr;
     const char *m_heap;
@@ -66,8 +66,8 @@ namespace GC {
     uintptr_t *m_stack_top = nullptr;
 
     // maybe change to std::list
-    std::list<Chunk *> m_allocated_chunks;
-    std::list<Chunk *> m_freed_chunks;
+    std::vector<Chunk *> m_allocated_chunks;
+    std::vector<Chunk *> m_freed_chunks;
 
   public:
 

@@ -168,7 +168,7 @@ namespace GC {
     * @param end      Pointer to the end of the stack frame.
     * @param worklist The currently allocated chunks, which haven't been marked. 
   */ 
-  void Heap::mark(uintptr_t *start, const uintptr_t *end, list<Chunk*> worklist) {
+  void Heap::mark(uintptr_t *start, const uintptr_t *end, vector<Chunk*> worklist) {
     int counter = 0;
     // To find adresses thats in the worklist
     for (; start < end; start++) { 
@@ -273,7 +273,7 @@ namespace GC {
    *       larger chunks.
   */
   void Heap::free_overlap(Heap *heap) {
-    std::list<Chunk *> filtered;
+    std::vector<Chunk *> filtered;
     size_t i = 0;
     // filtered.push_back(heap->m_freed_chunks.at(i++));
     filtered.push_back(getAt(heap->m_freed_chunks, i++));
@@ -384,7 +384,7 @@ namespace GC {
     cout << "Marked: " << chunk->marked << "\nStart adr: " << chunk->start << "\nSize: " << chunk->size << " B\n" << endl;
   }
 
-  void Heap::print_worklist(std::list<Chunk *> list) {
+  void Heap::print_worklist(std::vector<Chunk *> list) {
     for (auto cp : list) {
       cout << "Chunk at:\t" << cp->start << "\nSize:\t\t" << cp->size << endl;
     }
