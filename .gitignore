@@ -3,6 +3,9 @@ dist-newstyle
 *.x
 *.bak
 src/Grammar
+
+language
+llvm.ll
 /language
 .vscode/
 

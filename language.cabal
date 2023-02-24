@@ -1,4 +1,4 @@
-cabal-version:      3.0
+cabal-version:      3.4
 
 name:               language
 
@@ -12,26 +12,34 @@ build-type:         Simple
 
 extra-doc-files:    CHANGELOG.md
 
+
 extra-source-files:
   Grammar.cf
 
 
 common warnings
-    ghc-options: -Wall
+    ghc-options: -W
 
 executable language
     import:           warnings
 
     main-is:          Main.hs
-
+    
     other-modules:
       Grammar.Abs
       Grammar.Lex
       Grammar.Par
       Grammar.Print
       Grammar.Skel
-      Interpreter
-
+      Grammar.ErrM
+      LambdaLifter
+      Auxiliary
+      Renamer
+      TypeChecker
+      TypeCheckerIr
+--      Interpreter
+      Compiler
+      LlvmIr
     hs-source-dirs:   src
 
     build-depends:    
@@ -40,5 +48,5 @@ executable language
       , containers
       , either
       , array
-
+      , extra
     default-language: GHC2021

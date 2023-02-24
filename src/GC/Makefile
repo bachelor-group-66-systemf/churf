@@ -9,8 +9,8 @@ STDFLAGS 	= -std=gnu++20 -stdlib=libc++
 WFLAGS 		= -Wall -Wextra
 DBGFLAGS 	= -g
 
-test_test:
-	echo "$(shell pwd)"
+advance:
+	$(CC) $(WFLAGS) $(STDFLAGS) tests/advance.cpp -o tests/advance.out
 
 heap:
 	$(CC) $(WFLAGS) $(STDFLAGS) $(LIB_INCL) lib/heap.cpp
