@@ -63,7 +63,7 @@ namespace GC {
     const char *m_heap;
     size_t m_size;
     size_t m_allocated_size;
-    uintptr_t *m_stack_end = nullptr;
+    uintptr_t *m_stack_top = nullptr;
 
     // maybe change to std::list
     std::list<Chunk *> m_allocated_chunks;

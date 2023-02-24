@@ -14,13 +14,13 @@ namespace GC {
 
   /**
    * Initialises the heap singleton and saves the address
-   * of the calling stack frame as the stack_end. Presumeably
+   * of the calling stack frame as the stack_top. Presumeably
    * this address points to the stack frame of the compiled
    * LLVM executable after linking.
   */
   void Heap::init() {
     Heap *heap = Heap::the();
-    heap->m_stack_end = reinterpret_cast<uintptr_t *>(__builtin_frame_address(1));
+    heap->m_stack_top = reinterpret_cast<uintptr_t *>(__builtin_frame_address(1));
   }
 
   /**
@@ -139,17 +139,17 @@ namespace GC {
     auto heap = Heap::the();
 
     // get current stack
-    auto stack_start = reinterpret_cast<uintptr_t *>(__builtin_frame_address(0));
+    auto stack_bottom = reinterpret_cast<uintptr_t *>(__builtin_frame_address(0));
 
     // fix this block, it's nästy
-    uintptr_t *stack_end;
-    if (heap->m_stack_end != nullptr)
-      stack_end = heap->m_stack_end;
+    uintptr_t *stack_top;
+    if (heap->m_stack_top != nullptr)
+      stack_top = heap->m_stack_top;
     else
-      stack_end = (uintptr_t *)0; // temporary
+      stack_top = (uintptr_t *)0; // temporary
 
     auto work_list = heap->m_allocated_chunks;
-    mark(stack_start, stack_end, work_list);
+    mark(stack_bottom, stack_top, work_list);
 
     sweep(heap);
 
@@ -211,9 +211,9 @@ namespace GC {
   
   /**
    * Sweeps the heap, unmarks the marked chunks for the next cycle,
-   * adds the unmarked nodes to the vector of freed chunks; to be freed.
+   * adds the unmarked nodes to the list of freed chunks; to be freed.
    * 
-   * @param heap Pointer to the heap to oporate on.
+   * @param heap Pointer to the heap singleton instance.
   */
   void Heap::sweep(Heap *heap) {
     auto iter = heap->m_allocated_chunks.begin();
@@ -301,9 +301,9 @@ namespace GC {
   void Heap::check_init() {
     auto heap = Heap::the();
     cout << "Heap addr:\t" << heap << endl;
-    cout << "GC m_stack_end:\t" << heap->m_stack_end << endl;
-    auto stack_start = reinterpret_cast<uintptr_t *>(__builtin_frame_address(0));
-    cout << "GC stack_start:\t" << stack_start << endl;
+    cout << "GC m_stack_top:\t" << heap->m_stack_top << endl;
+    auto stack_bottom = reinterpret_cast<uintptr_t *>(__builtin_frame_address(0));
+    cout << "GC stack_bottom:\t" << stack_bottom << endl;
   }
   
   /**
@@ -325,20 +325,20 @@ namespace GC {
     auto heap = Heap::the();
 
     // get the frame adress, whwere local variables and saved registers are located
-    auto stack_start = reinterpret_cast<uintptr_t *>(__builtin_frame_address(0));
-    cout << "Stack start in collect:\t" << stack_start << endl;
-    uintptr_t *stack_end;
+    auto stack_bottom = reinterpret_cast<uintptr_t *>(__builtin_frame_address(0));
+    cout << "Stack bottom in collect:\t" << stack_bottom << endl;
+    uintptr_t *stack_top;
 
-    if (heap->m_stack_end != nullptr)
-      stack_end = heap->m_stack_end;
+    if (heap->m_stack_top != nullptr)
+      stack_top = heap->m_stack_top;
     else
-      stack_end = (uintptr_t *) stack_start - 80; // dummy value
+      stack_top = (uintptr_t *) stack_bottom + 80; // dummy value
 
-    cout << "Stack end in collect:\t " << stack_end << endl;
+    cout << "Stack end in collect:\t " << stack_top << endl;
     auto work_list = heap->m_allocated_chunks;
 
     if (flags & MARK) {
-      mark(stack_start, stack_end, work_list);
+      mark(stack_bottom, stack_top, work_list);
     }
 
     if (flags & SWEEP) {
