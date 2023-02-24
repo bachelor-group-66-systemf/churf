@@ -44,7 +44,7 @@ instance Show LLVMType where
         Ref ty -> show ty <> "*"
         Function t xs -> show t <> " (" <> intercalate ", " (map show xs) <> ")*"
         Array n ty -> concat ["[", show n, " x ", show ty, "]"]
-        CustomType (Ident ty) -> ty
+        CustomType (Ident ty) -> "%" <> ty
 
 data LLVMComp
     = LLEq
@@ -146,9 +146,9 @@ llvmIrToString = go 0
         replicate i '\t' <> case l of
             (Type (Ident n) types) ->
                 concat
-                    [ "%", n, " = {"
-                    , intercalate " , " (map show types)
-                    , "}"
+                    [ "%", n, " = type { "
+                    , intercalate ", " (map show types)
+                    , " }\n"
                     ]
             (Define c t (Ident i) params) ->
                 concat

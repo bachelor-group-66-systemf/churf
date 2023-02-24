@@ -3,26 +3,28 @@
 
 module Compiler (compile) where
 
-import           Auxiliary           (snoc)
-import           Control.Monad.State (StateT, execStateT, gets, modify)
-import           Data.Map            (Map)
-import qualified Data.Map            as Map
-import           Data.Tuple.Extra    (dupe, first, second)
-import qualified Grammar.Abs         as GA
-import           Grammar.ErrM        (Err)
-import           LlvmIr              (CallingConvention (..), LLVMComp (..),
-                                      LLVMIr (..), LLVMType (..),
-                                      LLVMValue (..), Visibility (..),
-                                      llvmIrToString)
-import           TypeChecker         (partitionType)
-import           TypeCheckerIr       (Bind (..), Case (..), Exp (..), Id,
-                                      Ident (..), Program (..),
-                                      Type (TFun, TInt))
+import           Auxiliary            (snoc)
+import           Control.Monad.State  (StateT, execStateT, gets, modify)
+import           Data.List.Extra      (trim)
+import           Data.Map             (Map)
+import qualified Data.Map             as Map
+import           Data.Tuple.Extra     (dupe, first, second)
+import qualified Grammar.Abs          as GA
+import           Grammar.ErrM         (Err)
+import           LlvmIr               (CallingConvention (..), LLVMComp (..),
+                                       LLVMIr (..), LLVMType (..),
+                                       LLVMValue (..), Visibility (..),
+                                       llvmIrToString)
+import           System.Process.Extra (readCreateProcess, shell)
+import           TypeChecker          (partitionType)
+import           TypeCheckerIr        (Bind (..), Case (..), Exp (..), Id,
+                                       Ident (..), Program (..), Type (..))
 
 -- | The record used as the code generator state
 data CodeGenerator = CodeGenerator
     { instructions  :: [LLVMIr]
     , functions     :: Map Id FunctionInfo
+    , constructors  :: Map Id FunctionInfo
     , variableCount :: Integer
     , labelCount    :: Integer
     }
@@ -34,6 +36,7 @@ data FunctionInfo = FunctionInfo
     { numArgs   :: Int
     , arguments :: [Id]
     }
+    deriving Show
 
 -- | Adds a instruction to the CodeGenerator state
 emit :: LLVMIr -> CompilerState ()
@@ -60,51 +63,62 @@ getNewLabel = do
 -- | Produces a map of functions infos from a list of binds,
 --  which contains useful data for code generation.
 getFunctions :: [Bind] -> Map Id FunctionInfo
-getFunctions bs = Map.fromList $ map go bs
+getFunctions bs = Map.fromList $ go bs
   where
-    go (Bind id args _) =
+    go [] = []
+    go (Bind id args _ : xs) =
         (id, FunctionInfo { numArgs=length args, arguments=args })
+        : go xs
+    go (DataStructure n cons : xs) = do
+        map (\(id, xs) -> ((id, TPol n), FunctionInfo {
+            numArgs=length xs, arguments=createArgs xs
+        })) cons
+        <> go xs
 
+createArgs :: [Type] -> [Id]
+createArgs xs = fst $ foldl (\(acc, l) t -> (acc ++ [(Ident ("arg_" <> show l) , t)],l+1)) ([], 0) xs
 
+-- | Produces a map of functions infos from a list of binds,
+--  which contains useful data for code generation.
+getConstructors :: [Bind] -> Map Id FunctionInfo
+getConstructors bs = Map.fromList $ go bs
+  where
+    go [] = []
+    go (DataStructure n cons : xs) = do
+        map (\(id, xs) -> ((id, TPol n), FunctionInfo {
+            numArgs=length xs, arguments=createArgs xs
+        })) cons
+        <> go xs
+    go (_: xs) = go xs
 
 initCodeGenerator :: [Bind] -> CodeGenerator
 initCodeGenerator scs = CodeGenerator { instructions = defaultStart
                                       , functions = getFunctions scs
+                                      , constructors = getConstructors scs
                                       , variableCount = 0
                                       , labelCount = 0
                                       }
-{-
+
 run :: Err String -> IO ()
 run s = do
     let s' = case s of
             Right s -> s
             Left _  -> error "yo"
-    writeFile "llvm.ll" s'
+    writeFile "output/llvm.ll" s'
     putStrLn . trim =<< readCreateProcess (shell "lli") s'
 
 test :: Integer -> Program
 test v = Program [
-    Bind (Ident "fibonacci", TInt) [(Ident "x", TInt)] (
-        ECase TInt (EId ("x", TInt)) [
-            (TInt,Case (CInt 0) (EInt 0)),
-            Case (CInt 1) (EInt 1),
-            Case CatchAll (EAdd TInt
-                (EApp TInt (EId (Ident "fibonacci", TInt)) (
-                    EAdd TInt (EId (Ident "x", TInt))
-                              (EInt (fromIntegral ((maxBound :: Int) * 2)))
-                ))
-                (EApp TInt (EId (Ident "fibonacci", TInt)) (
-                    EAdd TInt (EId (Ident "x", TInt))
-                    (EInt (fromIntegral ((maxBound :: Int) * 2 + 1)))
-                ))
-            )
-        ]
-    ),
+    DataStructure (Ident "Craig") [
+        (Ident "Bob", [TInt]),
+        (Ident "Alice", [TInt, TInt])
+    ],
+    Bind (Ident "fibonacci", TInt) [(Ident "x", TInt)] (EId ("x",TInt)),
     Bind (Ident "main", TInt) [] (
        EApp TInt (EId (Ident "fibonacci", TInt))  (EInt v) -- (EInt 92)
     )
     ]
--}
+
 {- | Compiles an AST and produces a LLVM Ir string.
   An easy way to actually "compile" this output is to
   Simply pipe it to LLI
@@ -115,8 +129,14 @@ compile (Program scs) = do
     llvmIrToString . instructions <$> execStateT (compileScs scs) codegen
 
 compileScs :: [Bind] -> CompilerState ()
-compileScs []                             = pure ()
-compileScs (Bind (name, t) args exp : xs) = do
+compileScs []                             = do
+    return ()
+    -- c <- gets (Map.toList . constructors)
+    -- mapM_ (\((id, t), fi) -> do
+    --         emit $ Define FastCC (type2LlvmType t) id []
+    --         emit DefineEnd
+    --     ) c
+compileScs (Bind (name, _t) args exp : xs) = do
     emit $ UnsafeRaw "\n"
     emit . Comment $ show name <> ": " <> show exp
     let args' = map (second type2LlvmType) args
@@ -128,8 +148,16 @@ compileScs (Bind (name, t) args exp : xs) = do
     emit DefineEnd
     modify $ \s -> s { variableCount = 0 }
     compileScs xs
-  where
-    t_return = snd $ partitionType (length args) t
+compileScs (DataStructure id@(Ident outer_id) ts : xs) = do
+    let biggest_variant = maximum ((\(_, t) -> sum $ typeByteSize . type2LlvmType <$> t) <$> ts)
+    emit $ Type id [I8, Array biggest_variant I8]
+    mapM_ (\(Ident inner_id, fi) -> do
+            emit $ Type (Ident $ outer_id <> "_" <> inner_id) (I8 : map type2LlvmType fi)
+        ) ts
+    compileScs xs
+
+  -- where
+  --   _t_return = snd $ partitionType (length args) t
 
 mainContent :: LLVMValue -> [LLVMIr]
 mainContent var =
@@ -150,7 +178,9 @@ mainContent var =
     ]
 
 defaultStart :: [LLVMIr]
-defaultStart = [ UnsafeRaw "@.str = private unnamed_addr constant [3 x i8] c\"%i\n\", align 1\n"
+defaultStart = [ UnsafeRaw "target triple = \"x86_64-pc-linux-gnu\"\n"
+               , UnsafeRaw "target datalayout = \"e-m:o-i64:64-f80:128-n8:16:32:64-S128\"\n"
+               , UnsafeRaw "@.str = private unnamed_addr constant [3 x i8] c\"%i\n\", align 1\n"
                , UnsafeRaw "declare i32 @printf(ptr noalias nocapture, ...)\n"
                ]
 
@@ -183,19 +213,6 @@ emitECased t e cases = do
     emit $ SetVariable (Ident $ show res) (Load ty Ptr (Ident $ show stackPtr))
     where
     emitCases :: LLVMType -> Ident -> Integer -> LLVMValue -> Case -> CompilerState ()
-    emitCases ty label stackPtr vs (Case (GA.CInt 0) exp) = do
-        ns <- getNewVar
-        lbl_failPos <- (\x -> Ident $ "failed_" <> show x) <$> getNewLabel
-        lbl_succPos <- (\x -> Ident $ "success_" <> show x) <$> getNewLabel
-        lbl_failNeg <- (\x -> Ident $ "failed_" <> show x) <$> getNewLabel
-        lbl_succNeg <- (\x -> Ident $ "success_" <> show x) <$> getNewLabel
-        emit $ SetVariable (Ident $ show ns) (Icmp LLEq ty vs (VInteger 0))
-        emit $ BrCond (VIdent (Ident $ show ns) ty) lbl_succPos lbl_failPos
-        emit $ Label lbl_succPos
-        val <- exprToValue exp
-        emit $ Store ty val Ptr (Ident . show $ stackPtr)
-        emit $ Br label
-        emit $ Label lbl_failPos
     emitCases ty label stackPtr vs (Case (GA.CInt i) exp) = do
         ns <- getNewVar
         lbl_failPos <- (\x -> Ident $ "failed_" <> show x) <$> getNewLabel
@@ -342,7 +359,7 @@ type2LlvmType = \case
     TFun t xs -> do
         let (t', xs') = function2LLVMType xs [type2LlvmType t]
         Function t' xs'
-    t -> CustomType $ Ident ("\"" ++ show t ++ "\"")
+    TPol t -> CustomType t
   where
     function2LLVMType :: Type -> [LLVMType] -> (LLVMType, [LLVMType])
     function2LLVMType (TFun t xs) s = function2LLVMType xs (type2LlvmType t : s)
@@ -363,3 +380,14 @@ valueGetType (VInteger _)      = I64
 valueGetType (VIdent _ t)      = t
 valueGetType (VConstant s)     = Array (length s) I8
 valueGetType (VFunction _ _ t) = t
+
+typeByteSize :: LLVMType -> Int
+typeByteSize I1             = 1
+typeByteSize I8             = 1
+typeByteSize I32            = 4
+typeByteSize I64            = 8
+typeByteSize Ptr            = 8
+typeByteSize (Ref _)        = 8
+typeByteSize (Function _ _) = 8
+typeByteSize (Array n t)    = n * typeByteSize t
+typeByteSize (CustomType _) = 8

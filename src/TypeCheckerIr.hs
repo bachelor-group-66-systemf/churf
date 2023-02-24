@@ -30,7 +30,7 @@ data Case = Case GA.Case Exp
 
 type Id = (Ident, Type)
 
-data Bind = Bind Id [Id] Exp
+data Bind = Bind Id [Id] Exp | DataStructure Ident [(Ident, [Type])]
     deriving (C.Eq, C.Ord, C.Show, C.Read)
 
 instance Print Program where
@@ -44,6 +44,12 @@ instance Print Bind where
         , prtIdPs 0 parms
         , doc $ showString "="
         , prt 0 rhs
+        ]
+    prt i (DataStructure (Ident n) xs) = prPrec i 0 $ concatD
+        [ prt 0 n
+        , doc $ showString "{"
+        , doc . showString . show $ xs
+        , doc $ showString "}"
         ]
 
 instance Print [Bind] where
