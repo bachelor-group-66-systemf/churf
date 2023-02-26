@@ -2,9 +2,9 @@
 
 #include <assert.h>
 #include <iostream>
-#include <list>
 #include <setjmp.h>
 #include <stdlib.h>
+#include <vector>
 
 #include "chunk.hpp"
 
