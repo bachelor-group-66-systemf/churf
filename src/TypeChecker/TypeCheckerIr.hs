@@ -5,12 +5,12 @@ module TypeChecker.TypeCheckerIr
   , module TypeChecker.TypeCheckerIr
   ) where
 
-import           Grammar.Abs   (Ident (..), Literal (..), Type (..))
+import           Grammar.Abs   (Data (..), Ident (..), Literal (..), Type (..))
 import           Grammar.Print
 import           Prelude
 import qualified Prelude       as C (Eq, Ord, Read, Show)
 
-newtype Program = Program [Bind]
+newtype Program = Program [Def]
   deriving (C.Eq, C.Ord, C.Show, C.Read)
 
 data Exp
@@ -22,10 +22,17 @@ data Exp
     | EAbs Type Id Exp
       deriving (C.Eq, C.Ord, C.Read, C.Show)
 
+data Def = DBind Bind | DData Data
+    deriving (C.Eq, C.Ord, C.Read, C.Show)
+
 type Id = (Ident, Type)
 
 data Bind = Bind Id [Id] Exp
     deriving (C.Eq, C.Ord, C.Show, C.Read)
+
+instance Print Def where
+  prt i (DBind bind) = prt i bind
+  prt i (DData d)    = prt i d
 
 instance Print Program where
     prt i (Program sc) = prPrec i 0 $ prt 0 sc
@@ -75,7 +82,7 @@ instance Print Exp where
                     , doc $ showString "in"
                     , prt 0 e
                     ]
-    EApp t e1 e2 -> prPrec i 2 $ concatD
+    EApp _ e1 e2 -> prPrec i 2 $ concatD
                         [ prt 2 e1
                         , prt 3 e2
                         ]

@@ -1,2 +1,14 @@
-main : _Int ;
-main = 3 + 3 ;
+data List ('a) where;
+    Nil : List ('a),
+    Cons : 'a -> List ('a) -> List ('a) ;
+
+main : List (_Int) ;
+main = Cons 1 (Cons 0 Nil) ;
+
+data Bool () where;
+    True : Bool (),
+    False : Bool ();
+
+boolean : Bool (_Int);
+boolean = True ;
+    

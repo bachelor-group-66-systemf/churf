@@ -3,7 +3,7 @@ Program. Program ::= [Def] ;
 
 DBind. Def ::= Bind ;
 DData. Def ::= Data ;
-terminator Def ";" ;
+separator Def ";" ;
 
 Bind. Bind ::= Ident ":" Type ";"
                Ident [Ident] "=" Exp ;
@@ -31,16 +31,19 @@ IMatch. Match ::= Ident ;
 InitMatch. Match ::= Ident Match ;
 separator Match " " ;
 
-TMono. Type1 ::= "_" Ident ;
-TPol. Type1 ::= "'" Ident ;
-TArr. Type ::= Type1 "->" Type ;
+TMono.   Type1 ::= "_" Ident ;
+TPol.    Type1 ::= "'" Ident ;
+TConstr. Type1  ::= Ident "(" [Type] ")" ; 
+TArr.    Type ::= Type1 "->" Type ;
+
 separator Type " " ;
+coercions Type 2 ;
 
 -- shift/reduce problem here
-Data. Data ::= "data" Ident [Type] "where" ";"
+Data. Data ::= "data" Type "where" ";"
                [Constructor];
 
-terminator Constructor ";" ;
+separator Constructor "," ;
 
 Constructor. Constructor ::= Ident ":" Type ;
 
@@ -48,10 +51,9 @@ Constructor. Constructor ::= Ident ":" Type ;
 -- token Poly upper (letter | digit | '_')* ;
 -- token Mono lower (letter | digit | '_')* ;
 
-terminator Bind ";" ;
+separator Bind ";" ;
 separator Ident " ";
 
-coercions Type 1 ;
 coercions Exp 5 ;
 
 comment "--" ;

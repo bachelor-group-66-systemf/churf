@@ -34,9 +34,9 @@ executable language
       TypeChecker.TypeChecker
       TypeChecker.TypeCheckerIr
       Renamer.Renamer
-      LambdaLifter.LambdaLifter
-      Codegen.Codegen
-      Codegen.LlvmIr
+      -- LambdaLifter.LambdaLifter
+      -- Codegen.Codegen
+      -- Codegen.LlvmIr
 
     hs-source-dirs:   src
 

@@ -2,18 +2,18 @@
 
 module Main where
 
-import           Codegen.Codegen           (compile)
-import           GHC.IO.Handle.Text        (hPutStrLn)
-import           Grammar.ErrM              (Err)
-import           Grammar.Par               (myLexer, pProgram)
-import           Grammar.Print             (printTree)
+-- import           Codegen.Codegen           (compile)
+import           GHC.IO.Handle.Text      (hPutStrLn)
+import           Grammar.ErrM            (Err)
+import           Grammar.Par             (myLexer, pProgram)
+import           Grammar.Print           (printTree)
 
-import           LambdaLifter.LambdaLifter (lambdaLift)
-import           Renamer.Renamer           (rename)
-import           System.Environment        (getArgs)
-import           System.Exit               (exitFailure, exitSuccess)
-import           System.IO                 (stderr)
-import           TypeChecker.TypeChecker   (typecheck)
+-- import           LambdaLifter.LambdaLifter (lambdaLift)
+import           Renamer.Renamer         (rename)
+import           System.Environment      (getArgs)
+import           System.Exit             (exitFailure, exitSuccess)
+import           System.IO               (stderr)
+import           TypeChecker.TypeChecker (typecheck)
 
 main :: IO ()
 main =
@@ -37,14 +37,14 @@ main' s = do
     typechecked <- fromTypeCheckerErr $ typecheck renamed
     printToErr $ printTree typechecked
 
-    printToErr "\n-- Lambda Lifter --"
-    let lifted = lambdaLift typechecked
-    printToErr $ printTree lifted
+    -- printToErr "\n-- Lambda Lifter --"
+    -- let lifted = lambdaLift typechecked
+    -- printToErr $ printTree lifted
 
-    printToErr "\n -- Printing compiler output to stdout --"
-    compiled <- fromCompilerErr $ compile lifted
-    putStrLn compiled
-    writeFile "llvm.ll" compiled
+    -- printToErr "\n -- Printing compiler output to stdout --"
+    -- compiled <- fromCompilerErr $ compile lifted
+    -- putStrLn compiled
+    -- writeFile "llvm.ll" compiled
 
     exitSuccess
 
