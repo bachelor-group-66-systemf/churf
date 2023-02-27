@@ -109,7 +109,9 @@ checkBind (Bind n t _ args e) = do
 typeEq :: Type -> Type -> Bool
 typeEq (TArr l r) (TArr l' r')            = typeEq l l' && typeEq r r'
 typeEq (TMono a) (TMono b)                = a == b
-typeEq (TConstr name a) (TConstr name' b) = name == name' && and (zipWith typeEq a b)
+typeEq (TConstr name a) (TConstr name' b) = if length a == length b  
+                                                then name == name' && and (zipWith typeEq a b)
+                                                else False
 typeEq (TPol _) (TPol _)                  = True
 typeEq _ _                                = False
 
