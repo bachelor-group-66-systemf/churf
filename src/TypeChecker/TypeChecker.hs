@@ -1,153 +1,250 @@
--- {-# LANGUAGE LambdaCase          #-}
--- {-# LANGUAGE OverloadedRecordDot #-}
--- {-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Use traverse_" #-}
+{-# OPTIONS_GHC -Wno-overlapping-patterns #-}
 
 module TypeChecker.TypeChecker where
 
--- import           Control.Monad             (void)
--- import           Control.Monad.Except      (ExceptT, runExceptT, throwError)
--- import           Control.Monad.State       (StateT)
--- import qualified Control.Monad.State       as St
--- import           Data.Functor.Identity     (Identity, runIdentity)
--- import           Data.Map                  (Map)
--- import qualified Data.Map                  as M
+import           Control.Monad.Except
+import           Control.Monad.Reader
+import           Control.Monad.State
+import           Data.Functor.Identity     (Identity, runIdentity)
+import           Data.List                 (foldl')
+import           Data.Map                  (Map)
+import qualified Data.Map                  as M
+import           Data.Set                  (Set)
+import qualified Data.Set                  as S
 
--- import           TypeChecker.TypeCheckerIr
+import           Grammar.Abs
+import           Grammar.Print             (printTree)
+import qualified TypeChecker.TypeCheckerIr as T
 
--- data Ctx = Ctx
---     { vars      :: Map Integer Type
---     , sigs      :: Map Ident Type
---     , nextFresh :: Int
---     }
---     deriving (Show)
+-- | A data type representing type variables
+data Poly = Forall [Ident] Type
+    deriving Show
 
--- -- Perhaps swap over to reader monad instead for vars and sigs.
--- type Infer = StateT Ctx (ExceptT Error Identity)
+newtype Ctx = Ctx { vars  :: Map Ident Poly }
 
--- {-
+data Env = Env { count :: Int
+               , sigs  :: Map Ident Type
+               }
 
--- The type checker will assume we first rename all variables to unique name, as to not
--- have to care about scoping. It significantly improves the quality of life of the
--- programmer.
+type Error = String
+type Subst = Map Ident Type
 
--- TODOs:
---     Add skolemization variables. i.e
---     { \x. 3 : forall a. a -> a }
---     should not type check
+type Infer = StateT Env (ReaderT Ctx (ExceptT Error Identity))
 
---     Generalize. Not really sure what that means though
+initCtx = Ctx mempty
+initEnv = Env 0 mempty
 
--- -}
+runPretty :: Exp -> Either Error String
+runPretty = fmap (printTree . fst). run . inferExp
 
--- typecheck :: RProgram -> Either Error TProgram
--- typecheck = todo
+run :: Infer a -> Either Error a
+run = runC initEnv initCtx
 
--- run :: Infer a -> Either Error a
--- run = runIdentity . runExceptT . flip St.evalStateT (Ctx mempty mempty 0)
+runC :: Env -> Ctx -> Infer a -> Either Error a
+runC e c = runIdentity . runExceptT . flip runReaderT c . flip evalStateT e
 
--- -- Have to figure out a way to coerce polymorphic types to monomorphic ones where necessary
--- -- { \x. \y. x + y } will have the type { a -> b -> Int }
--- inferExp :: RExp -> Infer Type
--- inferExp = \case
+typecheck :: Program -> Either Error T.Program
+typecheck = run . checkPrg
 
---     RAnn expr typ -> do
---         t <- inferExp expr
---         void $ t =:= typ
---         return t
+checkPrg :: Program -> Infer T.Program
+checkPrg (Program bs) = do
+    let bs' = getBinds bs
+    traverse (\(Bind n t _ _ _) -> insertSig n t) bs'
+    bs' <- mapM checkBind bs'
+    return $ T.Program bs'
+  where
+    getBinds :: [Def] -> [Bind]
+    getBinds = map toBind . filter isBind
+    isBind :: Def -> Bool
+    isBind (DBind _) = True
+    isBind _         = True
+    toBind :: Def -> Bind
+    toBind (DBind bind) = bind
+    toBind _            = error "Can't convert DData to Bind"
 
---     RBound num name -> lookupVars num
+checkBind :: Bind -> Infer T.Bind
+checkBind (Bind n t _ args e) = do
+    (t', e') <- inferExp $ makeLambda e (reverse args)
+    s <- unify t t'
+    let t'' = apply s t
+    unless (t `typeEq` t'') (throwError $ unwords ["Top level signature", printTree t, "does not match body with type:", printTree t''])
+    return $ T.Bind (n, t) [] e'
+  where
+    makeLambda :: Exp -> [Ident] -> Exp
+    makeLambda = foldl (flip EAbs)
 
---     RFree name -> lookupSigs name
+typeEq :: Type -> Type -> Bool
+typeEq (TArr l r) (TArr l' r') = typeEq l l' && typeEq r r'
+typeEq (TMono a) (TMono b)     = a == b
+typeEq (TPol _) (TPol _)       = True
+typeEq _ _                     = False
 
---     RConst (CInt i) -> return $ TMono "Int"
+inferExp :: Exp -> Infer (Type, T.Exp)
+inferExp e = do
+    (s, t, e') <- w e
+    let subbed = apply s t
+    return (subbed, replace subbed e')
 
---     RConst (CStr str) -> return $ TMono "Str"
+replace :: Type -> T.Exp -> T.Exp
+replace t = \case
+    T.ELit _ e -> T.ELit t e
+    T.EId (n, _) -> T.EId (n, t)
+    T.EAbs _ name e -> T.EAbs t name e
+    T.EApp _ e1 e2 -> T.EApp t e1 e2
+    T.EAdd _ e1 e2 -> T.EAdd t e1 e2
+    T.ELet (T.Bind (n, _) args e1) e2 -> T.ELet (T.Bind (n, t) args e1) e2
 
---     RAdd expr1 expr2 -> do
---         let int = TMono "Int"
---         typ1 <- check expr1 int
---         typ2 <- check expr2 int
---         return int
+w :: Exp -> Infer (Subst, Type, T.Exp)
+w = \case
 
---     RApp expr1 expr2 -> do
---         fn_t <- inferExp expr1
---         arg_t <- inferExp expr2
---         res <- fresh
---         new_t <- fn_t =:= TArrow arg_t res
---         return res
+    EAnn e t -> do
+        (s1, t', e') <- w e
+        applySt s1 $ do
+            s2 <- unify (apply s1 t) t'
+            return (s2 `compose` s1, t, e')
 
---     RAbs num name expr -> do
---         arg <- fresh
---         insertVars num arg
---         typ <- inferExp expr
---         return $ TArrow arg typ
+    ELit (LInt n) -> return (nullSubst, TMono "Int", T.ELit  (TMono "Int") (LInt n))
 
--- check :: RExp -> Type -> Infer ()
--- check e t = do
---     t' <- inferExp e
---     t =:= t'
---     return ()
+    ELit a -> error $ "NOT IMPLEMENTED YET: ELit " ++ show a
 
--- fresh :: Infer Type
--- fresh = do
---     var <- St.gets nextFresh
---     St.modify (\st -> st {nextFresh = succ var})
---     return (TPoly $ Ident (show var))
+    EId i -> do
+        var <- asks vars
+        case M.lookup i var of
+          Just t  -> inst t >>= \x -> return (nullSubst, x, T.EId (i, x))
+          Nothing -> do
+              sig <- gets sigs
+              case M.lookup i sig of
+                  Nothing -> throwError $ "Unbound variable: " ++ show i
+                  Just t  -> return (nullSubst, t, T.EId (i, t))
 
--- -- | Unify two types.
--- (=:=) :: Type -> Type -> Infer Type
--- (=:=) (TPoly _) b = return b
--- (=:=) a (TPoly _) = return a
--- (=:=) (TMono a) (TMono b) | a == b = return (TMono a)
--- (=:=) (TArrow a b) (TArrow c d) = do
---     t1 <- a =:= c
---     t2 <- b =:= d
---     return $ TArrow t1 t2
--- (=:=) a b = throwError (TypeMismatch $ unwords ["Can not unify type", show a, "with", show b])
+    EAbs name e -> do
+        fr <- fresh
+        withBinding name (Forall [] fr) $ do
+            (s1, t', e') <- w e
+            let varType = apply s1 fr
+            let newArr = TArr varType t'
+            return (s1, newArr, T.EAbs newArr (name, varType) e')
 
--- lookupVars :: Integer -> Infer Type
--- lookupVars i = do
---     st <- St.gets vars
---     case M.lookup i st of
---        Just t  -> return t
---        Nothing -> throwError $ UnboundVar "lookupVars"
+    EAdd e0 e1 -> do
+        (s1, t0, e0') <- w e0
+        applySt s1 $ do
+            (s2, t1, e1') <- w e1
+            applySt s2 $ do
+                s3 <- unify (apply s2 t0) (TMono "Int")
+                s4 <- unify (apply s3 t1) (TMono "Int")
+                return (s4 `compose` s3 `compose` s2 `compose` s1, TMono "Int", T.EAdd (TMono "Int") e0' e1')
 
--- insertVars :: Integer -> Type -> Infer ()
--- insertVars i t = do
---     st <- St.get
---     St.put (st {vars = M.insert i t st.vars})
+    EApp e0 e1 -> do
+        fr <- fresh
+        (s0, t0, e0') <- w e0
+        applySt s0 $ do
+            (s1, t1, e1') <- w e1
+            -- applySt s1 $ do
+            s2 <- unify (apply s1 t0) (TArr t1 fr)
+            let t = apply s2 fr
+            return (s2 `compose` s1 `compose` s0, t, T.EApp t e0' e1')
 
--- lookupSigs :: Ident -> Infer Type
--- lookupSigs i = do
---     st <- St.gets sigs
---     case M.lookup i st of
---         Just t  -> return t
---         Nothing -> throwError $ UnboundVar "lookupSigs"
+    ELet name e0 e1 -> do
+        (s1, t1, e0') <- w e0
+        env <- asks vars
+        let t' = generalize (apply s1 env) t1
+        withBinding name t' $ do
+            (s2, t2, e1') <- w e1
+            return (s2 `compose` s1, t2, T.ELet (T.Bind (name,t2) [] e0') e1' )
 
--- insertSigs :: Ident -> Type -> Infer ()
--- insertSigs i t = do
---     st <- St.get
---     St.put (st {sigs = M.insert i t st.sigs})
+    ECase a b -> error $ "NOT IMPLEMENTED YET: ECase" ++ show a ++ " " ++ show b
 
--- {-# WARNING todo "TODO IN CODE" #-}
--- todo :: a
--- todo = error "TODO in code"
+-- | Unify two types producing a new substitution (constraint)
+unify :: Type -> Type -> Infer Subst
+unify t0 t1 = case (t0, t1) of
+    (TArr a b, TArr c d) -> do
+        s1 <- unify a c
+        s2 <- unify (apply s1 b) (apply s1 d)
+        return $ s1 `compose` s2
+    (TPol a, b) -> occurs a b
+    (a, TPol b) -> occurs b a
+    (TMono a, TMono b) -> if a == b then return M.empty else throwError "Types do not unify"
+    (a, b) -> throwError . unwords $ ["Type:", printTree a, "can't be unified with:", printTree b]
 
--- data Error
---     = TypeMismatch String
---     | NotNumber String
---     | FunctionTypeMismatch String
---     | NotFunction String
---     | UnboundVar String
---     | AnnotatedMismatch String
---     | Default String
---     deriving (Show)
+-- | Check if a type is contained in another type.
+-- I.E. { a = a -> b } is an unsolvable constraint since there is no substitution such that these are equal
+occurs :: Ident -> Type -> Infer Subst
+occurs _ (TPol _) = return nullSubst
+occurs i t = if S.member i (free t)
+                then throwError "Occurs check failed"
+                else return $ M.singleton i t
 
+-- | Generalize a type over all free variables in the substitution set
+generalize :: Map Ident Poly -> Type -> Poly
+generalize env t = Forall (S.toList $ free t S.\\ free env) t
 
--- {-
+-- | Instantiate a polymorphic type. The free type variables are substituted with fresh ones.
+inst :: Poly -> Infer Type
+inst (Forall xs t) = do
+    xs' <- mapM (const fresh) xs
+    let s = M.fromList $ zip xs xs'
+    return $ apply s t
 
--- The procedure inst(σ) specializes the polytype
--- σ by copying the term and replacing the bound type variables
--- consistently by new monotype variables.
+-- | Compose two substitution sets
+compose :: Subst -> Subst -> Subst
+compose m1 m2 = M.map (apply m1) m2 `M.union` m1
 
--- -}
+-- | A class representing free variables functions
+class FreeVars t where
+  -- | Get all free variables from t
+  free :: t -> Set Ident
+  -- | Apply a substitution to t
+  apply :: Subst -> t -> t
+
+instance FreeVars Type where
+  free :: Type -> Set Ident
+  free (TPol a)   = S.singleton a
+  free (TMono _)  = mempty
+  free (TArr a b) = free a `S.union` free b
+  apply :: Subst -> Type -> Type
+  apply sub t = do
+    case t of
+        TMono a -> TMono a
+        TPol a -> case M.lookup a sub of
+                   Nothing -> TPol a
+                   Just t  -> t
+        TArr a b -> TArr (apply sub a) (apply sub b)
+
+instance FreeVars Poly where
+  free :: Poly -> Set Ident
+  free (Forall xs t) = free t S.\\ S.fromList xs
+  apply :: Subst -> Poly -> Poly
+  apply s (Forall xs t) = Forall xs (apply (foldr M.delete s xs) t)
+
+instance FreeVars (Map Ident Poly) where
+  free :: Map Ident Poly -> Set Ident
+  free m = foldl' S.union S.empty (map free $ M.elems m)
+  apply :: Subst -> Map Ident Poly -> Map Ident Poly
+  apply s = M.map (apply s)
+
+-- | Apply substitutions to the environment.
+applySt :: Subst -> Infer a -> Infer a
+applySt s = local (\st -> st { vars = apply s (vars st) })
+
+-- | Represents the empty substition set
+nullSubst :: Subst
+nullSubst = M.empty
+
+-- | Generate a new fresh variable and increment the state counter
+fresh :: Infer Type
+fresh = do
+    n <- gets count
+    modify (\st -> st { count = n + 1 })
+    return . TPol . Ident $ "t" ++ show n
+
+-- | Run the monadic action with an additional binding
+withBinding :: (Monad m, MonadReader Ctx m) => Ident -> Poly -> m a -> m a
+withBinding i p = local (\st -> st { vars = M.insert i p (vars st) })
+
+-- | Insert a function signature into the environment
+insertSig :: Ident -> Type -> Infer ()
+insertSig i t = modify (\st -> st { sigs = M.insert i t (sigs st) })

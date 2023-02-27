@@ -1,27 +1,54 @@
 
-Program. Program ::= [Bind] ;
+Program. Program ::= [Def] ;
 
+DBind. Def ::= Bind ;
+DData. Def ::= Data ;
+terminator Def ";" ;
 
 Bind. Bind ::= Ident ":" Type ";"
                Ident [Ident] "=" Exp ;
 
 EAnn.   Exp5 ::= "(" Exp ":" Type ")" ;
 EId.    Exp4 ::= Ident ;
-EInt.   Exp4 ::= Integer ;
+ELit.   Exp4 ::= Literal ;
 EApp.   Exp3 ::= Exp3 Exp4 ;
 EAdd.   Exp1 ::= Exp1 "+" Exp2 ;
-ELet.   Exp ::= "let" Ident "=" Exp "in" Exp ; 
+ELet.   Exp  ::= "let" Ident "=" Exp "in" Exp ; 
 EAbs.   Exp  ::= "\\" Ident "." Exp ;
+ECase.  Exp ::= "case" Exp "of" "{" [Inj]  "}";
 
-TMono. Type1 ::= "Mono" Ident ;
-TPol. Type1 ::= "Poly" Ident ;
+LInt. Literal ::= Integer ;
+
+Inj. Inj ::= Init "=>" Exp ;
+terminator Inj ";" ;
+
+InitLit. Init ::= Literal ;
+InitConstr. Init ::= Ident [Match] ;
+InitCatch. Init ::= "_" ;
+
+LMatch. Match ::= Literal ;
+IMatch. Match ::= Ident ;
+InitMatch. Match ::= Ident Match ;
+separator Match " " ;
+
+TMono. Type1 ::= "_" Ident ;
+TPol. Type1 ::= "'" Ident ;
 TArr. Type ::= Type1 "->" Type ;
+separator Type " " ;
+
+-- shift/reduce problem here
+Data. Data ::= "data" Ident [Type] "where" ";"
+               [Constructor];
+
+terminator Constructor ";" ;
+
+Constructor. Constructor ::= Ident ":" Type ;
 
 -- This doesn't seem to work so we'll have to live with ugly keywords for now
--- token Upper (upper (letter | digit | '_')*) ;
--- token Lower (lower (letter | digit | '_')*) ;
+-- token Poly upper (letter | digit | '_')* ;
+-- token Mono lower (letter | digit | '_')* ;
 
-separator Bind ";" ;
+terminator Bind ";" ;
 separator Ident " ";
 
 coercions Type 1 ;
@@ -29,3 +56,4 @@ coercions Exp 5 ;
 
 comment "--" ;
 comment "{-" "-}" ;
+

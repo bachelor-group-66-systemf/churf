@@ -1,3 +1,2 @@
-fun : Mono Int -> Mono Int ;
-fun = let f = \x. x in f 3 ;
-
+main : _Int ;
+main = 3 + 3 ;

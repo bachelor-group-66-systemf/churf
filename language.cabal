@@ -16,7 +16,7 @@ extra-source-files:
   Grammar.cf
 
 common warnings
-    ghc-options: -Wdefault
+    ghc-options: -W
 
 executable language
     import:           warnings
@@ -31,15 +31,12 @@ executable language
       Grammar.Skel
       Grammar.ErrM
       Auxiliary
-      -- TypeChecker.TypeChecker
-      -- TypeChecker.TypeCheckerIr
-      -- TypeChecker.Unification
-      TypeChecker.HM
-      TypeChecker.AlgoW
-      TypeChecker.HMIr
-      Renamer.RenamerM
-      -- Renamer.Renamer
-      -- Renamer.RenamerIr
+      TypeChecker.TypeChecker
+      TypeChecker.TypeCheckerIr
+      Renamer.Renamer
+      LambdaLifter.LambdaLifter
+      Codegen.Codegen
+      Codegen.LlvmIr
 
     hs-source-dirs:   src
 
@@ -50,34 +47,35 @@ executable language
       , either
       , extra
       , array
+      , QuickCheck
 
     default-language: GHC2021
 
-test-suite test
-  hs-source-dirs: tests, src
-  main-is: Main.hs
-  type: exitcode-stdio-1.0
+Test-suite language-testsuite
+    type: exitcode-stdio-1.0
+    main-is: Tests.hs
 
-  other-modules:
-    Grammar.Abs
-    Grammar.Lex
-    Grammar.Par
-    Grammar.Print
-    Grammar.Skel
-    Grammar.ErrM
-    Auxiliary
-    Renamer.RenamerM
-    TypeChecker.AlgoW
-    TypeChecker.HM
-    TypeChecker.HMIr
+    other-modules:
+      Grammar.Abs
+      Grammar.Lex
+      Grammar.Par
+      Grammar.Print
+      Grammar.Skel
+      Grammar.ErrM
+      Auxiliary
+      TypeChecker.TypeChecker
+      TypeChecker.TypeCheckerIr
+      Renamer.Renamer
 
-  build-depends:  
-      base >=4.16
-    , mtl
-    , containers
-    , either
-    , array
-    , extra
-    , hspec
+    hs-source-dirs: src, tests
 
-  default-language: GHC2021
+    build-depends: 
+        base >=4.16
+      , mtl
+      , containers
+      , either
+      , extra
+      , array
+      , QuickCheck
+
+    default-language: GHC2021

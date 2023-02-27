@@ -1,101 +1,91 @@
-{-# LANGUAGE LambdaCase, OverloadedRecordDot, OverloadedStrings #-}
+{-# LANGUAGE LambdaCase #-}
 
-module Renamer.Renamer (rename) where
+module Renamer.Renamer where
 
-import Renamer.RenamerIr
-import Control.Monad.State
-import Control.Monad.Except
-import Control.Monad.Reader
-import Data.Functor.Identity (Identity, runIdentity)
-import Data.Set (Set)
-import qualified Data.Set as S
-import Data.Map (Map)
-import qualified Data.Map as M
+import           Auxiliary           (mapAccumM)
+import           Control.Monad.State (MonadState, State, evalState, gets,
+                                      modify)
+import           Data.List           (foldl')
+import           Data.Map            (Map)
+import qualified Data.Map            as Map
+import           Data.Maybe          (fromMaybe)
+import           Data.Tuple.Extra    (dupe)
+import           Grammar.Abs
 
-import Renamer.RenamerIr
-import qualified Grammar.Abs as Old
 
-type Rename = StateT Ctx (ExceptT Error Identity)
+-- | Rename all variables and local binds
+rename :: Program -> Program
+rename (Program bs) = Program $ evalState (runRn $ mapM (renameSc initNames) bs) 0
+  where
+    -- initNames = Map.fromList $ map (\(Bind name _ _ _ _) -> dupe name) bs
+    initNames = Map.fromList $ foldl' saveIfBind [] bs
+    saveIfBind acc (DBind (Bind name _ _ _ _)) = dupe name : acc
+    saveIfBind acc _                           = acc
+    renameSc :: Names -> Def -> Rn Def
+    renameSc old_names (DBind (Bind name t _ parms rhs)) = do
+        (new_names, parms') <- newNames old_names parms
+        rhs'                <- snd <$> renameExp new_names rhs
+        pure . DBind $ Bind name t name parms' rhs'
+    renameSc _ def = pure def
 
-data Ctx = Ctx { count :: Integer
-               , sig :: Set Ident
-               , env :: Map Ident Integer}
+--
 
-run :: Rename a -> Either Error a
-run = runIdentity . runExceptT . flip evalStateT initCtx
+-- | Rename monad. State holds the number of renamed names.
+newtype Rn a = Rn { runRn :: State Int a }
+  deriving (Functor, Applicative, Monad, MonadState Int)
 
-initCtx :: Ctx
-initCtx = Ctx { count = 0
-              , sig = mempty
-              , env = mempty }
+-- | Maps old to new name
+type Names = Map Ident Ident
 
-rename :: Old.Program -> Either Error RProgram
-rename = run . renamePrg
+renameLocalBind :: Names -> Bind -> Rn (Names, Bind)
+renameLocalBind old_names (Bind name t _ parms rhs) = do
+    (new_names, name')   <- newName old_names name
+    (new_names', parms') <- newNames new_names parms
+    (new_names'', rhs')  <- renameExp new_names' rhs
+    pure (new_names'', Bind name' t name' parms' rhs')
 
-renamePrg :: Old.Program -> Rename RProgram
-renamePrg (Old.Program xs) = do
-    xs' <- mapM renameBind xs
-    return $ RProgram xs'
+renameExp :: Names -> Exp -> Rn (Names, Exp)
+renameExp old_names = \case
+    EId  n     -> pure (old_names, EId . fromMaybe n $ Map.lookup n old_names)
 
-renameBind :: Old.Bind -> Rename RBind
-renameBind (Old.Bind n t i args e) = do
-    insertSig i
-    e' <- renameExp (makeLambda (reverse args) e)
-    return $ RBind i e'
-  where 
-    makeLambda :: [Ident] -> Old.Exp -> Old.Exp
-    makeLambda [] e = e
-    makeLambda (x:xs) e = makeLambda xs (Old.EAbs x e)
+    ELit (LInt i1)    -> pure (old_names, ELit (LInt i1))
 
-renameExp :: Old.Exp -> Rename RExp
-renameExp = \case
+    EApp e1 e2 -> do
+        (env1, e1') <- renameExp old_names e1
+        (env2, e2') <- renameExp old_names e2
+        pure (Map.union env1 env2, EApp e1' e2')
 
-    Old.EId i -> do
-        st <- get
-        case M.lookup i st.env of
-            Just n -> return $ RId i
-            Nothing -> case S.member i st.sig of
-                         True -> return $ RId i
-                         False -> throwError $ UnboundVar (show i)
+    EAdd e1 e2 -> do
+        (env1, e1') <- renameExp old_names e1
+        (env2, e2') <- renameExp old_names e2
+        pure (Map.union env1 env2, EAdd e1' e2')
 
-    Old.EInt c -> return $ RInt c
+    ELet i e1 e2  -> do
+        (new_names, e1')   <- renameExp old_names e1
+        (new_names', e2') <- renameExp new_names e2
+        pure (new_names', ELet i e1' e2')
 
-    Old.EAnn e t -> flip RAnn t <$> renameExp e
+    EAbs par e  -> do
+        (new_names, par') <- newName old_names par
+        (new_names', e')  <- renameExp new_names e
+        pure (new_names', EAbs par' e')
 
-    Old.EApp e1 e2 -> RApp <$> renameExp e1 <*> renameExp e2
+    EAnn e t -> do
+        (new_names, e') <- renameExp old_names e
+        pure (new_names, EAnn e' t)
 
-    Old.EAdd e1 e2 -> RAdd <$> renameExp e1 <*> renameExp e2
+    ECase _ _ -> error "ECase NOT IMPLEMENTED YET"
 
-    -- Convert let-expressions to lambdas
-    Old.ELet i e1 e2 -> renameExp (Old.EApp (Old.EAbs i e2) e1)
+-- | Create a new name and add it to name environment.
+newName :: Names -> Ident -> Rn (Names, Ident)
+newName env old_name = do
+    new_name <- makeName old_name
+    pure (Map.insert old_name new_name env, new_name)
 
-    Old.EAbs i e -> do
-        n <- cnt
-        ctx <- get
-        insertEnv i n
-        re <- renameExp e
-        return $ RAbs n i re
+-- | Create multiple names and add them to the name environment
+newNames :: Names -> [Ident] -> Rn (Names, [Ident])
+newNames = mapAccumM newName
 
--- | Get current count and increase it by one
-cnt :: Rename Integer
-cnt = do
-    st <- get
-    put (Ctx { count = succ st.count
-             , sig = st.sig
-             , env = st.env })
-    return st.count
-        
-insertEnv :: Ident -> Integer -> Rename ()
-insertEnv i n = do
-    c <- get
-    put ( Ctx { env = M.insert i n c.env , sig = c.sig , count = c.count} )
-
-insertSig :: Ident -> Rename ()
-insertSig i = do
-    c <- get
-    put ( Ctx { sig = S.insert i c.sig , env = c.env , count = c.count } )
-
-data Error = UnboundVar String
-
-instance Show Error where
-    show (UnboundVar str) = "Unbound variable: " <> str
+-- | Annotate name with number and increment the number @prefix ⇒ prefix_number@.
+makeName :: Ident -> Rn Ident
+makeName (Ident prefix) = gets (\i -> Ident $ prefix ++ "_" ++ show i) <* modify succ

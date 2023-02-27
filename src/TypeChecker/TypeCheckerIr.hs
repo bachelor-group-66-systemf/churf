@@ -1,74 +1,99 @@
--- {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE LambdaCase #-}
 
-module TypeChecker.TypeCheckerIr --(
---     TProgram (..),
---     TBind (..),
---     TExp (..),
---     RProgram (..),
---     RBind (..),
---     RExp (..),
---     Type (..),
---     Const (..),
---     Ident (..),
--- ) where
+module TypeChecker.TypeCheckerIr
+  ( module Grammar.Abs
+  , module TypeChecker.TypeCheckerIr
+  ) where
 
--- import           Grammar.Print
--- import           Renamer.RenamerIr
+import           Grammar.Abs   (Ident (..), Literal (..), Type (..))
+import           Grammar.Print
+import           Prelude
+import qualified Prelude       as C (Eq, Ord, Read, Show)
 
--- newtype TProgram = TProgram [TBind]
---     deriving (Eq, Show, Read, Ord)
+newtype Program = Program [Bind]
+  deriving (C.Eq, C.Ord, C.Show, C.Read)
 
--- data TBind = TBind Ident Type TExp
---     deriving (Eq, Show, Read, Ord)
+data Exp
+    = EId  Id
+    | ELit Type Literal
+    | ELet Bind Exp
+    | EApp Type Exp Exp
+    | EAdd Type Exp Exp
+    | EAbs Type Id Exp
+      deriving (C.Eq, C.Ord, C.Read, C.Show)
 
--- data TExp
---     = TAnn TExp Type
---     | TBound Integer Ident Type
---     | TFree Ident Type
---     | TConst Const Type
---     | TApp TExp TExp Type
---     | TAdd TExp TExp Type
---     | TAbs Integer Ident TExp Type
---     deriving (Eq, Ord, Show, Read)
+type Id = (Ident, Type)
 
--- instance Print TProgram where
---     prt i = \case
---         TProgram defs -> prPrec i 0 (concatD [prt 0 defs])
+data Bind = Bind Id [Id] Exp
+    deriving (C.Eq, C.Ord, C.Show, C.Read)
 
--- instance Print TBind where
---     prt i = \case
---         TBind x t e ->
---             prPrec i 0 $
---                 concatD
---                     [ prt 0 x
---                     , doc (showString ":")
---                     , prt 0 t
---                     , doc (showString "=")
---                     , prt 0 e
---                     , doc (showString "\n")
---                     ]
+instance Print Program where
+    prt i (Program sc) = prPrec i 0 $ prt 0 sc
 
--- instance Print TExp where
---     prt i = \case
---         TAnn e t ->
---             prPrec i 2 $
---                 concatD
---                     [ prt 0 e
---                     , doc (showString ":")
---                     , prt 1 t
---                     ]
---         TBound _ u t -> prPrec i 3 $ concatD [prt 0 u]
---         TFree u t -> prPrec i 3 $ concatD [prt 0 u]
---         TConst c _ -> prPrec i 3 (concatD [prt 0 c])
---         TApp e e1 t -> prPrec i 2 $ concatD [prt 2 e, prt 3 e1]
---         TAdd e e1 t -> prPrec i 1 $ concatD [prt 1 e, doc (showString "+"), prt 2 e1]
---         TAbs _ u e t ->
---             prPrec i 0 $
---                 concatD
---                     [ doc (showString "(")
---                     , doc (showString "λ")
---                     , prt 0 u
---                     , doc (showString ".")
---                     , prt 0 e
---                     , doc (showString ")")
---                     ]
+instance Print Bind where
+    prt i (Bind (t, name) parms rhs) = prPrec i 0 $ concatD
+        [ prt 0 name
+        , doc $ showString ":"
+        , prt 0 t
+        , prtIdPs 0 parms
+        , doc $ showString "="
+        , prt 0 rhs
+        ]
+
+instance Print [Bind] where
+  prt _ []     = concatD []
+  prt _ [x]    = concatD [prt 0 x]
+  prt _ (x:xs) = concatD [prt 0 x, doc (showString ";"), prt 0 xs]
+
+prtIdPs :: Int -> [Id] -> Doc
+prtIdPs i = prPrec i 0 . concatD . map (prtIdP i)
+
+prtId :: Int -> Id -> Doc
+prtId i (name, t) = prPrec i 0 $ concatD
+    [ prt 0 name
+    , doc $ showString ":"
+    , prt 0 t
+    ]
+
+prtIdP :: Int -> Id -> Doc
+prtIdP i (name, t) = prPrec i 0 $ concatD
+    [ doc $ showString "("
+    , prt 0 name
+    , doc $ showString ":"
+    , prt 0 t
+    , doc $ showString ")"
+    ]
+
+
+instance Print Exp where
+  prt i = \case
+    EId n       -> prPrec i 3 $ concatD [prtId 0 n]
+    ELit _ (LInt i1) -> prPrec i 3 $ concatD [prt 0 i1]
+    ELet bs e    -> prPrec i 3 $ concatD
+                    [ doc $ showString "let"
+                    , prt 0 bs
+                    , doc $ showString "in"
+                    , prt 0 e
+                    ]
+    EApp t e1 e2 -> prPrec i 2 $ concatD
+                        [ prt 2 e1
+                        , prt 3 e2
+                        ]
+    EAdd t e1 e2 -> prPrec i 1 $ concatD
+                        [ doc $ showString "@"
+                        , prt 0 t
+                        , prt 1 e1
+                        , doc $ showString "+"
+                        , prt 2 e2
+                        ]
+    EAbs t n e  -> prPrec i 0 $ concatD
+                        [ doc $ showString "@"
+                        , prt 0 t
+                        , doc $ showString "\\"
+                        , prtId 0 n
+                        , doc $ showString "."
+                        , prt 0 e
+                        ]
+
+
+
