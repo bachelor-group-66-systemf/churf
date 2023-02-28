@@ -29,8 +29,8 @@ int main() {
 GC::Heap *singleton_test() {
     std::cout << "TESTING SINGLETON INSTANCES" << std::endl;
     std::cout << "===========================" << std::endl;
-    std::cout << "Call 1:\t" << GC::Heap::the() << std::endl;   // First call which initializes the singleton instance
-    GC::Heap *heap = GC::Heap::the();                           // Second call which should return the initialized instance
+    std::cout << "Call 1:\t" << GC::Heap::debug_the() << std::endl;   // First call which initializes the singleton instance
+    GC::Heap *heap = GC::Heap::debug_the();                           // Second call which should return the initialized instance
     std::cout << "Call 2:\t" << heap << std::endl;
     std::cout << "===========================" << std::endl;
     return heap;

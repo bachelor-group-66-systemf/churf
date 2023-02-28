@@ -9,11 +9,11 @@ struct Obj {
 };
 
 int main() {
-    auto heap = GC::Heap::the2();
+    auto heap = GC::Heap::debug_the();
 
     std::cout << "heap:\t" << heap << std::endl;
     
-    auto obj = static_cast<Obj *>(heap->alloc(sizeof(Obj)));
+    auto obj = static_cast<Obj *>(GC::Heap::alloc(sizeof(Obj)));
 
     std::cout << "obj: \t" << obj << std::endl;
 

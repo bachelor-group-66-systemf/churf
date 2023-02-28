@@ -78,11 +78,17 @@ namespace GC {
      * that the address of the topmost stack frame is
      * saved as the limit for scanning the stack in collect.
     */
-    static void init();              // TODO: make static
-    static void dispose();           // -||-
-    static void *alloc(size_t size); // -||-
+    static void init();
+    static void dispose();
+    static void *alloc(size_t size);
     
     // DEBUG ONLY
+    static inline Heap *debug_the() { // TODO: make private
+      if (m_instance) // if m_instance is not a nullptr
+        return m_instance;
+      m_instance = new Heap();
+      return m_instance;
+    }
     void collect(uint flags); // conditional collection
     void check_init();        // print dummy things
     void print_contents();    // print dummy things
