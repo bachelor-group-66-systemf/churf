@@ -141,12 +141,7 @@ namespace GC {
     // get current stack
     auto stack_bottom = reinterpret_cast<uintptr_t *>(__builtin_frame_address(0));
 
-    // fix this block, it's nästy
-    uintptr_t *stack_top;
-    if (heap->m_stack_top != nullptr)
-      stack_top = heap->m_stack_top;
-    else
-      stack_top = (uintptr_t *)0; // temporary
+    uintptr_t *stack_top = heap->m_stack_top != nullptr ? heap->m_stack_top : (uintptr_t *)0;
 
     auto work_list = heap->m_allocated_chunks;
     mark(stack_bottom, stack_top, work_list);

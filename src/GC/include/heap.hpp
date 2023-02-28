@@ -35,14 +35,14 @@ namespace GC {
       std::free((char *)m_heap);
     }
 
-    static inline Heap *the() { // TODO: make private
+    inline static Heap *the() { // TODO: make private
       if (m_instance) // if m_instance is not a nullptr
         return m_instance;
       m_instance = new Heap();
       return m_instance;
     }
 
-    static inline Chunk *getAt(std::vector<Chunk *> list, size_t n) {
+    inline static Chunk *getAt(std::vector<Chunk *> list, size_t n) {
       auto iter = list.begin();
       if (!n)
         return *iter;
