@@ -28,7 +28,6 @@ rename (Program bs) = Program $ evalState (runRn $ mapM (renameSc initNames) bs)
         pure . DBind $ Bind name t name parms' rhs'
     renameSc _ def = pure def
 
---
 
 -- | Rename monad. State holds the number of renamed names.
 newtype Rn a = Rn { runRn :: State Int a }

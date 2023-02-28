@@ -1,14 +1,33 @@
 {-# LANGUAGE LambdaCase #-}
 
-module TypeChecker.TypeCheckerIr
-  ( module Grammar.Abs
-  , module TypeChecker.TypeCheckerIr
-  ) where
+module TypeChecker.TypeCheckerIr where
 
-import           Grammar.Abs   (Data (..), Ident (..), Literal (..), Type (..))
+import           Control.Monad.Except
+import           Control.Monad.Reader
+import           Control.Monad.State
+import           Data.Functor.Identity (Identity)
+import           Data.Map              (Map)
+import           Grammar.Abs           (Data (..), Ident (..), Init (..),
+                                        Literal (..), Type (..))
 import           Grammar.Print
 import           Prelude
-import qualified Prelude       as C (Eq, Ord, Read, Show)
+import qualified Prelude               as C (Eq, Ord, Read, Show)
+
+-- | A data type representing type variables
+data Poly = Forall [Ident] Type
+    deriving Show
+
+newtype Ctx = Ctx { vars :: Map Ident Poly }
+
+data Env = Env { count        :: Int
+               , sigs         :: Map Ident Type
+               , constructors :: Map Ident Type
+               }
+
+type Error = String
+type Subst = Map Ident Type
+
+type Infer = StateT Env (ReaderT Ctx (ExceptT Error Identity))
 
 newtype Program = Program [Def]
   deriving (C.Eq, C.Ord, C.Show, C.Read)
@@ -22,6 +41,9 @@ data Exp
     | EAbs Type Id Exp
       deriving (C.Eq, C.Ord, C.Read, C.Show)
 
+data Inj = Inj (Init, Type) Exp
+    deriving (C.Eq, C.Ord, C.Read, C.Show)
+
 data Def = DBind Bind | DData Data
     deriving (C.Eq, C.Ord, C.Read, C.Show)
 
@@ -29,6 +51,10 @@ type Id = (Ident, Type)
 
 data Bind = Bind Id [Id] Exp
     deriving (C.Eq, C.Ord, C.Show, C.Read)
+
+instance Print [Def] where
+  prt _ []     = concatD []
+  prt _ (x:xs) = concatD [prt 0 x, doc (showString "\n"), prt 0 xs]
 
 instance Print Def where
   prt i (DBind bind) = prt i bind
@@ -41,16 +67,16 @@ instance Print Bind where
     prt i (Bind (t, name) parms rhs) = prPrec i 0 $ concatD
         [ prt 0 name
         , doc $ showString ":"
-        , prt 0 t
+        , prt 1 t
         , prtIdPs 0 parms
         , doc $ showString "="
-        , prt 0 rhs
+        , prt 2 rhs
         ]
 
 instance Print [Bind] where
   prt _ []     = concatD []
   prt _ [x]    = concatD [prt 0 x]
-  prt _ (x:xs) = concatD [prt 0 x, doc (showString ";"), prt 0 xs]
+  prt _ (x:xs) = concatD [prt 0 x, doc (showString ";"), doc (showString "\n"), prt 0 xs]
 
 prtIdPs :: Int -> [Id] -> Doc
 prtIdPs i = prPrec i 0 . concatD . map (prtIdP i)

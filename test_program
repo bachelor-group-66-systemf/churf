@@ -1,14 +1,12 @@
-data List ('a) where;
-    Nil : List ('a),
-    Cons : 'a -> List ('a) -> List ('a) ;
+data List ('a) where {
+    Nil : List ('a) 
+    Cons : 'a -> List ('a) -> List ('a) 
+};
 
-main : List (_Int) ;
+data Bool () where {
+    True : Bool () 
+    False : Bool ()
+};
+
+main : List ('a) ;
 main = Cons 1 (Cons 0 Nil) ;
-
-data Bool () where;
-    True : Bool (),
-    False : Bool ();
-
-boolean : Bool (_Int);
-boolean = True ;
-    

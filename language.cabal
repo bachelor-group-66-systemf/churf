@@ -47,7 +47,6 @@ executable language
       , either
       , extra
       , array
-      , QuickCheck
 
     default-language: GHC2021
 
@@ -76,6 +75,7 @@ Test-suite language-testsuite
       , either
       , extra
       , array
+      , hspec
       , QuickCheck
 
     default-language: GHC2021
