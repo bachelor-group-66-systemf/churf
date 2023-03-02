@@ -8,18 +8,19 @@ separator Def ";" ;
 Bind. Bind ::= Ident ":" Type ";"
                Ident [Ident] "=" Exp ;
 
-Data. Data ::= "data" Type "where" "{"
-               [Constructor] "}" ;
-
-separator nonempty Constructor "" ;
+Data. Data ::= "data" Constr "where" "{" [Constructor] "}" ;
 
 Constructor. Constructor ::= Ident ":" Type ;
+separator nonempty Constructor "" ;
 
 TMono.   Type1 ::= "_" Ident ;
 TPol.    Type1 ::= "'" Ident ;
-TConstr. Type1 ::= Ident "(" [Type] ")" ; 
+TConstr. Type1 ::= Constr ;
 TArr.    Type  ::= Type1 "->" Type ;
 
+Constr.  Constr ::= Ident "(" [Type] ")" ;
+
+-- TODO: Move literal to its own thing since it's reused in Init as well.
 EAnn.   Exp5 ::= "(" Exp ":" Type ")" ;
 EId.    Exp4 ::= Ident ;
 ELit.   Exp4 ::= Literal ;
@@ -41,14 +42,9 @@ InitCatch. Init  ::= "_" ;
 separator Type " " ;
 coercions Type 2 ;
 
--- This doesn't seem to work so we'll have to live with ugly keywords for now
--- token Poly upper (letter | digit | '_')* ;
--- token Mono lower (letter | digit | '_')* ;
-
 separator Ident " ";
 
 coercions Exp 5 ;
 
 comment "--" ;
 comment "{-" "-}" ;
-

@@ -7,7 +7,7 @@ module TypeChecker.TypeChecker where
 import           Control.Monad.Except
 import           Control.Monad.Reader
 import           Control.Monad.State
-import           Data.Functor.Identity     (Identity, runIdentity)
+import           Data.Functor.Identity     (runIdentity)
 import           Data.List                 (foldl')
 import           Data.Map                  (Map)
 import qualified Data.Map                  as M
@@ -20,7 +20,6 @@ import           Grammar.Print             (printTree)
 import qualified TypeChecker.TypeCheckerIr as T
 import           TypeChecker.TypeCheckerIr (Ctx (..), Env (..), Error, Infer,
                                             Poly (..), Subst)
-
 
 initCtx = Ctx mempty
 initEnv = Env 0 mempty mempty
@@ -39,9 +38,10 @@ typecheck = run . checkPrg
 
 checkData :: Data -> Infer ()
 checkData d = case d of
-    (Data typ@(TConstr name _) constrs) -> do
+    (Data typ@(Constr name ts) constrs) -> do
+        unless (all isPoly ts) (throwError $ unwords ["Data type incorrectly declared"])
         traverse_ (\(Constructor name' t')
-                    -> if typ == retType t'
+                    -> if TConstr typ == retType t'
                           then insertConstr name' t' else
                           throwError $
                               unwords
@@ -51,11 +51,9 @@ checkData d = case d of
                               , printTree (retType t')
                               , "does not match data: "
                               , printTree typ]) constrs
-    _ -> throwError "Data type incorrectly declared"
-  where
-    retType :: Type -> Type
-    retType (TArr _ t2) = retType t2
-    retType a           = a
+retType :: Type -> Type
+retType (TArr _ t2) = retType t2
+retType a           = a
 
 checkPrg :: Program -> Infer T.Program
 checkPrg (Program bs) = do
@@ -86,7 +84,7 @@ checkBind (Bind n t _ args e) = do
                                                   , "does not match body with inferred type:"
                                                   , printTree t''
                                                   ])
-    return $ T.Bind (n, t) [] e'
+    return $ T.Bind (n, t) e'
   where
     makeLambda :: Exp -> [Ident] -> Exp
     makeLambda = foldl (flip EAbs)
@@ -96,7 +94,7 @@ checkBind (Bind n t _ args e) = do
 typeEq :: Type -> Type -> Bool
 typeEq (TArr l r) (TArr l' r')            = typeEq l l' && typeEq r r'
 typeEq (TMono a) (TMono b)                = a == b
-typeEq (TConstr name a) (TConstr name' b) = length a == length b
+typeEq (TConstr (Constr name a)) (TConstr (Constr name' b)) = length a == length b
                                             && name == name'
                                             && and (zipWith typeEq a b)
 typeEq (TPol _) (TPol _)                  = True
@@ -106,6 +104,10 @@ isMoreGeneral :: Type -> Type -> Bool
 isMoreGeneral _ (TPol _)            = True
 isMoreGeneral (TArr a b) (TArr c d) = isMoreGeneral a c && isMoreGeneral b d
 isMoreGeneral a b                   = a == b
+
+isPoly :: Type -> Bool
+isPoly (TPol _) = True
+isPoly _        = False
 
 inferExp :: Exp -> Infer (Type, T.Exp)
 inferExp e = do
@@ -120,7 +122,7 @@ replace t = \case
     T.EAbs _ name e                   -> T.EAbs t name e
     T.EApp _ e1 e2                    -> T.EApp t e1 e2
     T.EAdd _ e1 e2                    -> T.EAdd t e1 e2
-    T.ELet (T.Bind (n, _) args e1) e2 -> T.ELet (T.Bind (n, t) args e1) e2
+    T.ELet (T.Bind (n, _) e1) e2 -> T.ELet (T.Bind (n, t) e1) e2
 
 algoW :: Exp -> Infer (Subst, Type, T.Exp)
 algoW = \case
@@ -216,9 +218,9 @@ algoW = \case
         let t' = generalize (apply s1 env) t1
         withBinding name t' $ do
             (s2, t2, e1') <- algoW e1
-            return (s2 `compose` s1, t2, T.ELet (T.Bind (name,t2) [] e0') e1' )
+            return (s2 `compose` s1, t2, T.ELet (T.Bind (name,t2) e0') e1' )
 
-    ECase e0 injs -> undefined
+    ECase _ _ -> undefined
 
 -- | Unify two types producing a new substitution
 unify :: Type -> Type -> Infer Subst
@@ -231,7 +233,7 @@ unify t0 t1 = case (t0, t1) of
     (a, TPol b) -> occurs b a
     (TMono a, TMono b) -> if a == b then return M.empty else throwError "Types do not unify"
     -- | TODO: Figure out a cleaner way to express the same thing
-    (TConstr name t, TConstr name' t') -> if name == name' && length t == length t'
+    (TConstr (Constr name t), TConstr (Constr name' t')) -> if name == name' && length t == length t'
                                             then do
                                                 xs <- zipWithM unify t t'
                                                 return $ foldr compose nullSubst xs
@@ -280,7 +282,7 @@ instance FreeVars Type where
   free (TMono _)     = mempty
   free (TArr a b)    = free a `S.union` free b
   -- | Not guaranteed to be correct
-  free (TConstr _ a) = foldl' (\acc x -> free x `S.union` acc) S.empty a
+  free (TConstr (Constr _ a)) = foldl' (\acc x -> free x `S.union` acc) S.empty a
   apply :: Subst -> Type -> Type
   apply sub t = do
     case t of
@@ -289,7 +291,7 @@ instance FreeVars Type where
                    Nothing -> TPol a
                    Just t  -> t
         TArr a b -> TArr (apply sub a) (apply sub b)
-        TConstr name a -> TConstr name (map (apply sub) a)
+        TConstr (Constr name a) -> TConstr (Constr name (map (apply sub) a))
 
 instance FreeVars Poly where
   free :: Poly -> Set Ident
@@ -329,3 +331,37 @@ insertSig i t = modify (\st -> st { sigs = M.insert i t (sigs st) })
 -- | Insert a constructor with its data type
 insertConstr :: Ident -> Type -> Infer ()
 insertConstr i t = modify (\st -> st { constructors = M.insert i t (constructors st) })
+
+
+-------- PATTERN MATCHING ---------
+
+checkInj :: Inj -> Infer T.Inj
+checkInj (Inj it expr) = do
+    (_, e') <- inferExp expr
+    t' <- initType it
+    return $ T.Inj (it, t') e'
+
+initType :: Init -> Infer Type
+initType = \case
+    InitLit lit -> return $ litType lit
+    InitConstr c args -> do
+        st <- gets constructors
+        case M.lookup c st of
+            Nothing -> throwError $ unwords ["Constructor:", printTree c, "does not exist"]
+            Just t -> do
+                let flat = flattenType t
+                let returnType = last flat
+                if length (init flat) == length args
+                   then return returnType
+                   else throwError $ "Can't partially match on the constructor: " ++ printTree c
+                -- Ignoring the variables for now, they can not be used in the expression to the
+                -- right of '=>'
+
+    InitCatch -> return $ TPol "catch"
+
+flattenType :: Type -> [Type]
+flattenType (TArr a b) = flattenType a ++ flattenType b
+flattenType a          = [a]
+
+litType :: Literal -> Type
+litType (LInt i) = TMono "Int"

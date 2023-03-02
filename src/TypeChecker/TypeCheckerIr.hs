@@ -49,7 +49,7 @@ data Def = DBind Bind | DData Data
 
 type Id = (Ident, Type)
 
-data Bind = Bind Id [Id] Exp
+data Bind = Bind Id Exp
     deriving (C.Eq, C.Ord, C.Show, C.Read)
 
 instance Print [Def] where
@@ -64,11 +64,10 @@ instance Print Program where
     prt i (Program sc) = prPrec i 0 $ prt 0 sc
 
 instance Print Bind where
-    prt i (Bind (t, name) parms rhs) = prPrec i 0 $ concatD
+    prt i (Bind (t, name) rhs) = prPrec i 0 $ concatD
         [ prt 0 name
         , doc $ showString ":"
         , prt 1 t
-        , prtIdPs 0 parms
         , doc $ showString "="
         , prt 2 rhs
         ]

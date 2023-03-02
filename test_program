@@ -8,5 +8,5 @@ data Bool () where {
     False : Bool ()
 };
 
-main : List ('a) ;
+main : List (_Int) ;
 main = Cons 1 (Cons 0 Nil) ;
