@@ -39,6 +39,7 @@ data Exp
     | EApp Type Exp Exp
     | EAdd Type Exp Exp
     | EAbs Type Id Exp
+    | ECase Type Exp [Inj]
       deriving (C.Eq, C.Ord, C.Read, C.Show)
 
 data Inj = Inj (Init, Type) Exp

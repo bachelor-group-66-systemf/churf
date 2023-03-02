@@ -220,7 +220,12 @@ algoW = \case
             (s2, t2, e1') <- algoW e1
             return (s2 `compose` s1, t2, T.ELet (T.Bind (name,t2) e0') e1' )
 
-    ECase _ _ -> undefined
+    ECase caseExpr injs -> do
+        (s0, t0, e0') <- algoW caseExpr
+        injs' <- mapM (checkInj t0) injs
+        undefined
+
+
 
 -- | Unify two types producing a new substitution
 unify :: Type -> Type -> Infer Subst
@@ -335,15 +340,19 @@ insertConstr i t = modify (\st -> st { constructors = M.insert i t (constructors
 
 -------- PATTERN MATCHING ---------
 
-checkInj :: Inj -> Infer T.Inj
-checkInj (Inj it expr) = do
+-- case expr of, the type of 'expr' is caseType
+checkInj :: Type -> Inj -> Infer T.Inj
+checkInj caseType (Inj it expr) = do
     (_, e') <- inferExp expr
-    t' <- initType it
+    t' <- initType caseType it
     return $ T.Inj (it, t') e'
 
-initType :: Init -> Infer Type
-initType = \case
-    InitLit lit -> return $ litType lit
+initType :: Type -> Init -> Infer Type
+initType expected = \case
+    InitLit lit -> let returnType = litType lit
+                    in if expected == returnType
+                      then return expected
+                      else throwError $ unwords ["Inferred type", printTree returnType, "does not match expected type:", printTree expected]  
     InitConstr c args -> do
         st <- gets constructors
         case M.lookup c st of
@@ -351,13 +360,14 @@ initType = \case
             Just t -> do
                 let flat = flattenType t
                 let returnType = last flat
-                if length (init flat) == length args
-                   then return returnType
-                   else throwError $ "Can't partially match on the constructor: " ++ printTree c
+                case (length (init flat) == length args, returnType == expected) of
+                    (True, True) -> return returnType
+                    (False, _) -> throwError $ "Can't partially match on the constructor: " ++ printTree c
+                    (_, False) -> throwError $ unwords ["Inferred type", printTree returnType, "does not match expected type:", printTree expected] 
                 -- Ignoring the variables for now, they can not be used in the expression to the
                 -- right of '=>'
 
-    InitCatch -> return $ TPol "catch"
+    InitCatch -> return expected
 
 flattenType :: Type -> [Type]
 flattenType (TArr a b) = flattenType a ++ flattenType b

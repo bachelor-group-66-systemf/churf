@@ -1,5 +1,3 @@
-alias b := build
-
 build:
     bnfc -o src -d Grammar.cf
 
