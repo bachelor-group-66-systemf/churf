@@ -38,7 +38,6 @@ instance Print [Type] where
   prt _ (x:xs) = concatD [prt 0 x, doc (showString " "), prt 0 xs]
 
 
-
 data Bind = Bind Id [Id] Exp
     deriving (C.Eq, C.Ord, C.Show, C.Read)
 
