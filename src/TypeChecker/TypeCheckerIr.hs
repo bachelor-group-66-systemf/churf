@@ -127,6 +127,17 @@ instance Print Exp where
                         , doc $ showString "."
                         , prt 0 e
                         ]
+    ECase t exp injs -> prPrec i 0 (concatD [doc (showString "case"), prt 0 exp, doc (showString "of"), doc (showString "{"), prt 0 injs, doc (showString "}"), doc (showString ":"), prt 0 t])
+
+instance Print Inj where
+  prt i = \case
+    Inj (init,t) exp -> prPrec i 0 (concatD [prt 0 init, doc (showString ":"), prt 0 t, doc (showString "=>"), prt 0 exp])
+
+instance Print [Inj] where
+  prt _ []     = concatD []
+  prt _ [x]    = concatD [prt 0 x]
+  prt _ (x:xs) = concatD [prt 0 x, doc (showString ";"), prt 0 xs]
+
 
 
 

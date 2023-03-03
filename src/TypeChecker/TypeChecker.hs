@@ -1,5 +1,8 @@
 {-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# OPTIONS_GHC -Wno-unused-matches #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Use mapAndUnzipM" #-}
 
 -- | A module for type checking and inference using algorithm W, Hindley-Milner
 module TypeChecker.TypeChecker where
@@ -100,10 +103,12 @@ typeEq (TConstr (Constr name a)) (TConstr (Constr name' b)) = length a == length
 typeEq (TPol _) (TPol _)                  = True
 typeEq _ _                                = False
 
-isMoreGeneral :: Type -> Type -> Bool
-isMoreGeneral _ (TPol _)            = True
-isMoreGeneral (TArr a b) (TArr c d) = isMoreGeneral a c && isMoreGeneral b d
-isMoreGeneral a b                   = a == b
+isMoreSpecificOrEq :: Type -> Type -> Bool
+isMoreSpecificOrEq _ (TPol _)            = True
+isMoreSpecificOrEq (TArr a b) (TArr c d) = isMoreSpecificOrEq a c && isMoreSpecificOrEq b d
+isMoreSpecificOrEq (TConstr (Constr n1 ts1)) (TConstr (Constr n2 ts2))
+  = n1 == n2 && length ts1 == length ts2 && and (zipWith isMoreSpecificOrEq ts1 ts2)
+isMoreSpecificOrEq a b                   = a == b
 
 isPoly :: Type -> Bool
 isPoly (TPol _) = True
@@ -117,12 +122,13 @@ inferExp e = do
 
 replace :: Type -> T.Exp -> T.Exp
 replace t = \case
-    T.ELit _ e                        -> T.ELit t e
-    T.EId (n, _)                      -> T.EId (n, t)
-    T.EAbs _ name e                   -> T.EAbs t name e
-    T.EApp _ e1 e2                    -> T.EApp t e1 e2
-    T.EAdd _ e1 e2                    -> T.EAdd t e1 e2
+    T.ELit _ e                   -> T.ELit t e
+    T.EId (n, _)                 -> T.EId (n, t)
+    T.EAbs _ name e              -> T.EAbs t name e
+    T.EApp _ e1 e2               -> T.EApp t e1 e2
+    T.EAdd _ e1 e2               -> T.EAdd t e1 e2
     T.ELet (T.Bind (n, _) e1) e2 -> T.ELet (T.Bind (n, t) e1) e2
+    T.ECase _ expr injs          -> T.ECase t expr injs
 
 algoW :: Exp -> Infer (Subst, Type, T.Exp)
 algoW = \case
@@ -130,7 +136,7 @@ algoW = \case
     -- | TODO: Reason more about this one. Could be wrong
     EAnn e t -> do
         (s1, t', e') <- algoW e
-        unless (t `isMoreGeneral` t') (throwError $ unwords
+        unless (t `isMoreSpecificOrEq` t') (throwError $ unwords
             ["Annotated type:"
             , printTree t
             , "does not match inferred type:"
@@ -218,13 +224,18 @@ algoW = \case
         let t' = generalize (apply s1 env) t1
         withBinding name t' $ do
             (s2, t2, e1') <- algoW e1
-            return (s2 `compose` s1, t2, T.ELet (T.Bind (name,t2) e0') e1' )
+            return (s2 `compose` s1, t2, T.ELet (T.Bind (name,t2) e0') e1')
 
     ECase caseExpr injs -> do
         (s0, t0, e0') <- algoW caseExpr
-        injs' <- mapM (checkInj t0) injs
-        undefined
-
+        (injs', ts) <- unzip <$> mapM (checkInj t0) injs
+        case ts of
+          [] -> throwError "Case expression missing any matches"
+          ts -> do
+            unified <- zipWithM unify ts (tail ts)
+            let unified' = foldl' compose mempty unified
+            let typ = apply unified' (head ts)
+            return (unified', typ, T.ECase typ e0' injs')
 
 
 -- | Unify two types producing a new substitution
@@ -340,19 +351,19 @@ insertConstr i t = modify (\st -> st { constructors = M.insert i t (constructors
 
 -------- PATTERN MATCHING ---------
 
--- case expr of, the type of 'expr' is caseType
-checkInj :: Type -> Inj -> Infer T.Inj
+-- "case expr of", the type of 'expr' is caseType
+checkInj :: Type -> Inj -> Infer (T.Inj, Type)
 checkInj caseType (Inj it expr) = do
-    (_, e') <- inferExp expr
-    t' <- initType caseType it
-    return $ T.Inj (it, t') e'
+    (args, t') <- initType caseType it
+    (s, t, e') <- local (\st -> st { vars = args }) (algoW expr)
+    return (T.Inj (it, t') e', t)
 
-initType :: Type -> Init -> Infer Type
+initType :: Type -> Init -> Infer (Map Ident Poly, Type)
 initType expected = \case
     InitLit lit -> let returnType = litType lit
                     in if expected == returnType
-                      then return expected
-                      else throwError $ unwords ["Inferred type", printTree returnType, "does not match expected type:", printTree expected]  
+                      then return (mempty,expected)
+                      else throwError $ unwords ["Inferred type", printTree returnType, "does not match expected type:", printTree expected]
     InitConstr c args -> do
         st <- gets constructors
         case M.lookup c st of
@@ -360,14 +371,14 @@ initType expected = \case
             Just t -> do
                 let flat = flattenType t
                 let returnType = last flat
-                case (length (init flat) == length args, returnType == expected) of
-                    (True, True) -> return returnType
+                case (length (init flat) == length args, returnType `isMoreSpecificOrEq` expected) of
+                    (True, True) -> return (M.fromList $ zip args (map (Forall []) flat), expected)
                     (False, _) -> throwError $ "Can't partially match on the constructor: " ++ printTree c
-                    (_, False) -> throwError $ unwords ["Inferred type", printTree returnType, "does not match expected type:", printTree expected] 
+                    (_, False) -> throwError $ unwords ["Inferred type", printTree returnType, "does not match expected type:", printTree expected]
                 -- Ignoring the variables for now, they can not be used in the expression to the
                 -- right of '=>'
 
-    InitCatch -> return expected
+    InitCatch -> return (mempty, expected)
 
 flattenType :: Type -> [Type]
 flattenType (TArr a b) = flattenType a ++ flattenType b

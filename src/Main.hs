@@ -33,7 +33,7 @@ main' s = do
 
     putStrLn "\n-- TypeChecker --"
     typechecked <- fromTypeCheckerErr $ typecheck renamed
-    putStrLn $ printTree typechecked
+    putStrLn $ show typechecked
 
     -- putStrLn "\n-- Lambda Lifter --"
     -- let lifted = lambdaLift typechecked

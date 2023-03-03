@@ -1,12 +1,30 @@
+-- data Bool () where {
+--     True : Bool () 
+--     False : Bool ()
+-- };
+-- 
+-- main : _Int ;
+-- main = case True of {
+--     False => 0 ;
+--     True => 1
+-- };
+
 data List ('a) where {
     Nil : List ('a) 
-    Cons : 'a -> List ('a) -> List ('a) 
+    Cons : ('a) -> List ('a) -> List ('a)
 };
 
-data Bool () where {
-    True : Bool () 
-    False : Bool ()
+data Maybe ('a) where {
+    Nothing : Maybe ('a)
+    Just : 'a -> Maybe ('a)
 };
 
-main : List (_Int) ;
-main = Cons 1 (Cons 0 Nil) ;
+safeHead : List ('a) -> Maybe ('a) ;
+safeHead xs =
+    case xs of {
+        Nil => Nothing ;
+        Cons x xs => Just x
+    };
+
+main : Maybe (_Int) ;
+main = safeHead (Cons 0 (Cons 1 Nil)) ;

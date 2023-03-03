@@ -73,7 +73,9 @@ renameExp old_names = \case
         (new_names, e') <- renameExp old_names e
         pure (new_names, EAnn e' t)
 
-    ECase _ _ -> error "ECase NOT IMPLEMENTED YET"
+    ECase e injs -> do
+        (new_names, e') <- renameExp old_names e
+        pure (new_names, ECase e' injs)
 
 -- | Create a new name and add it to name environment.
 newName :: Names -> Ident -> Rn (Names, Ident)
