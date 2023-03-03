@@ -1,13 +1,7 @@
--- data Bool () where {
---     True : Bool () 
---     False : Bool ()
--- };
--- 
--- main : _Int ;
--- main = case True of {
---     False => 0 ;
---     True => 1
--- };
+data Bool () where {
+    True : Bool () 
+    False : Bool ()
+};
 
 data List ('a) where {
     Nil : List ('a) 
@@ -19,6 +13,11 @@ data Maybe ('a) where {
     Just : 'a -> Maybe ('a)
 };
 
+data Either ('a 'b) where {
+    Left : 'a -> Either ('a 'b)
+    Right : 'b -> Either ('a 'b)
+};
+
 safeHead : List ('a) -> Maybe ('a) ;
 safeHead xs =
     case xs of {
@@ -28,3 +27,17 @@ safeHead xs =
 
 main : Maybe (_Int) ;
 main = safeHead (Cons 0 (Cons 1 Nil)) ;
+
+maybeToEither : Either ('a 'b) ->  Maybe ('a) ;
+maybeToEither e =
+    case e of {
+        Left y => Nothing ;
+        Right x => Just x
+    };
+
+id : 'a -> 'a ;
+id x = x ;
+
+-- Bug, occurs check failed
+holdFn : Maybe ('b -> 'b) ;
+holdFn = Just id ;

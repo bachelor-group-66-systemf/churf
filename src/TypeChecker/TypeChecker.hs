@@ -18,11 +18,17 @@ import           Data.Set                  (Set)
 import qualified Data.Set                  as S
 
 import           Data.Foldable             (traverse_)
+import           Debug.Trace               (trace)
 import           Grammar.Abs
 import           Grammar.Print             (printTree)
 import qualified TypeChecker.TypeCheckerIr as T
 import           TypeChecker.TypeCheckerIr (Ctx (..), Env (..), Error, Infer,
                                             Poly (..), Subst)
+
+{- BUGS TODO:
+    Occurs fails on data types, e.g declared Maybe a, used in fn as Maybe (a -> a)
+-}
+
 
 initCtx = Ctx mempty
 initEnv = Env 0 mempty mempty
@@ -237,10 +243,9 @@ algoW = \case
             let typ = apply unified' (head ts)
             return (unified', typ, T.ECase typ e0' injs')
 
-
 -- | Unify two types producing a new substitution
 unify :: Type -> Type -> Infer Subst
-unify t0 t1 = case (t0, t1) of
+unify t0 t1 = case (trace ("LEFT: " ++ show t0) t0, trace ("RIGHT: " ++ show t1) t1) of
     (TArr a b, TArr c d) -> do
         s1 <- unify a c
         s2 <- unify (apply s1 b) (apply s1 d)
@@ -299,6 +304,7 @@ instance FreeVars Type where
   free (TArr a b)    = free a `S.union` free b
   -- | Not guaranteed to be correct
   free (TConstr (Constr _ a)) = foldl' (\acc x -> free x `S.union` acc) S.empty a
+
   apply :: Subst -> Type -> Type
   apply sub t = do
     case t of
@@ -334,7 +340,7 @@ fresh :: Infer Type
 fresh = do
     n <- gets count
     modify (\st -> st { count = n + 1 })
-    return . TPol . Ident $ "t" ++ show n
+    return . TPol . Ident $ show n
 
 -- | Run the monadic action with an additional binding
 withBinding :: (Monad m, MonadReader Ctx m) => Ident -> Poly -> m a -> m a
@@ -352,7 +358,7 @@ insertConstr i t = modify (\st -> st { constructors = M.insert i t (constructors
 -------- PATTERN MATCHING ---------
 
 -- "case expr of", the type of 'expr' is caseType
-checkInj :: Type -> Inj -> Infer (T.Inj, Type)
+checkInj :: Type -> Inj -> Infer (T.Inj, Type);
 checkInj caseType (Inj it expr) = do
     (args, t') <- initType caseType it
     (s, t, e') <- local (\st -> st { vars = args }) (algoW expr)
@@ -360,23 +366,34 @@ checkInj caseType (Inj it expr) = do
 
 initType :: Type -> Init -> Infer (Map Ident Poly, Type)
 initType expected = \case
+
     InitLit lit -> let returnType = litType lit
                     in if expected == returnType
                       then return (mempty,expected)
-                      else throwError $ unwords ["Inferred type", printTree returnType, "does not match expected type:", printTree expected]
+                      else throwError $ unwords [ "Inferred type"
+                                                , printTree returnType
+                                                , "does not match expected type:"
+                                                , printTree expected
+                                                ]
+
     InitConstr c args -> do
         st <- gets constructors
         case M.lookup c st of
-            Nothing -> throwError $ unwords ["Constructor:", printTree c, "does not exist"]
+            Nothing -> throwError $ unwords ["Constructor:"
+                                            , printTree c
+                                            , "does not exist"
+                                            ]
             Just t -> do
                 let flat = flattenType t
                 let returnType = last flat
                 case (length (init flat) == length args, returnType `isMoreSpecificOrEq` expected) of
                     (True, True) -> return (M.fromList $ zip args (map (Forall []) flat), expected)
                     (False, _) -> throwError $ "Can't partially match on the constructor: " ++ printTree c
-                    (_, False) -> throwError $ unwords ["Inferred type", printTree returnType, "does not match expected type:", printTree expected]
-                -- Ignoring the variables for now, they can not be used in the expression to the
-                -- right of '=>'
+                    (_, False) -> throwError $ unwords [ "Inferred type"
+                                                       , printTree returnType
+                                                       , "does not match expected type:"
+                                                       , printTree expected
+                                                       ]
 
     InitCatch -> return (mempty, expected)
 
@@ -386,3 +403,4 @@ flattenType a          = [a]
 
 litType :: Literal -> Type
 litType (LInt i) = TMono "Int"
+
