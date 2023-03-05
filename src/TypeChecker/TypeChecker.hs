@@ -272,7 +272,7 @@ unify t0 t1 = case (trace ("LEFT: " ++ show t0) t0, trace ("RIGHT: " ++ show t1)
 occurs :: Ident -> Type -> Infer Subst
 occurs _ (TPol _) = return nullSubst
 occurs i t = if S.member i (free t)
-                then throwError "Occurs check failed"
+                then throwError $ unwords ["Occurs check failed, can't unify", printTree (TPol i), "with", printTree t]
                 else return $ M.singleton i t
 
 -- | Generalize a type over all free variables in the substitution set

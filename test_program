@@ -1,43 +1,50 @@
-data Bool () where {
-    True : Bool () 
-    False : Bool ()
-};
-
-data List ('a) where {
-    Nil : List ('a) 
-    Cons : ('a) -> List ('a) -> List ('a)
-};
+-- data Bool () where {
+--     True : Bool () 
+--     False : Bool ()
+-- };
+-- 
+-- data List ('a) where {
+--     Nil : List ('a) 
+--     Cons : ('a) -> List ('a) -> List ('a)
+-- };
 
 data Maybe ('a) where {
     Nothing : Maybe ('a)
     Just : 'a -> Maybe ('a)
 };
 
-data Either ('a 'b) where {
-    Left : 'a -> Either ('a 'b)
-    Right : 'b -> Either ('a 'b)
-};
-
-safeHead : List ('a) -> Maybe ('a) ;
-safeHead xs =
-    case xs of {
-        Nil => Nothing ;
-        Cons x xs => Just x
-    };
-
-main : Maybe (_Int) ;
-main = safeHead (Cons 0 (Cons 1 Nil)) ;
-
-maybeToEither : Either ('a 'b) ->  Maybe ('a) ;
-maybeToEither e =
-    case e of {
-        Left y => Nothing ;
-        Right x => Just x
-    };
-
 id : 'a -> 'a ;
 id x = x ;
 
--- Bug, occurs check failed
-holdFn : Maybe ('b -> 'b) ;
-holdFn = Just id ;
+main : Maybe ('a -> 'a) ; 
+main = Just id;
+
+-- data Either ('a 'b) where {
+--     Left : 'a -> Either ('a 'b)
+--     Right : 'b -> Either ('a 'b)
+-- };
+
+-- safeHead : List ('a) -> Maybe ('a) ;
+-- safeHead xs =
+--     case xs of {
+--         Nil => Nothing ;
+--         Cons x xs => Just x
+--     };
+
+-- main : Maybe (_Int) ;
+-- main = safeHead (Cons 0 (Cons 1 Nil)) ;
+-- 
+-- maybeToEither : Either ('a 'b) ->  Maybe ('a) ;
+-- maybeToEither e =
+--     case e of {
+--         Left y => Nothing ;
+--         Right x => Just x
+--     };
+-- 
+-- -- Bug. f not included in the case-expression context
+-- fmap : ('a -> 'b) -> Maybe ('a) -> Maybe ('b) ;
+-- fmap f x =
+--     case x of {
+--         Just x => Just (f x) ;
+--         Nothing => Nothing
+--     }
