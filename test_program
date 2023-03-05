@@ -16,7 +16,7 @@ data Maybe ('a) where {
 id : 'a -> 'a ;
 id x = x ;
 
-main : Maybe ('a -> 'a) ; 
+main : Maybe ('a -> 'a) ;
 main = Just id;
 
 -- data Either ('a 'b) where {

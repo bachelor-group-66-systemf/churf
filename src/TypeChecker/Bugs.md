@@ -29,6 +29,7 @@ id x = x ;
 main : Maybe ('a -> 'a) ; 
 main = Just id;
 ```
+UPDATE: Might have found a fix. Need to be tested.
 
 ### The function f is not carried into the case-expression
 
