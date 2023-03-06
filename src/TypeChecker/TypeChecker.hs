@@ -1,8 +1,6 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-{-# HLINT ignore "Use mapAndUnzipM" #-}
-
 -- | A module for type checking and inference using algorithm W, Hindley-Milner
 module TypeChecker.TypeChecker where
 
@@ -16,7 +14,6 @@ import Data.Map (Map)
 import Data.Map qualified as M
 import Data.Set (Set)
 import Data.Set qualified as S
-import Debug.Trace (trace)
 import Grammar.Abs
 import Grammar.Print (printTree)
 import TypeChecker.TypeCheckerIr (
@@ -54,7 +51,10 @@ freshenData (Data (Constr name ts) constrs) = do
     let fr' = case fr of
             TPol a -> a
             -- Meh, this part assumes fresh generates a polymorphic type
-            _ -> error "Bug: implementation of fresh and freshenData are not compatible"
+            _ ->
+                error
+                    "Bug: implementation of \
+                    \ fresh and freshenData are not compatible"
     let new_ts = map (freshenType fr') ts
     let new_constrs = map (freshenConstr fr') constrs
     return $ Data (Constr name new_ts) new_constrs
@@ -63,11 +63,13 @@ freshenData (Data (Constr name ts) constrs) = do
     freshenType iden = \case
         (TPol a) -> TPol iden
         (TArr a b) -> TArr (freshenType iden a) (freshenType iden b)
-        (TConstr (Constr a ts)) -> TConstr (Constr a (map (freshenType iden) ts))
+        (TConstr (Constr a ts)) ->
+            TConstr (Constr a (map (freshenType iden) ts))
         rest -> rest
 
     freshenConstr :: Ident -> Constructor -> Constructor
-    freshenConstr iden (Constructor name t) = Constructor name (freshenType iden t)
+    freshenConstr iden (Constructor name t) =
+        Constructor name (freshenType iden t)
 
 checkData :: Data -> Infer ()
 checkData d = do
@@ -153,9 +155,12 @@ typeEq _ _ = False
 
 isMoreSpecificOrEq :: Type -> Type -> Bool
 isMoreSpecificOrEq _ (TPol _) = True
-isMoreSpecificOrEq (TArr a b) (TArr c d) = isMoreSpecificOrEq a c && isMoreSpecificOrEq b d
+isMoreSpecificOrEq (TArr a b) (TArr c d) =
+    isMoreSpecificOrEq a c && isMoreSpecificOrEq b d
 isMoreSpecificOrEq (TConstr (Constr n1 ts1)) (TConstr (Constr n2 ts2)) =
-    n1 == n2 && length ts1 == length ts2 && and (zipWith isMoreSpecificOrEq ts1 ts2)
+    n1 == n2
+        && length ts1 == length ts2
+        && and (zipWith isMoreSpecificOrEq ts1 ts2)
 isMoreSpecificOrEq a b = a == b
 
 isPoly :: Type -> Bool
@@ -200,7 +205,8 @@ algoW = \case
     -- \| ------------------
     -- \|   Γ ⊢ i : Int, ∅
 
-    ELit (LInt n) -> return (nullSubst, TMono "Int", T.ELit (TMono "Int") (LInt n))
+    ELit (LInt n) ->
+        return (nullSubst, TMono "Int", T.ELit (TMono "Int") (LInt n))
     ELit a -> error $ "NOT IMPLEMENTED YET: ELit " ++ show a
     -- \| x : σ ∈ Γ   τ = inst(σ)
     -- \| ----------------------
@@ -218,7 +224,9 @@ algoW = \case
                         constr <- gets constructors
                         case M.lookup i constr of
                             Just t -> return (nullSubst, t, T.EId (i, t))
-                            Nothing -> throwError $ "Unbound variable: " ++ show i
+                            Nothing ->
+                                throwError $
+                                    "Unbound variable: " ++ show i
 
     -- \| τ = newvar   Γ, x : τ ⊢ e : τ', S
     -- \| ---------------------------------
@@ -281,7 +289,7 @@ algoW = \case
             return (s2 `compose` s1, t2, T.ELet (T.Bind (name, t2) e0') e1')
     ECase caseExpr injs -> do
         (_, t0, e0') <- algoW caseExpr
-        (injs', ts) <- unzip <$> mapM (checkInj t0) injs
+        (injs', ts) <- mapAndUnzipM (checkInj t0) injs
         case ts of
             [] -> throwError "Case expression missing any matches"
             ts -> do
@@ -463,9 +471,18 @@ initType expected = \case
             Just t -> do
                 let flat = flattenType t
                 let returnType = last flat
-                case (length (init flat) == length args, returnType `isMoreSpecificOrEq` expected) of
-                    (True, True) -> return (M.fromList $ zip args (map (Forall []) flat), expected)
-                    (False, _) -> throwError $ "Can't partially match on the constructor: " ++ printTree c
+                case ( length (init flat) == length args
+                     , returnType `isMoreSpecificOrEq` expected
+                     ) of
+                    (True, True) ->
+                        return
+                            ( M.fromList $ zip args (map (Forall []) flat)
+                            , expected
+                            )
+                    (False, _) ->
+                        throwError $
+                            "Can't partially match on the constructor: "
+                                ++ printTree c
                     (_, False) ->
                         throwError $
                             unwords
