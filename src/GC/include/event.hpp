@@ -15,7 +15,9 @@ namespace GC {
         MarkStart,
         ChunkMarked,
         ChunkSwept,
-        ChunkFreed
+        ChunkFreed,
+        NewChunk,
+        ReusedChunk
     };
 
     using TimeStamp = chrono::_V2::system_clock::time_point;

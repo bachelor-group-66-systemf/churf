@@ -28,5 +28,6 @@ namespace GC {
 
     void GCEvent::printFull() {
         assert(false && "TODO: unimplemented");
+        ostream s1 = cout;
     }
 }

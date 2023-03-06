@@ -27,7 +27,7 @@ namespace GC {
             return m_instance;
         }
 
-        inline static Profiler *m_instance;
+        inline static Profiler *m_instance = nullptr;
         vector<GCEvent *> m_events;
 
     public:

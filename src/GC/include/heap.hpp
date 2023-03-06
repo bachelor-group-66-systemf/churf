@@ -64,6 +64,7 @@ namespace GC {
     size_t m_size;
     size_t m_allocated_size;
     uintptr_t *m_stack_top = nullptr;
+    bool m_profiler_enable = false;
 
     // maybe change to std::list
     std::vector<Chunk *> m_allocated_chunks;
@@ -92,5 +93,6 @@ namespace GC {
     void collect(uint flags); // conditional collection
     void check_init();        // print dummy things
     void print_contents();    // print dummy things
+    void set_profiler(bool mode);
   };
 }

@@ -404,4 +404,9 @@ namespace GC {
       cout << "NO FREED CHUNKS" << endl;
     }      
   }
+
+  void Heap::set_profiler(bool mode) {
+    auto heap = Heap::the();
+    heap->m_profiler_enable = mode;
+  }
 }
