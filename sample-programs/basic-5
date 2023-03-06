@@ -1,9 +1,14 @@
-id x = x;
+-- double : _Int -> _Int ;
+-- double n = n + n;
 
-add x y = x + y;
+apply : ('a -> 'b -> 'c) -> 'a -> 'b -> 'c ;
+apply f x = \y. f x y ;
 
-double n = n + n;
+id : 'a -> 'a ;
+id x = x ;
 
-apply f x = \y. f x y;
+add : _Int -> _Int -> _Int ;
+add x y = x + y ;
 
-main = apply (id add) ((\x. x + 1) 1) (double 3);
+main : _Int -> _Int -> _Int ;
+main = (id add) 1 2 ;

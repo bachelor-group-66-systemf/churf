@@ -61,7 +61,7 @@ freshenData (Data (Constr name ts) constrs) = do
   where
     freshenType :: Ident -> Type -> Type
     freshenType iden = \case
-        (TPol a) -> TPol iden
+        (TPol _) -> TPol iden
         (TArr a b) -> TArr (freshenType iden a) (freshenType iden b)
         (TConstr (Constr a ts)) ->
             TConstr (Constr a (map (freshenType iden) ts))

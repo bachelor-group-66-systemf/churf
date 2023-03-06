@@ -1,2 +1,2 @@
-
-main = (\x. x+x+3) ((\x. x) 2)
+main : _Int ;
+main = (\x. x+x+3) ((\x. x) 2) ;

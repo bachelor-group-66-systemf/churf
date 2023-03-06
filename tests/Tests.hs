@@ -1,20 +1,26 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+
 {-# HLINT ignore "Use <$>" #-}
 {-# HLINT ignore "Use camelCase" #-}
 
 module Main where
 
-import           Data.Either               (isLeft, isRight)
-import           Data.Map                  (Map)
-import qualified Data.Map                  as M
-import           Grammar.Abs
-import           Test.Hspec
-import           Test.QuickCheck
-import           TypeChecker.TypeChecker
-import qualified TypeChecker.TypeCheckerIr as T
-import           TypeChecker.TypeCheckerIr (Ctx (..), Env (..), Error, Infer,
-                                            Poly (..))
+import Data.Either (isLeft, isRight)
+import Data.Map (Map)
+import Data.Map qualified as M
+import Grammar.Abs
+import Test.Hspec
+import Test.QuickCheck
+import TypeChecker.TypeChecker
+import TypeChecker.TypeCheckerIr (
+    Ctx (..),
+    Env (..),
+    Error,
+    Infer,
+    Poly (..),
+ )
+import TypeChecker.TypeCheckerIr qualified as T
 
 main :: IO ()
 main = hspec $ do
@@ -67,10 +73,11 @@ infer_eabs = describe "algoW used on EAbs" $ do
     it "should infer the argument type as polymorphic if it is not used in the lambda" $ do
         let lambda = EAbs "x" (ELit (LInt 0))
         getType lambda `shouldSatisfy` isArrowPolyToMono
+
     it "should infer a variable as function if used as one" $ do
         let lambda = EAbs "f" (EAbs "x" (EApp (EId "f") (EId "x")))
         let isOk (Right (TArr (TArr (TPol _) (TPol _)) (TArr (TPol _) (TPol _)))) = True
-            isOk _                                                                = False
+            isOk _ = False
         getType lambda `shouldSatisfy` isOk
 
 infer_eapp = describe "algoW used on EApp" $ do
@@ -81,9 +88,21 @@ infer_eapp = describe "algoW used on EApp" $ do
             let ctx = Ctx (M.singleton (Ident (x :: String)) t)
             getTypeC env ctx (EApp (EId (Ident x)) (EId (Ident x))) `shouldBe` Left "Occurs check failed"
 
+churf_id :: Bind 
+churf_id = Bind "id" (TArr (TPol "a") (TPol "a")) "id" ["x"] (EId "x")
+
+churf_add :: Bind
+churf_add = Bind "add" (TArr (TMono "Int") (TArr (TMono "Int") (TMono "Int"))) "add" ["x", "y"] (EAdd (EId "x") (EId "y"))
+
+churf_main :: Bind
+churf_main = Bind "main" (TArr (TMono "Int") (TArr (TMono "Int") (TMono "Int"))) "main" [] (EApp (EId "id") (EId "add"))
+
+test_bug :: IO ()
+test_bug = undefined
+
 isArrowPolyToMono :: Either Error Type -> Bool
 isArrowPolyToMono (Right (TArr (TPol _) (TMono _))) = True
-isArrowPolyToMono _                                 = False
+isArrowPolyToMono _ = False
 
 -- | Empty environment
 getType :: Exp -> Either Error Type

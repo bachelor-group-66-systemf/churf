@@ -1,8 +1,22 @@
 ## Bugs
 
-### Polymorphic type variables are global?
+None known at this moment
 
-This doesn't work (occurs check failed, can't unify `(a -> a) = a`
+## Fixed bugs
+
+* 1
+
+```hs
+fmap : ('a -> 'b) -> Maybe ('a) -> Maybe ('b) ;
+fmap f x =
+    case x of {
+        Just x => Just (f x) ;
+        Nothing => Nothing
+    }
+```
+
+* 2
+
 ```hs
 data Maybe ('a) where {
     Nothing : Maybe ('a)
@@ -28,17 +42,4 @@ id x = x ;
 
 main : Maybe ('a -> 'a) ; 
 main = Just id;
-```
-UPDATE: Might have found a fix. Need to be tested.
-
-### The function f is not carried into the case-expression
-
-Code example that does not type check
-```hs
-fmap : ('a -> 'b) -> Maybe ('a) -> Maybe ('b) ;
-fmap f x =
-    case x of {
-        Just x => Just (f x) ;
-        Nothing => Nothing
-    }
 ```

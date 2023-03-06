@@ -3,15 +3,15 @@
 module Main where
 
 -- import           Codegen.Codegen           (compile)
-import           Grammar.ErrM            (Err)
-import           Grammar.Par             (myLexer, pProgram)
-import           Grammar.Print           (printTree)
+import Grammar.ErrM (Err)
+import Grammar.Par (myLexer, pProgram)
+import Grammar.Print (printTree)
 
 -- import           LambdaLifter.LambdaLifter (lambdaLift)
-import           Renamer.Renamer         (rename)
-import           System.Environment      (getArgs)
-import           System.Exit             (exitFailure, exitSuccess)
-import           TypeChecker.TypeChecker (typecheck)
+import Renamer.Renamer (rename)
+import System.Environment (getArgs)
+import System.Exit (exitFailure, exitSuccess)
+import TypeChecker.TypeChecker (typecheck)
 
 main :: IO ()
 main =
