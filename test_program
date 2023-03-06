@@ -13,11 +13,11 @@ data Maybe ('a) where {
     Just : 'a -> Maybe ('a)
 };
 
-id : 'a -> 'a ;
-id x = x ;
+-- id : 'a -> 'a ;
+-- id x = x ;
 
-main : Maybe ('a -> 'a) ;
-main = Just id;
+-- main : Maybe ('a -> 'a) ;
+-- main = Just id;
 
 -- data Either ('a 'b) where {
 --     Left : 'a -> Either ('a 'b)
@@ -40,11 +40,11 @@ main = Just id;
 --         Left y => Nothing ;
 --         Right x => Just x
 --     };
--- 
--- -- Bug. f not included in the case-expression context
--- fmap : ('a -> 'b) -> Maybe ('a) -> Maybe ('b) ;
--- fmap f x =
---     case x of {
---         Just x => Just (f x) ;
---         Nothing => Nothing
---     }
+ 
+-- Bug. f not included in the case-expression context
+fmap : ('a -> 'b) -> Maybe ('a) -> Maybe ('b) ;
+fmap f x =
+    case x of {
+        Just x => Just (f x) ;
+        Nothing => Nothing
+    }
