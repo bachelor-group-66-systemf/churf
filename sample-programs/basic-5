@@ -1,17 +1,8 @@
 -- double : _Int -> _Int ;
 -- double n = n + n;
 
-apply : ('a -> 'b -> 'c) -> 'a -> 'b -> 'c ;
-apply f x y = f x y ;
-
 id : 'a -> 'a ;
 id x = x ;
 
-add : _Int -> _Int -> _Int ;
-add x y = x + y ;
-
-main : _Int -> _Int -> _Int ;
-main = apply (id add) ;
-
-idadd : _Int -> _Int -> _Int ;
-idadd = id add ;
+main : ('a -> 'b -> 'c) ;
+main = id ;

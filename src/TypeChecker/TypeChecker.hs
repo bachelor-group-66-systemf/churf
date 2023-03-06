@@ -45,6 +45,7 @@ typecheck = run . checkPrg
 
 {- | Start by freshening the type variable of data types to avoid clash with
 other user defined polymorphic types
+This might be wrong for type constructors that work over several variables
 -}
 freshenData :: Data -> Infer Data
 freshenData (Data (Constr name ts) constrs) = do
@@ -59,18 +60,21 @@ freshenData (Data (Constr name ts) constrs) = do
     let new_ts = map (freshenType fr') ts
     let new_constrs = map (freshenConstr fr') constrs
     return $ Data (Constr name new_ts) new_constrs
-  where
-    freshenType :: Ident -> Type -> Type
-    freshenType iden = \case
-        (TPol _) -> TPol iden
-        (TArr a b) -> TArr (freshenType iden a) (freshenType iden b)
-        (TConstr (Constr a ts)) ->
-            TConstr (Constr a (map (freshenType iden) ts))
-        rest -> rest
 
-    freshenConstr :: Ident -> Constructor -> Constructor
-    freshenConstr iden (Constructor name t) =
-        Constructor name (freshenType iden t)
+{- | Freshen all polymorphic variables, regardless of name
+| freshenType "d" (a -> b -> c) becomes (d -> d -> d)
+-}
+freshenType :: Ident -> Type -> Type
+freshenType iden = \case
+    (TPol _) -> TPol iden
+    (TArr a b) -> TArr (freshenType iden a) (freshenType iden b)
+    (TConstr (Constr a ts)) ->
+        TConstr (Constr a (map (freshenType iden) ts))
+    rest -> rest
+
+freshenConstr :: Ident -> Constructor -> Constructor
+freshenConstr iden (Constructor name t) =
+    Constructor name (freshenType iden t)
 
 checkData :: Data -> Infer ()
 checkData d = do
