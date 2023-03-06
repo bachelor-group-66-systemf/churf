@@ -14,6 +14,7 @@ import Data.Map (Map)
 import Data.Map qualified as M
 import Data.Set (Set)
 import Data.Set qualified as S
+import Debug.Trace (trace)
 import Grammar.Abs
 import Grammar.Print (printTree)
 import TypeChecker.TypeCheckerIr (
@@ -300,38 +301,41 @@ algoW = \case
 
 -- | Unify two types producing a new substitution
 unify :: Type -> Type -> Infer Subst
-unify t0 t1 = case (t0, t1) of
-    (TArr a b, TArr c d) -> do
-        s1 <- unify a c
-        s2 <- unify (apply s1 b) (apply s1 d)
-        return $ s1 `compose` s2
-    (TPol a, b) -> occurs a b
-    (a, TPol b) -> occurs b a
-    (TMono a, TMono b) ->
-        if a == b then return M.empty else throwError "Types do not unify"
-    -- \| TODO: Figure out a cleaner way to express the same thing
-    (TConstr (Constr name t), TConstr (Constr name' t')) ->
-        if name == name' && length t == length t'
-            then do
-                xs <- zipWithM unify t t'
-                return $ foldr compose nullSubst xs
-            else
-                throwError $
-                    unwords
-                        [ "Type constructor:"
-                        , printTree name
-                        , "(" ++ printTree t ++ ")"
-                        , "does not match with:"
-                        , printTree name'
-                        , "(" ++ printTree t' ++ ")"
-                        ]
-    (a, b) ->
-        throwError . unwords $
-            [ "Type:"
-            , printTree a
-            , "can't be unified with:"
-            , printTree b
-            ]
+unify t0 t1 = do
+    trace ("t0: " ++ show t0) return ()
+    trace ("t1: " ++ show t1) return ()
+    case (t0, t1) of
+        (TArr a b, TArr c d) -> do
+            s1 <- unify a c
+            s2 <- unify (apply s1 b) (apply s1 d)
+            return $ s1 `compose` s2
+        (TPol a, b) -> occurs a b
+        (a, TPol b) -> occurs b a
+        (TMono a, TMono b) ->
+            if a == b then return M.empty else throwError "Types do not unify"
+        -- \| TODO: Figure out a cleaner way to express the same thing
+        (TConstr (Constr name t), TConstr (Constr name' t')) ->
+            if name == name' && length t == length t'
+                then do
+                    xs <- zipWithM unify t t'
+                    return $ foldr compose nullSubst xs
+                else
+                    throwError $
+                        unwords
+                            [ "Type constructor:"
+                            , printTree name
+                            , "(" ++ printTree t ++ ")"
+                            , "does not match with:"
+                            , printTree name'
+                            , "(" ++ printTree t' ++ ")"
+                            ]
+        (a, b) ->
+            throwError . unwords $
+                [ "Type:"
+                , printTree a
+                , "can't be unified with:"
+                , printTree b
+                ]
 
 {- | Check if a type is contained in another type.
 I.E. { a = a -> b } is an unsolvable constraint since there is no substitution
@@ -409,7 +413,7 @@ instance FreeVars (Map Ident Poly) where
 
 -- | Apply substitutions to the environment.
 applySt :: Subst -> Infer a -> Infer a
-applySt s = local (\st -> st {vars = apply s (vars st)})
+applySt s = local (\st -> st{vars = apply s (vars st)})
 
 -- | Represents the empty substition set
 nullSubst :: Subst
@@ -419,21 +423,21 @@ nullSubst = M.empty
 fresh :: Infer Type
 fresh = do
     n <- gets count
-    modify (\st -> st {count = n + 1})
+    modify (\st -> st{count = n + 1})
     return . TPol . Ident $ show n
 
 -- | Run the monadic action with an additional binding
 withBinding :: (Monad m, MonadReader Ctx m) => Ident -> Poly -> m a -> m a
-withBinding i p = local (\st -> st {vars = M.insert i p (vars st)})
+withBinding i p = local (\st -> st{vars = M.insert i p (vars st)})
 
 -- | Insert a function signature into the environment
 insertSig :: Ident -> Type -> Infer ()
-insertSig i t = modify (\st -> st {sigs = M.insert i t (sigs st)})
+insertSig i t = modify (\st -> st{sigs = M.insert i t (sigs st)})
 
 -- | Insert a constructor with its data type
 insertConstr :: Ident -> Type -> Infer ()
 insertConstr i t =
-    modify (\st -> st {constructors = M.insert i t (constructors st)})
+    modify (\st -> st{constructors = M.insert i t (constructors st)})
 
 -------- PATTERN MATCHING ---------
 
@@ -441,7 +445,7 @@ insertConstr i t =
 checkInj :: Type -> Inj -> Infer (T.Inj, Type)
 checkInj caseType (Inj it expr) = do
     (args, t') <- initType caseType it
-    (_, t, e') <- local (\st -> st {vars = args `M.union` vars st}) (algoW expr)
+    (_, t, e') <- local (\st -> st{vars = args `M.union` vars st}) (algoW expr)
     return (T.Inj (it, t') e', t)
 
 initType :: Type -> Init -> Infer (Map Ident Poly, Type)

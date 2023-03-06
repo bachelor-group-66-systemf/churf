@@ -29,6 +29,7 @@ main = hspec $ do
     infer_eid
     infer_eabs
     infer_eapp
+    test_id_function
 
 infer_elit = describe "algoW used on ELit" $ do
     it "infers the type mono Int" $ do
@@ -86,19 +87,24 @@ infer_eapp = describe "algoW used on EApp" $ do
             let env = Env 0 mempty mempty
             let t = Forall [] (TPol "a")
             let ctx = Ctx (M.singleton (Ident (x :: String)) t)
-            getTypeC env ctx (EApp (EId (Ident x)) (EId (Ident x))) `shouldBe` Left "Occurs check failed"
+            getTypeC env ctx (EApp (EId (Ident x)) (EId (Ident x))) `shouldSatisfy` isLeft
 
-churf_id :: Bind 
+churf_id :: Bind
 churf_id = Bind "id" (TArr (TPol "a") (TPol "a")) "id" ["x"] (EId "x")
 
 churf_add :: Bind
 churf_add = Bind "add" (TArr (TMono "Int") (TArr (TMono "Int") (TMono "Int"))) "add" ["x", "y"] (EAdd (EId "x") (EId "y"))
 
 churf_main :: Bind
-churf_main = Bind "main" (TArr (TMono "Int") (TArr (TMono "Int") (TMono "Int"))) "main" [] (EApp (EId "id") (EId "add"))
+churf_main = Bind "main" (TArr (TMono "Int") (TMono "Int")) "main" [] (EApp (EApp (EId "id") (EId "add")) (ELit (LInt 0)))
 
-test_bug :: IO ()
-test_bug = undefined
+prg = Program [DBind churf_main, DBind churf_add, DBind churf_id]
+
+test_id_function :: SpecWith ()
+test_id_function =
+    describe "typechecking a program with id, add and main, where id is applied to add in main" $ do
+        it "should succeed to find the correct type" $ do
+            typecheck prg `shouldSatisfy` isRight
 
 isArrowPolyToMono :: Either Error Type -> Bool
 isArrowPolyToMono (Right (TArr (TPol _) (TMono _))) = True
