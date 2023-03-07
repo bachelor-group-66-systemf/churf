@@ -1,2 +1,6 @@
 main : _Int ;
-main = 3 + 3 ;
+main = double 3 ;
+
+double : _Int -> _Int ;
+double x = x + x ;
+

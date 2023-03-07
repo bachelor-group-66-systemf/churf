@@ -14,6 +14,7 @@ import           System.Environment        (getArgs)
 import           System.Exit               (exitFailure, exitSuccess)
 import           System.IO                 (stderr)
 import           TypeChecker.TypeChecker   (typecheck)
+import Monomorpher.Monomorpher (monomorphize)
 
 main :: IO ()
 main =
@@ -41,10 +42,14 @@ main' s = do
     let lifted = lambdaLift typechecked
     printToErr $ printTree lifted
 
-    printToErr "\n -- Printing compiler output to stdout --"
-    compiled <- fromCompilerErr $ compile lifted
-    putStrLn compiled
-    writeFile "llvm.ll" compiled
+    printToErr "\n -- Monomorphizer --"
+    let monomorphed = monomorphize lifted
+    printToErr $ printTree monomorphed
+
+    --printToErr "\n -- Printing compiler output to stdout --"
+    --compiled <- fromCompilerErr $ compile lifted
+    --putStrLn compiled
+    --writeFile "llvm.ll" compiled
 
     exitSuccess
 

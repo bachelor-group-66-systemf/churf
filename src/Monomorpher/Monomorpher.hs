@@ -21,7 +21,7 @@
 -- expected type in this context. The result of this computation (a monomorphic 
 -- bind) is added to the resulting set of binds.
 
-module Monomorpher.Monomorpher (monomorphize) where
+module Monomorpher.Monomorpher (monomorphize, morphExp, morphBind) where
 
 import qualified TypeChecker.TypeCheckerIr as T
 import qualified Monomorpher.MonomorpherIr as M
@@ -32,6 +32,7 @@ import Control.Monad.State (MonadState (get), State, gets, modify, execState)
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Data.Maybe (fromJust)
+import Debug.Trace
 
 -- | The environment of computations in this module.
 data Env = Env { -- | All binds in the program.
@@ -43,7 +44,7 @@ data Env = Env { -- | All binds in the program.
                  -- | Local variables, not necessary if id's are annotated based
                  -- on if they are local or global.
                  locals :: Set.Set Ident
-               }
+               } deriving (Show)
 
 -- | State Monad wrapper for "Env".
 type EnvM a = State Env a
@@ -62,6 +63,10 @@ createEnv binds = Env { input  = Map.fromList kvPairs,
 -- | Functions to add, clear and get whether id is a local variable.
 addLocal :: Ident -> EnvM ()
 addLocal ident = modify (\env -> env { locals = Set.insert ident (locals env) })
+
+addLocals :: [Ident] -> EnvM ()
+addLocals idents = modify (\env -> 
+  env { locals = Set.fromList idents `Set.union` locals env })
 
 clearLocal :: EnvM ()
 clearLocal = modify (\env -> env { locals = Set.empty })
@@ -108,7 +113,7 @@ getMono t = do env <- get
         (getMono' polys t1) (getMono' polys t2)
     (T.TPol ident) -> case Map.lookup ident polys of
                          Just concrete -> concrete
-                         Nothing       -> error "type not found!"
+                         Nothing       -> error $ "type not found! type: " ++ show ident
 
 -- NOTE: could make this function more optimized
 -- | Makes a kv pair list of poly to concrete mappings, throws runtime
@@ -120,20 +125,6 @@ mapTypes (T.TArr pt1 pt2) (M.TArr mt1 mt2) = mapTypes pt1 mt1 ++
                                              mapTypes pt2 mt2
 mapTypes _ _ = error "structure of types not the same!"
 
--- | If ident not already in env's output, morphed bind to output
--- (and all referenced binds within this bind).
-morphBind :: M.Type -> T.Bind -> EnvM ()
-morphBind expectedType b@(T.Bind (ident, _) _ exp) = do
-  outputted <- isOutputted ident
-  if outputted then
-    -- Don't add anything!
-    return ()
-  else do
-    -- Add processed bind!
-    addPolyMap expectedType b
-    exp' <- morphExp expectedType exp
-    addMonomorphic $ M.Bind (ident, expectedType) [] exp'
-
 -- Get type of expression
 getExpType :: T.Exp -> T.Type
 getExpType (T.EId  (_, t)) = t
@@ -142,6 +133,21 @@ getExpType (T.EApp t _ _)  = t
 getExpType (T.EAdd t _ _)  = t
 getExpType (T.EAbs t _ _)  = t
 getExpType (T.ELet _ _)    = error "Lets not allowed🛑👮"
+
+-- | If ident not already in env's output, morphed bind to output
+-- (and all referenced binds within this bind).
+morphBind :: M.Type -> T.Bind -> EnvM ()
+morphBind expectedType b@(T.Bind (ident, _) args exp) = do
+  outputted <- isOutputted ident
+  if outputted then
+    -- Don't add anything!
+    return ()
+  else do
+    -- Add processed bind!
+    addLocals $ map fst args  -- Add all the local variables
+    addPolyMap expectedType b
+    exp' <- morphExp expectedType exp
+    addMonomorphic $ M.Bind (ident, expectedType) [] exp'
 
 morphExp :: M.Type -> T.Exp -> EnvM M.Exp
 morphExp expectedType exp = case exp of
@@ -156,13 +162,15 @@ morphExp expectedType exp = case exp of
                        e2' <- morphExp t2 e2
                        t1  <- getMono $ getExpType e1
                        e1' <- morphExp t1 e1
-                       return $ M.EApp expectedType e1' e2'
-  -- Add local vars to locals
+                       return $ M.EAdd expectedType e1' e2'
+  -- Add local vars to locals, this will never be called after the lambda lifter
   T.EAbs _ (ident, _) e -> do let (M.TArr _ t) = expectedType
+                              error "should not be able to happen"
                               addLocal ident
                               morphExp t e
 
   T.EId (ident, t) ->      do maybeLocal <- localExists ident
+                              trace ("Ident: " ++ show ident ++": " ++ show maybeLocal) (return ())
                               if maybeLocal then do
                                 t' <- getMono t
                                 return $ M.EId (ident, t')
@@ -184,11 +192,17 @@ monomorphize :: T.Program -> M.Program
 monomorphize (T.Program binds) = M.Program $ (map snd . Map.toList) outputMap
  where
   outputMap :: Map.Map Ident M.Bind
-  outputMap = output $ execState monomorphize' (createEnv binds)
+  outputMap = output $ execState monomorphize' (trace ("Inital Env: " ++ show (createEnv binds)) $ createEnv binds)
 
   monomorphize' :: EnvM ()
   monomorphize' = do
     main <- getMain
     morphBind (M.TMono $ M.Ident "Int") main
 
+-- Simple tests
+--argX     = T.Ident "x"
+--funcF    = (T.Ident "f", T.TArr )
+--typeInt  = T.TMono (T.Ident "Int")
+--test1Exp = T.ELit typeInt (T.LInt 8)
+--test1    = T.Program [T.Bind funcF [argX] test1Exp]
 

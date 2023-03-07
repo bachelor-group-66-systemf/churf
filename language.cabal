@@ -83,3 +83,4 @@ Test-suite language-testsuite
       , QuickCheck
 
     default-language: GHC2021
+
