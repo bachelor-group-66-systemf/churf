@@ -81,6 +81,7 @@ Test-suite language-testsuite
       , extra
       , array
       , QuickCheck
+      , hspec
 
     default-language: GHC2021
 
