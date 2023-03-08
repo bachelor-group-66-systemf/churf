@@ -9,12 +9,12 @@ import           Grammar.Par          (myLexer, pProgram)
 import           Grammar.Print        (printTree)
 
 -- import           Interpreter        (interpret)
-import           Control.Monad        (unless, when)
+import           Control.Monad        (when)
 import           Data.List.Extra      (isSuffixOf)
 import           LambdaLifter         (lambdaLift)
 import           Renamer              (rename)
 import           System.Directory     (createDirectory, doesPathExist,
-                                       getDirectoryContents, removeDirectory,
+                                       getDirectoryContents,
                                        removeDirectoryRecursive,
                                        setCurrentDirectory)
 import           System.Environment   (getArgs)

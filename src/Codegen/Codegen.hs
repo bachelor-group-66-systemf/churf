@@ -8,10 +8,8 @@ import           Codegen.LlvmIr       (CallingConvention (..), LLVMComp (..),
                                        LLVMIr (..), LLVMType (..),
                                        LLVMValue (..), Visibility (..),
                                        llvmIrToString)
-import           Control.Monad.State  (StateT, execStateT, foldM, foldM_, gets,
-                                       modify)
+import           Control.Monad.State  (StateT, execStateT, foldM_, gets, modify)
 import qualified Data.Bifunctor       as BI
-import           Data.Foldable        (traverse_)
 import           Data.List.Extra      (trim)
 import           Data.Map             (Map)
 import qualified Data.Map             as Map
