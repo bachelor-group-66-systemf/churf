@@ -6,7 +6,7 @@
 #include "event.hpp"
 #include "heap.hpp"
 
-using namespace std;
+// using namespace std;
 
 namespace GC {
     
@@ -22,12 +22,7 @@ namespace GC {
         return m_chunk;
     }
 
-    void GCEvent::printShort() {
+    void GCEvent::print(std::ostream &out) {
         assert(false && "TODO: unimplemented");
-    }
-
-    void GCEvent::printFull() {
-        assert(false && "TODO: unimplemented");
-        ostream s1 = cout;
     }
 }

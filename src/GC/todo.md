@@ -6,7 +6,9 @@ Goal for next week (24/2):
 - Write more complex tests
 
 ## GC TODO:
-- Double check m_heap_size functionality and when a collection is triggered
+- Skriva klart profiler
+- Kolla linking med Valter/Victor
+- Fixa en a-fil/static lib till Samuel
 - Kolla vektor vs list complexity
 
 ## Tests TODO

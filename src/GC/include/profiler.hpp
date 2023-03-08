@@ -10,11 +10,6 @@ using namespace std;
 
 namespace GC {
 
-    enum PrintTraceOptions {
-        Short,
-        Full
-    };
-
     class Profiler {
     private:
         Profiler() { }
@@ -33,6 +28,6 @@ namespace GC {
     public:
         static void record(GCEventType type);
         static void record(GCEventType type, Chunk *chunk);
-        static void printTrace(PrintTraceOptions opt);
+        static void printTrace();
     };
 }

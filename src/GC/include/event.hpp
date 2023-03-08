@@ -44,7 +44,6 @@ namespace GC {
         TimeStamp getTimeStamp();
         Chunk *getChunk();
 
-        void printShort();
-        void printFull();
+        void print(std::ostream &out);
     };
 }

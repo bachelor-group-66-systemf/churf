@@ -19,16 +19,13 @@ namespace GC {
         profiler->m_events.push_back(event);
     }
 
-    void Profiler::printTrace(PrintTraceOptions opt) {
+    void Profiler::printTrace() {
         auto profiler = Profiler::the();
         auto start = profiler->m_events.begin();
         auto end = profiler->m_events.end();
         while (start != end) {
             auto event = *start++;
-            if (opt == Short)
-                event->printShort();
-            else
-                event->printFull();
+            event->print(std::cout);
         }
     }
 }
