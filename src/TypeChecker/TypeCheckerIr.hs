@@ -1,139 +1,184 @@
 {-# LANGUAGE LambdaCase #-}
 
-module TypeChecker.TypeCheckerIr
-  ( module Grammar.Abs
-  , module TypeChecker.TypeCheckerIr
-  ) where
+module TypeChecker.TypeCheckerIr where
 
-import           Grammar.Abs   (Ident (..), Type (..))
-import qualified Grammar.Abs   as GA
+import           Control.Monad.Except
+import           Control.Monad.Reader
+import           Control.Monad.State
+import           Data.Functor.Identity (Identity)
+import           Data.Map              (Map)
+import           Grammar.Abs           (Data (..), Ident (..), Init (..),
+                                        Literal (..), Type (..))
 import           Grammar.Print
 import           Prelude
-import qualified Prelude       as C (Eq, Ord, Read, Show)
+import qualified Prelude               as C (Eq, Ord, Read, Show)
 
-newtype Program = Program [Bind]
-  deriving (C.Eq, C.Ord, C.Show, C.Read)
+-- | A data type representing type variables
+data Poly = Forall [Ident] Type
+    deriving (Show)
+
+newtype Ctx = Ctx {vars :: Map Ident Poly}
+
+data Env = Env
+    { count        :: Int
+    , sigs         :: Map Ident Type
+    , constructors :: Map Ident Type
+    }
+
+type Error = String
+type Subst = Map Ident Type
+
+type Infer = StateT Env (ReaderT Ctx (ExceptT Error Identity))
+
+newtype Program = Program [Def]
+    deriving (C.Eq, C.Ord, C.Show, C.Read)
 
 data Exp
-    = EId  Id
-    | EInt Integer
+    = EId Id
+    | ELit Type Literal
     | ELet Bind Exp
     | EApp Type Exp Exp
     | EAdd Type Exp Exp
     | ESub Type Exp Exp
-    | EAbs Type Id  Exp
-    | ECase Type Exp [(Type, Case)]
-  deriving (C.Eq, C.Ord, C.Show, C.Read)
+    | EAbs Type Id Exp
+    | ECase Type Exp [Inj]
+    deriving (C.Eq, C.Ord, C.Read, C.Show)
 
-data Case = Case GA.Case Exp
-  deriving (C.Eq, C.Ord, C.Show, C.Read)
+data Inj = Inj (Init, Type) Exp
+    deriving (C.Eq, C.Ord, C.Read, C.Show)
+
+data Def = DBind Bind | DData Data
+    deriving (C.Eq, C.Ord, C.Read, C.Show)
 
 type Id = (Ident, Type)
 
-data Bind = Bind Id [Id] Exp | DataStructure Ident [(Ident, [Type])]
+data Bind = Bind Id Exp
     deriving (C.Eq, C.Ord, C.Show, C.Read)
+
+instance Print [Def] where
+    prt _ []       = concatD []
+    prt _ (x : xs) = concatD [prt 0 x, doc (showString "\n"), prt 0 xs]
+
+instance Print Def where
+    prt i (DBind bind) = prt i bind
+    prt i (DData d)    = prt i d
 
 instance Print Program where
     prt i (Program sc) = prPrec i 0 $ prt 0 sc
 
 instance Print Bind where
-    prt i (Bind name@(n, _) parms rhs) = prPrec i 0 $ concatD
-        [ prtId 0 name
-        , doc $ showString ";"
-        , prt 0 n
-        , prtIdPs 0 parms
-        , doc $ showString "="
-        , prt 0 rhs
-        ]
-    prt i (DataStructure (Ident n) xs) = prPrec i 0 $ concatD
-        [ prt 0 n
-        , doc $ showString "{"
-        , doc . showString . show $ xs
-        , doc $ showString "}"
-        ]
+    prt i (Bind (t, name) rhs) =
+        prPrec i 0 $
+            concatD
+                [ prt 0 name
+                , doc $ showString ":"
+                , prt 0 t
+                , doc $ showString "\n"
+                , prt 0 name
+                , doc $ showString "="
+                , prt 0 rhs
+                ]
 
 instance Print [Bind] where
-  prt _ []     = concatD []
-  prt _ [x]    = concatD [prt 0 x]
-  prt _ (x:xs) = concatD [prt 0 x, doc (showString ";"), prt 0 xs]
+    prt _ [] = concatD []
+    prt _ [x] = concatD [prt 0 x]
+    prt _ (x : xs) = concatD [prt 0 x, doc (showString ";"), doc (showString "\n"), prt 0 xs]
 
 prtIdPs :: Int -> [Id] -> Doc
 prtIdPs i = prPrec i 0 . concatD . map (prtIdP i)
 
 prtId :: Int -> Id -> Doc
-prtId i (name, t) = prPrec i 0 $ concatD
-    [ prt 0 name
-    , doc $ showString ":"
-    , prt 0 t
-    ]
+prtId i (name, t) =
+    prPrec i 0 $
+        concatD
+            [ prt 0 name
+            , doc $ showString ":"
+            , prt 0 t
+            ]
 
 prtIdP :: Int -> Id -> Doc
-prtIdP i (name, t) = prPrec i 0 $ concatD
-    [ doc $ showString "("
-    , prt 0 name
-    , doc $ showString ":"
-    , prt 0 t
-    , doc $ showString ")"
-    ]
-
+prtIdP i (name, t) =
+    prPrec i 0 $
+        concatD
+            [ doc $ showString "("
+            , prt 0 name
+            , doc $ showString ":"
+            , prt 0 t
+            , doc $ showString ")"
+            ]
 
 instance Print Exp where
-  prt i = \case
-      EId  n       -> prPrec i 3 $ concatD [prtIdP 0 n]
-      EInt i1      -> prPrec i 3 $ concatD [prt 0 i1]
-      ELet bs e    -> prPrec i 3 $ concatD
-                          [ doc $ showString "let"
-                          , prt 0 bs
-                          , doc $ showString "in"
-                          , prt 0 e
-                          ]
-      EApp t e1 e2 -> prPrec i 2 $ concatD
-                          [ doc $ showString "@"
-                          , prt 0 t
-                          , prt 2 e1
-                          , prt 3 e2
-                          ]
-      EAdd t e1 e2 -> prPrec i 1 $ concatD
-                          [ doc $ showString "@"
-                          , prt 0 t
-                          , prt 1 e1
-                          , doc $ showString "+"
-                          , prt 2 e2
-                          ]
-      ESub t e1 e2 -> prPrec i 1 $ concatD
-                          [ doc $ showString "@"
-                          , prt 0 t
-                          , prt 1 e1
-                          , doc $ showString "-"
-                          , prt 2 e2
-                          ]
-      EAbs t n  e  -> prPrec i 0 $ concatD
-                          [ doc $ showString "@"
-                          , prt 0 t
-                          , doc $ showString "\\"
-                          , prtIdP 0 n
-                          , doc $ showString "."
-                          , prt 0 e
-                          ]
-      ECase t e cs    -> prPrec i 0 $ concatD
-                          [ doc $ showString "@"
-                          , prt 0 t
-                          , doc $ showString "("
-                          , prt 0 e
-                          , doc $ showString ")"
-                          , prPrec i 0 $ concatD . printCases $ cs
-                          ]
+    prt i = \case
+        EId n -> prPrec i 3 $ concatD [prtId 0 n, doc $ showString "\n"]
+        ELit _ (LInt i1) -> prPrec i 3 $ concatD [prt 0 i1, doc $ showString "\n"]
+        ELet bs e ->
+            prPrec i 3 $
+                concatD
+                    [ doc $ showString "let"
+                    , prt 0 bs
+                    , doc $ showString "in"
+                    , prt 0 e
+                    , doc $ showString "\n"
+                    ]
+        EApp _ e1 e2 ->
+            prPrec i 2 $
+                concatD
+                    [ prt 2 e1
+                    , prt 3 e2
+                    ]
+        EAdd t e1 e2 ->
+            prPrec i 1 $
+                concatD
+                    [ doc $ showString "@"
+                    , prt 0 t
+                    , prt 1 e1
+                    , doc $ showString "+"
+                    , prt 2 e2
+                    , doc $ showString "\n"
+                    ]
+        ESub t e1 e2 ->
+            prPrec i 1 $
+                concatD
+                    [ doc $ showString "@"
+                    , prt 0 t
+                    , prt 1 e1
+                    , doc $ showString "-"
+                    , prt 2 e2
+                    , doc $ showString "\n"
+                    ]
+        EAbs t n e ->
+            prPrec i 0 $
+                concatD
+                    [ doc $ showString "@"
+                    , prt 0 t
+                    , doc $ showString "\\"
+                    , prtId 0 n
+                    , doc $ showString "."
+                    , prt 0 e
+                    , doc $ showString "\n"
+                    ]
+        ECase t exp injs ->
+            prPrec
+                i
+                0
+                ( concatD
+                    [ doc (showString "case")
+                    , prt 0 exp
+                    , doc (showString "of")
+                    , doc (showString "{")
+                    , prt 0 injs
+                    , doc (showString "}")
+                    , doc (showString ":")
+                    , prt 0 t
+                    , doc $ showString "\n"
+                    ]
+                )
 
-    where
-      printCases :: [(Type, Case)] -> [Doc]
-      printCases []          = []
-      printCases ((t, Case c e):xs) = concatD
-                                [ doc $ showString "@"
-                                , prt 0 t
-                                , doc $ showString "("
-                                , doc . showString . show $ c
-                                , doc $ showString ")"
-                                , doc $ showString "=>"
-                                , prt 0 e
-                                , doc $ showString "\n"
-                                ] : printCases xs
+instance Print Inj where
+    prt i = \case
+        Inj (init, t) exp -> prPrec i 0 (concatD [prt 0 init, doc (showString ":"), prt 0 t, doc (showString "=>"), prt 0 exp])
+
+instance Print [Inj] where
+    prt _ []       = concatD []
+    prt _ [x]      = concatD [prt 0 x]
+    prt _ (x : xs) = concatD [prt 0 x, doc (showString ";"), prt 0 xs]

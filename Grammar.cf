@@ -1,33 +1,51 @@
-Program. Program ::= [Bind];
 
-EId.  Exp3 ::= Ident;
-EInt. Exp3 ::= Integer;
-EAnn. Exp3  ::= "(" Exp ":" Type ")";
-ELet. Exp3 ::= "let" Bind "in" Exp; 
-EApp. Exp2 ::= Exp2 Exp3;
-EAdd. Exp1 ::= Exp1 "+" Exp2;
-ESub. Exp1 ::= Exp1 "-" Exp2;
-EAbs. Exp  ::= "\\" Ident ":" Type "." Exp;
-ECase. Exp ::= "case" Exp "of" "{" [CaseMatch] "}" ":" Type;
-CaseMatch. CaseMatch ::= Case "=>" Exp ;
-separator CaseMatch ",";
+Program. Program ::= [Def] ;
 
-
-CInt.     Case ::= Integer ;
-CatchAll. Case ::= "_" ;
+DBind. Def ::= Bind ;
+DData. Def ::= Data ;
+separator Def ";" ;
 
 Bind. Bind ::= Ident ":" Type ";"
-               Ident [Ident] "=" Exp;
+               Ident [Ident] "=" Exp ;
 
-separator Bind ";";
-separator Ident "";
+Data. Data ::= "data" Constr "where" "{" [Constructor] "}" ;
 
-coercions Exp 3;
+Constructor. Constructor ::= Ident ":" Type ;
+separator nonempty Constructor "" ;
 
-TInt. Type1 ::= "Int" ;
-TPol. Type1 ::= Ident ;
-TFun. Type  ::= Type1 "->" Type ;
-coercions Type 1 ;
+TMono.   Type1 ::= "_" Ident ;
+TPol.    Type1 ::= "'" Ident ;
+TConstr. Type1 ::= Constr ;
+TArr.    Type  ::= Type1 "->" Type ;
 
-comment "--";
-comment "{-" "-}";
+Constr.  Constr ::= Ident "(" [Type] ")" ;
+
+-- TODO: Move literal to its own thing since it's reused in Init as well.
+EAnn.   Exp5 ::= "(" Exp ":" Type ")" ;
+EId.    Exp4 ::= Ident ;
+ELit.   Exp4 ::= Literal ;
+EApp.   Exp3 ::= Exp3 Exp4 ;
+EAdd.   Exp1 ::= Exp1 "+" Exp2 ;
+ESub.   Exp1 ::= Exp1 "-" Exp2 ;
+ELet.   Exp  ::= "let" Ident "=" Exp "in" Exp ; 
+EAbs.   Exp  ::= "\\" Ident "." Exp ;
+ECase.  Exp  ::= "case" Exp "of" "{" [Inj] "}";
+
+LInt. Literal ::= Integer ;
+
+Inj. Inj ::= Init "=>" Exp ;
+separator nonempty Inj ";" ;
+
+InitLit. Init    ::= Literal ;
+InitConstr. Init ::= Ident [Ident] ;
+InitCatch. Init  ::= "_" ;
+
+separator Type " " ;
+coercions Type 2 ;
+
+separator Ident " ";
+
+coercions Exp 5 ;
+
+comment "--" ;
+comment "{-" "-}" ;
