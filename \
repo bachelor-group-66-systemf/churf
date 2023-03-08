@@ -46,28 +46,40 @@ typecheck = run . checkPrg
 
 {- | Start by freshening the type variable of data types to avoid clash with
 other user defined polymorphic types
+This might be wrong for type constructors that work over several variables
 -}
-freshenData :: Data -> Infer Data
-freshenData (Data (Constr name ts) constrs) = do
-    let xs = (S.toList . free) =<< ts
-    frs <- traverse (const fresh) xs
-    let m = M.fromList $ zip xs frs
-    return $ Data (Constr name (map (freshenType m) ts)) (map (\(Constructor ident t) -> Constructor ident (freshenType m t)) constrs)
-    
+-- freshenData :: Data -> Infer Data
+-- freshenData (Data (Constr name ts) constrs) = do
+--     new_ts <- traverse freshenType ts
+--     new_constrs <- traverse freshenConstr constrs
+--     return $ Data (Constr name new_ts) new_constrs
+--TODO: Fix incorrect behavior here
+
 {- | Freshen all polymorphic variables, regardless of name
 | freshenType "d" (a -> b -> c) becomes (d -> d -> d)
 -}
-freshenType :: Map Ident Type -> Type -> Type
-freshenType m t = case t of
-        TPol poly -> fromMaybe (error "bug in \'free\'") (M.lookup poly m)
-        TMono mono -> TMono mono
-        TArr t1 t2 -> TArr (freshenType m t1) (freshenType m t2)
-        TConstr (Constr ident ts) -> TConstr (Constr ident (map (freshenType m) ts))
+-- freshenType :: Type -> Infer Type
+-- freshenType t = do
+--     let freeVars = (S.toList $ free t)
+--     frs <- sequenceA $ map (const fresh) freeVars
+--     let remaps = M.fromList $ zip freeVars frs
+--     return $ go remaps t
+--   where
+--     go :: Map Ident Type -> Type -> Type
+--     go m t = case t of
+--         TPol a -> fromMaybe (error "bug in \'free\'") (M.lookup a m )
+--         TMono a -> TMono a
+--         TArr t1 t2 -> TArr (go m t1) (go m t2)
+--         TConstr (Constr ident ts) -> TConstr (Constr ident (map (go m) ts))
+
+-- freshenConstr :: Constructor -> Infer Constructor
+-- freshenConstr (Constructor name t) = do
+--     t' <- freshenType t
+--     return $ Constructor name t'
 
 checkData :: Data -> Infer ()
 checkData d = do
-    d' <- freshenData d
-    case d' of
+    case d of
         (Data typ@(Constr name ts) constrs) -> do
             unless
                 (all isPoly ts)
@@ -111,9 +123,7 @@ checkPrg (Program bs) = do
         (DBind b) -> do
             b' <- checkBind b
             fmap (T.DBind b' :) (checkDef xs)
-        (DData d) -> do
-            d' <- freshenData d
-            fmap (T.DData d' :) (checkDef xs)
+        (DData d) -> fmap (T.DData d :) (checkDef xs)
 
 checkBind :: Bind -> Infer T.Bind
 checkBind (Bind n t _ args e) = do
@@ -196,8 +206,7 @@ algoW = \case
             )
         applySt s1 $ do
             s2 <- unify t t'
-            let composition = s2 `compose` s1
-            return (composition, t, apply composition e')
+            return (s2 `compose` s1, t, e')
 
     -- \| ------------------
     -- \|   Γ ⊢ i : Int, ∅
@@ -235,7 +244,7 @@ algoW = \case
             (s1, t', e') <- algoW e
             let varType = apply s1 fr
             let newArr = TArr varType t'
-            return (s1, newArr, apply s1 $ T.EAbs newArr (name, varType) e')
+            return (s1, newArr, T.EAbs newArr (name, varType) e')
 
     -- \| Γ ⊢ e₀ : τ₀, S₀    S₀Γ ⊢ e₁ : τ₁, S₁
     -- \| s₂ = mgu(s₁τ₀, Int)    s₃ = mgu(s₂τ₁, Int)
@@ -250,11 +259,10 @@ algoW = \case
             -- applySt s2 $ do
             s3 <- unify (apply s2 t0) (TMono "Int")
             s4 <- unify (apply s3 t1) (TMono "Int")
-            let composition = s4 `compose` s3 `compose` s2 `compose` s1
             return
-                ( composition
+                ( s4 `compose` s3 `compose` s2 `compose` s1
                 , TMono "Int"
-                , apply composition $ T.EAdd (TMono "Int") e0' e1'
+                , T.EAdd (TMono "Int") e0' e1'
                 )
 
     -- \| Γ ⊢ e₀ : τ₀, S₀    S₀Γ ⊢ e₁ : τ₁, S1
@@ -270,8 +278,7 @@ algoW = \case
             -- applySt s1 $ do
             s2 <- unify (apply s1 t0) (TArr t1 fr)
             let t = apply s2 fr
-            let composition = s2 `compose` s1 `compose` s0
-            return (composition, t, apply composition $ T.EApp t e0' e1')
+            return (s2 `compose` s1 `compose` s0, t, T.EApp t e0' e1')
 
     -- \| Γ ⊢ e₀ : τ, S₀     S₀Γ, x : S̅₀Γ̅(τ) ⊢ e₁ : τ', S₁
     -- \| ----------------------------------------------
@@ -285,9 +292,7 @@ algoW = \case
         let t' = generalize (apply s1 env) t1
         withBinding name t' $ do
             (s2, t2, e1') <- algoW e1
-            let composition = s2 `compose` s1
-            return (composition, t2, apply composition $ T.ELet (T.Bind (name, t2) e0') e1')
-
+            return (s2 `compose` s1, t2, T.ELet (T.Bind (name, t2) e0') e1')
     ECase caseExpr injs -> do
         (_, t0, e0') <- algoW caseExpr
         (injs', ts) <- mapAndUnzipM (checkInj t0) injs
@@ -295,9 +300,9 @@ algoW = \case
             [] -> throwError "Case expression missing any matches"
             ts -> do
                 unified <- zipWithM unify ts (tail ts)
-                let composition = foldl' compose mempty unified
-                let typ = apply composition (head ts)
-                return (composition, typ, apply composition $ T.ECase typ e0' injs')
+                let unified' = foldl' compose mempty unified
+                let typ = apply unified' (head ts)
+                return (unified', typ, T.ECase typ e0' injs')
 
 -- | Unify two types producing a new substitution
 unify :: Type -> Type -> Infer Subst
@@ -337,7 +342,7 @@ unify t0 t1 = do
 
 {- | Check if a type is contained in another type.
 I.E. { a = a -> b } is an unsolvable constraint since there is no substitution
-where these are equal
+such that these are equal
 -}
 occurs :: Ident -> Type -> Infer Subst
 occurs _ (TPol _) = return nullSubst
@@ -409,30 +414,6 @@ instance FreeVars (Map Ident Poly) where
     apply :: Subst -> Map Ident Poly -> Map Ident Poly
     apply s = M.map (apply s)
 
-instance FreeVars T.Exp where
-    free :: T.Exp -> Set Ident
-    free = error "free not implemented for T.Exp"
-    apply :: Subst -> T.Exp -> T.Exp
-    apply s = \case
-       T.EId (ident, t) -> T.EId (ident, apply s t)
-       T.ELit t lit -> T.ELit (apply s t) lit
-       T.ELet (T.Bind (ident, t) e1) e2 -> T.ELet (T.Bind (ident, apply s t) (apply s e1)) (apply s e2)
-       T.EApp t e1 e2 -> T.EApp (apply s t) (apply s e1) (apply s e2)
-       T.EAdd t e1 e2 -> T.EAdd (apply s t) (apply s e1) (apply s e2)
-       T.EAbs t1 (ident, t2) e -> T.EAbs (apply s t1) (ident, apply s t2) (apply s e)
-       T.ECase t e injs -> T.ECase (apply s t) (apply s e) (apply s injs)
-    
-instance FreeVars T.Inj where
-    free :: T.Inj -> Set Ident
-    free = undefined
-    apply :: Subst -> T.Inj -> T.Inj
-    apply s (T.Inj (i, t) e) = T.Inj (i, apply s t) (apply s e)
-
-instance FreeVars [T.Inj] where
-    free :: [T.Inj] -> Set Ident
-    free = foldl' (\acc x -> free x `S.union` acc) mempty
-    apply s = map (apply s)
-
 -- | Apply substitutions to the environment.
 applySt :: Subst -> Infer a -> Infer a
 applySt s = local (\st -> st{vars = apply s (vars st)})
@@ -468,15 +449,25 @@ checkInj :: Type -> Inj -> Infer (T.Inj, Type)
 checkInj caseType (Inj it expr) = do
     (args, t') <- initType caseType it
     subst <- unify caseType t'
+    trace ("SUBST: " ++ show subst) return ()
     applySt subst $ do
         (_, t, e') <- local (\st -> st { vars = args `M.union` vars st }) (algoW expr)
         return (T.Inj (it, t') e', t)
 
 initType :: Type -> Init -> Infer (Map Ident Poly, Type)
 initType expected = \case
-
-    InitLit lit -> error "Pattern match on literals not implemented yet"
-
+    InitLit lit -> do
+             trace (show "EXPECTED: " ++ show expected ++ "\nreturnType: " ++ show (litType lit)) return ()
+             if litType lit `isMoreSpecificOrEq` expected
+                then return (mempty, litType lit)
+                else
+                    throwError $
+                        unwords
+                            [ "Inferred type"
+                            , printTree $ litType lit
+                            , "does not match expected type:"
+                            , printTree expected
+                            ]
     InitConstr c args -> do
         st <- gets constructors
         case M.lookup c st of
