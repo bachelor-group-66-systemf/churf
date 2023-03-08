@@ -38,6 +38,10 @@ main' s = do
     typechecked <- fromTypeCheckerErr $ typecheck renamed
     printToErr $ printTree typechecked
 
+    --printToErr "\n-- TreeConverter --"
+    --converted <- fromTypeCheckerErr $ convertToTypecheckerIR renamed
+    --printToErr $ printTree converted
+
     printToErr "\n-- Lambda Lifter --"
     let lifted = lambdaLift typechecked
     printToErr $ printTree lifted

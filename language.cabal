@@ -39,6 +39,7 @@ executable language
       LambdaLifter.LambdaLifter
       Codegen.Codegen
       Codegen.LlvmIr
+      TreeConverter
 
     hs-source-dirs:   src
 
