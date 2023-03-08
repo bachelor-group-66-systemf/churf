@@ -4,8 +4,10 @@
 module Compiler (compile) where
 
 import           Auxiliary            (snoc)
-import           Control.Monad.State  (StateT, execStateT, gets, modify)
+import           Control.Monad.State  (StateT, execStateT, foldM, foldM_, gets,
+                                       modify)
 import qualified Data.Bifunctor       as BI
+import           Data.Foldable        (traverse_)
 import           Data.List.Extra      (trim)
 import           Data.Map             (Map)
 import qualified Data.Map             as Map
@@ -19,7 +21,6 @@ import           LlvmIr               (CallingConvention (..), LLVMComp (..),
 import           System.Process.Extra (readCreateProcess, shell)
 import           TypeCheckerIr        (Bind (..), Case (..), Exp (..), Id,
                                        Ident (..), Program (..), Type (..))
-
 -- | The record used as the code generator state
 data CodeGenerator = CodeGenerator
     { instructions  :: [LLVMIr]
@@ -89,8 +90,8 @@ getConstructors :: [Bind] -> Map Id ConstructorInfo
 getConstructors bs = Map.fromList $ go bs
   where
     go [] = []
-    go (DataStructure n cons : xs) = do
-        fst (foldl (\(acc,i) (id, xs) -> (((id, TPol n), ConstructorInfo {
+    go (DataStructure (Ident n) cons : xs) = do
+        fst (foldl (\(acc,i) (Ident id, xs) -> (((Ident (n <> "_" <> id), TPol (Ident n)), ConstructorInfo {
             numArgsCI=length xs,
             argumentsCI=createArgs xs,
             numCI=i
@@ -117,12 +118,12 @@ run s = do
 test :: Integer -> Program
 test v = Program [
     DataStructure (Ident "Craig") [
-        (Ident "Bob", [TInt]),
-        (Ident "Alice", [TInt, TInt])
+        (Ident "Bob", [TInt])--,
+        --(Ident "Alice", [TInt, TInt])
     ],
     Bind (Ident "fibonacci", TInt) [(Ident "x", TInt)] (EId ("x",TInt)),
     Bind (Ident "main", TInt) [] (
-       EApp TInt (EId (Ident "fibonacci", TInt))  (EInt v) -- (EInt 92)
+       EApp (TPol "Craig") (EId (Ident "Craig_Bob", TPol "Craig"))  (EInt v) -- (EInt 92)
     )
     ]
 
@@ -140,18 +141,46 @@ compileScs []                             = do
     -- as a last step create all the constructors
     c <- gets (Map.toList . constructors)
     mapM_ (\((id, t), ci) -> do
+            let t' = type2LlvmType t
             let x = BI.second type2LlvmType <$> argumentsCI ci
-            emit $ Define FastCC (type2LlvmType t) id x
+            emit $ Define FastCC t' id x
             top <- Ident . show <$> getNewVar
             ptr <- Ident . show <$> getNewVar
-            emit $ SetVariable top (Alloca (type2LlvmType t))
-            -- %0 = getelementptr inbounds %Foo, %Foo* %x, i32 0, i32 0
+            -- allocated the primary type
+            emit $ SetVariable top (Alloca t')
+
+            -- set the first byte to the index of the constructor
             emit $ SetVariable ptr $
-                GetElementPtrInbounds (type2LlvmType t) (Ref $ type2LlvmType t)
+                GetElementPtrInbounds t' (Ref t')
                                       (VIdent top I8) I32 (VInteger 0) I32 (VInteger 0)
             emit $ Store I8 (VInteger $ numCI ci ) (Ref I8) ptr
-            -- store i8 1, i8* %0
-            emit $ Ret I64 (VInteger 0)
+
+            -- get a pointer of the correct type
+            ptr' <- Ident . show <$> getNewVar
+            emit $ SetVariable ptr' (Bitcast (Ref t') ptr (Ref $ CustomType id))
+
+            --emit $ UnsafeRaw "\n"
+
+            foldM_ (\i (Ident arg_n, arg_t)-> do
+                let arg_t' = type2LlvmType arg_t
+                emit $ Comment (show arg_t' <>" "<> arg_n <> " " <> show i )
+                elemPtr <- Ident . show <$> getNewVar
+                emit $ SetVariable elemPtr (
+                    GetElementPtrInbounds (CustomType id) (Ref (CustomType id))
+                                          (VIdent ptr' Ptr) I32
+                                          (VInteger 0) I32 (VInteger i))
+                emit $ Store arg_t' (VIdent (Ident arg_n) arg_t') Ptr elemPtr
+                -- %2 = getelementptr inbounds %Foo_AInteger, %Foo_AInteger* %1, i32 0, i32 1
+                -- store i32 42, i32* %2
+                pure $ i + 1-- + typeByteSize arg_t'
+                ) 1 (argumentsCI ci)
+
+            --emit $ UnsafeRaw "\n"
+
+            -- load and return the constructed value
+            load <- Ident . show <$> getNewVar
+            emit $ SetVariable load (Load t' Ptr top)
+            emit $ Ret t' (VIdent load t')
             emit DefineEnd
 
             modify $ \s -> s { variableCount = 0 }
@@ -398,10 +427,10 @@ getType (ECase t _ _) = type2LlvmType t
 valueGetType :: LLVMValue -> LLVMType
 valueGetType (VInteger _)      = I64
 valueGetType (VIdent _ t)      = t
-valueGetType (VConstant s)     = Array (length s) I8
+valueGetType (VConstant s)     = Array (fromIntegral $  length s) I8
 valueGetType (VFunction _ _ t) = t
 
-typeByteSize :: LLVMType -> Int
+typeByteSize :: LLVMType -> Integer
 typeByteSize I1             = 1
 typeByteSize I8             = 1
 typeByteSize I32            = 4

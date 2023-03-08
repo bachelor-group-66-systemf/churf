@@ -30,7 +30,7 @@ data LLVMType
     | Ptr
     | Ref LLVMType
     | Function LLVMType [LLVMType]
-    | Array Int LLVMType
+    | Array Integer LLVMType
     | CustomType Ident
 
 instance Show LLVMType where
