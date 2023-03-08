@@ -26,7 +26,7 @@ module Monomorpher.Monomorpher (monomorphize, morphExp, morphBind) where
 import qualified TypeChecker.TypeCheckerIr as T
 import qualified Monomorpher.MonomorpherIr as M
 
-import           Grammar.Abs   (Ident)
+import           Grammar.Abs   (Ident (Ident))
 
 import Control.Monad.State (MonadState (get), State, gets, modify, execState)
 import qualified Data.Map as Map
@@ -43,7 +43,8 @@ data Env = Env { -- | All binds in the program.
                  polys  :: Map.Map Ident M.Type,
                  -- | Local variables, not necessary if id's are annotated based
                  -- on if they are local or global.
-                 locals :: Set.Set Ident
+                 locals :: Set.Set Ident,
+                 currentFunc :: Ident
                } deriving (Show)
 
 -- | State Monad wrapper for "Env".
@@ -55,7 +56,8 @@ createEnv :: [T.Bind] -> Env
 createEnv binds = Env { input  = Map.fromList kvPairs, 
                         output = Map.empty,
                         polys  = Map.empty,
-                        locals = Set.empty }
+                        locals = Set.empty,
+                        currentFunc = Ident "main" }
  where
    kvPairs :: [(Ident, T.Bind)]
    kvPairs = map (\b@(T.Bind (ident, _) _ _) -> (ident, b)) binds
@@ -74,6 +76,11 @@ clearLocal = modify (\env -> env { locals = Set.empty })
 localExists :: Ident -> EnvM Bool
 localExists ident = do env <- get
                        return $ Set.member ident (locals env)
+
+-- | Gets whether ident is current function.
+isCurrentFunc :: Ident -> EnvM Bool
+isCurrentFunc ident = do env <- get
+                         return $ ident == currentFunc env
 
 -- | Gets a polymorphic bind from an id.
 getPolymorphic :: Ident -> EnvM (Maybe T.Bind)
@@ -180,8 +187,12 @@ morphExp expectedType exp = case exp of
                                 case bind of
                                   Nothing    -> error "Wowzers!"
                                   Just bind' -> do
+                                    maybeCurrentFunc <- isCurrentFunc ident
                                     t' <- getMono t
-                                    morphBind t' bind'
+                                    if maybeCurrentFunc then
+                                      return ()
+                                    else
+                                      morphBind t' bind'
                                     return $ M.EId (ident, t')
 
   T.ELet (T.Bind {}) _ -> error "Lets not possible yet."
