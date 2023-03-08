@@ -6,8 +6,6 @@
 #include "event.hpp"
 #include "heap.hpp"
 
-using namespace std;
-
 namespace GC {
 
     class Profiler {
@@ -23,7 +21,7 @@ namespace GC {
         }
 
         inline static Profiler *m_instance = nullptr;
-        vector<GCEvent *> m_events;
+        std::vector<GCEvent *> m_events;
 
     public:
         static void record(GCEventType type);

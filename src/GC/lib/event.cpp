@@ -6,8 +6,6 @@
 #include "event.hpp"
 #include "heap.hpp"
 
-// using namespace std;
-
 namespace GC {
     
     GCEventType GCEvent::getType() {

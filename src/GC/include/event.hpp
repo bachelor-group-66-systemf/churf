@@ -6,11 +6,11 @@
 
 #include "chunk.hpp"
 
-using namespace std;
+namespace GC
+{
 
-namespace GC {
-
-    enum GCEventType {
+    enum GCEventType
+    {
         CollectStart,
         MarkStart,
         ChunkMarked,
@@ -20,23 +20,27 @@ namespace GC {
         ReusedChunk
     };
 
-    using TimeStamp = chrono::_V2::system_clock::time_point;
+    using TimeStamp = std::chrono::_V2::system_clock::time_point;
 
-    class GCEvent {
+    class GCEvent
+    {
     private:
         // make const
         GCEventType m_type;
         TimeStamp m_timestamp;
         Chunk *m_chunk;
+
     public:
-        GCEvent(GCEventType type) {
+        GCEvent(GCEventType type)
+        {
             m_type = type;
-            m_timestamp = chrono::system_clock::now();
+            m_timestamp = std::chrono::system_clock::now();
         }
 
-        GCEvent(GCEventType type, Chunk *chunk) {
+        GCEvent(GCEventType type, Chunk *chunk)
+        {
             m_type = type;
-            m_timestamp = chrono::system_clock::now();
+            m_timestamp = std::chrono::system_clock::now();
             m_chunk = chunk;
         }
 
