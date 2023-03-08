@@ -1,7 +1,7 @@
 {-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Codegen.Codegen (compile) where
+module Codegen.Codegen (generateCode) where
 
 import           Auxiliary            (snoc)
 import           Codegen.LlvmIr       (CallingConvention (..), LLVMComp (..),
@@ -131,8 +131,8 @@ test v = Program [
   An easy way to actually "compile" this output is to
   Simply pipe it to LLI
 -}
-compile :: Program -> Err String
-compile (Program scs) = do
+generateCode :: Program -> Err String
+generateCode (Program scs) = do
     let codegen = initCodeGenerator scs
     llvmIrToString . instructions <$> execStateT (compileScs scs) codegen
 

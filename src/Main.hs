@@ -2,7 +2,7 @@
 
 module Main where
 
-import           Codegen.Codegen      (compile)
+import           Codegen.Codegen      (generateCode)
 import           GHC.IO.Handle.Text   (hPutStrLn)
 import           Grammar.ErrM         (Err)
 import           Grammar.Par          (myLexer, pProgram)
@@ -51,7 +51,7 @@ main' debug s = do
     printToErr $ printTree lifted
 
     printToErr "\n -- Printing compiler output to stdout --"
-    compiled <- fromCompilerErr $ compile lifted
+    compiled <- fromCompilerErr $ generateCode lifted
     --putStrLn compiled
 
     check <- doesPathExist "output"
