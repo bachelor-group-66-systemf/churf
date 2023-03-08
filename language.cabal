@@ -38,8 +38,8 @@ executable language
       TypeChecker
       TypeCheckerIr
 --      Interpreter
-      Compiler
-      LlvmIr
+      Codegen.Codegen
+      Codegen.LlvmIr
     hs-source-dirs:   src
 
     build-depends:    

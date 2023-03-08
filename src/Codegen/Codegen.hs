@@ -1,9 +1,13 @@
 {-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Compiler (compile) where
+module Codegen.Codegen (compile) where
 
 import           Auxiliary            (snoc)
+import           Codegen.LlvmIr       (CallingConvention (..), LLVMComp (..),
+                                       LLVMIr (..), LLVMType (..),
+                                       LLVMValue (..), Visibility (..),
+                                       llvmIrToString)
 import           Control.Monad.State  (StateT, execStateT, foldM, foldM_, gets,
                                        modify)
 import qualified Data.Bifunctor       as BI
@@ -14,10 +18,6 @@ import qualified Data.Map             as Map
 import           Data.Tuple.Extra     (dupe, first, second)
 import qualified Grammar.Abs          as GA
 import           Grammar.ErrM         (Err)
-import           LlvmIr               (CallingConvention (..), LLVMComp (..),
-                                       LLVMIr (..), LLVMType (..),
-                                       LLVMValue (..), Visibility (..),
-                                       llvmIrToString)
 import           System.Process.Extra (readCreateProcess, shell)
 import           TypeCheckerIr        (Bind (..), Case (..), Exp (..), Id,
                                        Ident (..), Program (..), Type (..))

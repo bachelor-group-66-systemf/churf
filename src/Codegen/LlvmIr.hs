@@ -1,6 +1,6 @@
 {-# LANGUAGE LambdaCase #-}
 
-module LlvmIr (
+module Codegen.LlvmIr (
     LLVMType (..),
     LLVMIr (..),
     llvmIrToString,

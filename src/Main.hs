@@ -2,7 +2,7 @@
 
 module Main where
 
-import           Compiler             (compile)
+import           Codegen.Codegen      (compile)
 import           GHC.IO.Handle.Text   (hPutStrLn)
 import           Grammar.ErrM         (Err)
 import           Grammar.Par          (myLexer, pProgram)
