@@ -1,6 +1,6 @@
 {-# LANGUAGE LambdaCase #-}
 
-module Renamer (module Renamer) where
+module Renamer.Renamer (module Renamer.Renamer) where
 
 import           Auxiliary           (mapAccumM)
 import           Control.Monad       (foldM)

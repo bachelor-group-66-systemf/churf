@@ -3,22 +3,23 @@
 
 module Codegen.Codegen (generateCode) where
 
-import           Auxiliary            (snoc)
-import           Codegen.LlvmIr       (CallingConvention (..), LLVMComp (..),
-                                       LLVMIr (..), LLVMType (..),
-                                       LLVMValue (..), Visibility (..),
-                                       llvmIrToString)
-import           Control.Monad.State  (StateT, execStateT, foldM_, gets, modify)
-import qualified Data.Bifunctor       as BI
-import           Data.List.Extra      (trim)
-import           Data.Map             (Map)
-import qualified Data.Map             as Map
-import           Data.Tuple.Extra     (dupe, first, second)
-import qualified Grammar.Abs          as GA
-import           Grammar.ErrM         (Err)
-import           System.Process.Extra (readCreateProcess, shell)
-import           TypeCheckerIr        (Bind (..), Case (..), Exp (..), Id,
-                                       Ident (..), Program (..), Type (..))
+import           Auxiliary                 (snoc)
+import           Codegen.LlvmIr            (CallingConvention (..),
+                                            LLVMComp (..), LLVMIr (..),
+                                            LLVMType (..), LLVMValue (..),
+                                            Visibility (..), llvmIrToString)
+import           Control.Monad.State       (StateT, execStateT, foldM_, gets,
+                                            modify)
+import qualified Data.Bifunctor            as BI
+import           Data.List.Extra           (trim)
+import           Data.Map                  (Map)
+import qualified Data.Map                  as Map
+import           Data.Tuple.Extra          (dupe, first, second)
+import qualified Grammar.Abs               as GA
+import           Grammar.ErrM              (Err)
+import           System.Process.Extra      (readCreateProcess, shell)
+import           TypeChecker.TypeCheckerIr (Bind (..), Case (..), Exp (..), Id,
+                                            Ident (..), Program (..), Type (..))
 -- | The record used as the code generator state
 data CodeGenerator = CodeGenerator
     { instructions  :: [LLVMIr]

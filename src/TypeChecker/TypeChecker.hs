@@ -1,18 +1,18 @@
 {-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE OverloadedRecordDot #-}
 
-module TypeChecker (typecheck, partitionType) where
+module TypeChecker.TypeChecker (typecheck, partitionType) where
 
-import           Auxiliary            (maybeToRightM, snoc)
-import           Control.Monad.Except (throwError, unless)
-import           Data.Map             (Map)
-import qualified Data.Map             as Map
+import           Auxiliary                 (maybeToRightM, snoc)
+import           Control.Monad.Except      (throwError, unless)
+import           Data.Map                  (Map)
+import qualified Data.Map                  as Map
 import           Grammar.Abs
-import           Grammar.ErrM         (Err)
-import           Grammar.Print        (Print (prt), concatD, doc, printTree,
-                                       render)
-import           Prelude              hiding (exp, id)
-import qualified TypeCheckerIr        as T
+import           Grammar.ErrM              (Err)
+import           Grammar.Print             (Print (prt), concatD, doc,
+                                            printTree, render)
+import           Prelude                   hiding (exp, id)
+import qualified TypeChecker.TypeCheckerIr as T
 
 -- NOTE: this type checker is poorly tested
 

@@ -32,11 +32,11 @@ executable language
       Grammar.Print
       Grammar.Skel
       Grammar.ErrM
-      LambdaLifter
+      LambdaLifter.LambdaLifter
       Auxiliary
-      Renamer
-      TypeChecker
-      TypeCheckerIr
+      Renamer.Renamer
+      TypeChecker.TypeChecker
+      TypeChecker.TypeCheckerIr
 --      Interpreter
       Codegen.Codegen
       Codegen.LlvmIr

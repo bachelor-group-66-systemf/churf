@@ -2,18 +2,19 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 
-module LambdaLifter (lambdaLift, freeVars, abstract, rename, collectScs) where
+module LambdaLifter.LambdaLifter (lambdaLift, freeVars, abstract, rename, collectScs) where
 
-import           Auxiliary           (snoc)
-import           Control.Applicative (Applicative (liftA2))
-import           Control.Monad.State (MonadState (get, put), State, evalState)
-import           Data.Set            (Set)
-import qualified Data.Set            as Set
-import           Debug.Trace         (trace)
-import qualified Grammar.Abs         as GA
-import           Prelude             hiding (exp)
-import           Renamer
-import           TypeCheckerIr
+import           Auxiliary                 (snoc)
+import           Control.Applicative       (Applicative (liftA2))
+import           Control.Monad.State       (MonadState (get, put), State,
+                                            evalState)
+import           Data.Set                  (Set)
+import qualified Data.Set                  as Set
+import           Debug.Trace               (trace)
+import qualified Grammar.Abs               as GA
+import           Prelude                   hiding (exp)
+import           Renamer.Renamer
+import           TypeChecker.TypeCheckerIr
 
 
 -- | Lift lambdas and let expression into supercombinators.

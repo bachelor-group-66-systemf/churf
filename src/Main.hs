@@ -2,26 +2,26 @@
 
 module Main where
 
-import           Codegen.Codegen      (generateCode)
-import           GHC.IO.Handle.Text   (hPutStrLn)
-import           Grammar.ErrM         (Err)
-import           Grammar.Par          (myLexer, pProgram)
-import           Grammar.Print        (printTree)
+import           Codegen.Codegen           (generateCode)
+import           GHC.IO.Handle.Text        (hPutStrLn)
+import           Grammar.ErrM              (Err)
+import           Grammar.Par               (myLexer, pProgram)
+import           Grammar.Print             (printTree)
 
 -- import           Interpreter        (interpret)
-import           Control.Monad        (when)
-import           Data.List.Extra      (isSuffixOf)
-import           LambdaLifter         (lambdaLift)
-import           Renamer              (rename)
-import           System.Directory     (createDirectory, doesPathExist,
-                                       getDirectoryContents,
-                                       removeDirectoryRecursive,
-                                       setCurrentDirectory)
-import           System.Environment   (getArgs)
-import           System.Exit          (exitFailure, exitSuccess)
-import           System.IO            (stderr)
-import           System.Process.Extra (spawnCommand, waitForProcess)
-import           TypeChecker          (typecheck)
+import           Control.Monad             (when)
+import           Data.List.Extra           (isSuffixOf)
+import           LambdaLifter.LambdaLifter (lambdaLift)
+import           Renamer.Renamer           (rename)
+import           System.Directory          (createDirectory, doesPathExist,
+                                            getDirectoryContents,
+                                            removeDirectoryRecursive,
+                                            setCurrentDirectory)
+import           System.Environment        (getArgs)
+import           System.Exit               (exitFailure, exitSuccess)
+import           System.IO                 (stderr)
+import           System.Process.Extra      (spawnCommand, waitForProcess)
+import           TypeChecker.TypeChecker   (typecheck)
 
 main :: IO ()
 main =

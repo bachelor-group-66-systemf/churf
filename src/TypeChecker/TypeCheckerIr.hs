@@ -1,8 +1,8 @@
 {-# LANGUAGE LambdaCase #-}
 
-module TypeCheckerIr
+module TypeChecker.TypeCheckerIr
   ( module Grammar.Abs
-  , module TypeCheckerIr
+  , module TypeChecker.TypeCheckerIr
   ) where
 
 import           Grammar.Abs   (Ident (..), Type (..))

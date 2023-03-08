@@ -10,8 +10,8 @@ module Codegen.LlvmIr (
     CallingConvention (..)
 ) where
 
-import           Data.List     (intercalate)
-import           TypeCheckerIr
+import           Data.List                 (intercalate)
+import           TypeChecker.TypeCheckerIr
 
 data CallingConvention = TailCC | FastCC | CCC | ColdCC
 instance Show CallingConvention where
