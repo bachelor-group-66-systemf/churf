@@ -126,7 +126,7 @@ getMono t = do env <- get
 -- | Makes a kv pair list of poly to concrete mappings, throws runtime
 -- error when encountering different structures between the two arguments.
 mapTypes :: T.Type -> M.Type -> [(Ident, M.Type)]
-mapTypes (T.TMono _)     (M.TMono _)       = []
+mapTypes (T.TMono _)      (M.TMono _)      = []
 mapTypes (T.TPol i1)      tm               = [(i1, tm)]
 mapTypes (T.TArr pt1 pt2) (M.TArr mt1 mt2) = mapTypes pt1 mt1 ++ 
                                              mapTypes pt2 mt2
@@ -144,8 +144,8 @@ getExpType (T.ELet _ _)    = error "Lets not allowed🛑👮"
 -- | If ident not already in env's output, morphed bind to output
 -- (and all referenced binds within this bind).
 morphBind :: M.Type -> T.Bind -> EnvM ()
-morphBind expectedType b@(T.Bind (ident, _) args exp) = do
-  outputted <- isOutputted ident
+morphBind expectedType b@(T.Bind (Ident name, _) args exp) = do
+  outputted <- isOutputted (Ident name)
   if outputted then
     -- Don't add anything!
     return ()
@@ -154,7 +154,7 @@ morphBind expectedType b@(T.Bind (ident, _) args exp) = do
     addLocals $ map fst args  -- Add all the local variables
     addPolyMap expectedType b
     exp' <- morphExp expectedType exp
-    addMonomorphic $ M.Bind (ident, expectedType) [] exp'
+    addMonomorphic $ M.Bind (newName expectedType b, expectedType) [] exp'
 
 morphExp :: M.Type -> T.Exp -> EnvM M.Exp
 morphExp expectedType exp = case exp of
@@ -189,13 +189,21 @@ morphExp expectedType exp = case exp of
                                   Just bind' -> do
                                     maybeCurrentFunc <- isCurrentFunc ident
                                     t' <- getMono t
-                                    if maybeCurrentFunc then
+                                    if maybeCurrentFunc then -- Recursive call?
                                       return ()
                                     else
                                       morphBind t' bind'
                                     return $ M.EId (ident, t')
 
   T.ELet (T.Bind {}) _ -> error "Lets not possible yet."
+
+-- Creates a new identifier for a function with an assigned type
+newName :: M.Type -> T.Bind -> Ident
+newName t (T.Bind (Ident bindName, _) _ _) = Ident (bindName ++ "_" ++ newName' t)
+ where
+  newName' :: M.Type -> String
+  newName' (M.TMono (Ident str)) = str
+  newName' (M.TArr t1 t2)        = newName' t1 ++ "_" ++ newName' t2
 
 -- TODO: make sure that monomorphic binds are not processed again
 -- | Does the monomorphization.
@@ -209,11 +217,4 @@ monomorphize (T.Program binds) = M.Program $ (map snd . Map.toList) outputMap
   monomorphize' = do
     main <- getMain
     morphBind (M.TMono $ M.Ident "Int") main
-
--- Simple tests
---argX     = T.Ident "x"
---funcF    = (T.Ident "f", T.TArr )
---typeInt  = T.TMono (T.Ident "Int")
---test1Exp = T.ELit typeInt (T.LInt 8)
---test1    = T.Program [T.Bind funcF [argX] test1Exp]
 
