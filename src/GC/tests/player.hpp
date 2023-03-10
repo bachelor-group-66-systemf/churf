@@ -2,6 +2,14 @@
 
 using std::string; 
 
+class Point {
+
+public:
+
+    int x, y;
+    Point(int _x, int _y) : x(_x), y(_y) {} 
+};
+
 class Player {
 
 private:
@@ -13,12 +21,9 @@ private:
 
 public:
 
-    Player(string n, Point pos, Point s, Point dir) {
-        name = n;
-        position = pos;
-        size = s;
-        direction = dir;
-    }
+    Player(string n, Point pos, Point s, Point dir) 
+        : name(n), position(pos.x, pos.y), size(s.x, s.y), direction(dir.x, dir.y)
+    {}
 
     void move() {
         position.x += direction.x; 
@@ -30,8 +35,4 @@ public:
         direction.y = dy;
     }
 
-};
-
-struct Point {
-    int x, y;
 };

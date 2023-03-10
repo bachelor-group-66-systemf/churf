@@ -6,43 +6,39 @@
 #include <stdlib.h>
 
 int main() {
-    // list<char> l;
-    // char c = 'a';
-    // for (int i = 1; i <= 5; i++) {
-    //     l.push_back(c++);
-    // }
+    using namespace std;
+    using TimeStamp = std::chrono::_V2::system_clock::time_point;
 
-    // auto iter = l.begin();
-    // auto stop = l.end();
+    list<char> l;
+    char c = 'a';
+    for (int i = 1; i <= 5; i++) {
+        l.push_back(c++);
+    }
 
-    // while (iter != stop) {
-    //     cout << *iter << " ";
+    auto iter = l.begin();
+    auto stop = l.end();
+
+    while (iter != stop) {
+        cout << *iter << " ";
      
-    //     iter++;
-    // }
-    // cout << endl;
-    // iter = l.begin();
-    // while (*iter != *stop) {
-    //     cout << *iter << " ";
-    //     iter++;
-    // }
-    // cout << endl;
+        iter++;
+    }
+    cout << endl;
+    iter = l.begin();
+    while (*iter != *stop) {
+        cout << *iter << " ";
+        iter++;
+    }
+    cout << endl;
 
-    // cout << "rebased" << endl;
-    // cout << "iter: " << *iter << "\nstop: " << *stop << endl;
+    cout << "rebased" << endl;
+    cout << "iter: " << *iter << "\nstop: " << *stop << endl;
 
-    // TimeStamp ts = std::chrono::system_clock::now();
-    // std::time_t tt = std::chrono::system_clock::to_time_t(ts);
-    // std::string tstr = std::ctime(&tt);
-    // tstr.resize(tstr.size()-1);
-    // std::cout << tstr << std::endl;
-
-    char buffer[31];
-    std::time_t tt = std::time(NULL);
-    std::tm *ptm = std::localtime(&tt);
-    std::strftime(buffer, 31, "/profiler/log_%a_%H_%M_%S.txt", ptm);
-    std::cout << buffer << std::endl;
-
+    TimeStamp ts = std::chrono::system_clock::now();
+    std::time_t tt = std::chrono::system_clock::to_time_t(ts);
+    std::string tstr = std::ctime(&tt);
+    tstr.resize(tstr.size()-1);
+    std::cout << tstr << std::endl;
 
     return 0;
 }

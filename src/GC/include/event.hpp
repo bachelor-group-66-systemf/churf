@@ -1,8 +1,9 @@
 #pragma once
 
-#include <time.h>
+#include <ctime>
 #include <iostream>
 #include <list>
+#include <time.h>
 
 #include "chunk.hpp"
 
@@ -26,7 +27,7 @@ namespace GC
         // make const
         GCEventType m_type;
         std::time_t m_timestamp;
-        Chunk *m_chunk;
+        Chunk *m_chunk = nullptr;
 
     public:
         GCEvent(GCEventType type)

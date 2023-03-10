@@ -12,6 +12,9 @@ DBGFLAGS 	= -g
 advance:
 	$(CC) $(WFLAGS) $(STDFLAGS) tests/advance.cpp -o tests/advance.out
 
+file:
+	$(CC) $(WFLAGS) $(STDFLAGS) tests/file.cpp -o tests/file.out
+
 heap:
 	$(CC) $(WFLAGS) $(STDFLAGS) $(LIB_INCL) lib/heap.cpp
 
@@ -34,6 +37,10 @@ linker:
 linker_vg:
 	make linker
 	valgrind $(VGFLAGS) tests/linker.out
+
+game:
+	rm -f tests/game.out
+	$(CC) $(WFLAGS) $(STDFLAGS) $(LIB_INCL) tests/game.cpp lib/heap.cpp -o tests/game.out	
 
 extern_lib:
 	rm -f lib/heap.o lib/libheap.so tests/extern_lib.out

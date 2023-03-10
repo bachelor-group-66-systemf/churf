@@ -7,18 +7,20 @@
 #include <vector>
 
 #include "chunk.hpp"
+#include "profiler.hpp"
 
 #define HEAP_SIZE 65536
-
-#define MARK (uint)0x1
-#define SWEEP (uint)0x2
-#define FREE (uint)0x4
-#define COLLECT_ALL (uint)0x7
-
 #define FREE_THRESH (uint)20
 
 namespace GC
 {
+
+	enum CollectOption {
+		MARK=0x1,
+		SWEEP=0x2,
+		FREE=0x4,
+		COLLECT_ALL=0x7
+	};
 
 	class Heap
 	{
@@ -53,14 +55,10 @@ namespace GC
 			return *iter;
 		}
 
-		void collect();
-		void sweep(Heap *heap);
-		uintptr_t *try_recycle_chunks(size_t size);
-		void free(Heap *heap);
-		void free_overlap(Heap *heap);
-		void mark(uintptr_t *start, const uintptr_t *end, std::vector<Chunk *> &worklist);
-		void print_line(Chunk *chunk);
-		void print_worklist(std::vector<Chunk *> &list);
+		inline static bool getProfilerMode() {
+			auto heap = Heap::the();
+			return heap->m_profiler_enable;
+		}
 
 		inline static Heap *m_instance = nullptr;
 		const char *m_heap;
@@ -71,6 +69,15 @@ namespace GC
 
 		std::vector<Chunk *> m_allocated_chunks;
 		std::vector<Chunk *> m_freed_chunks;
+
+		void collect();
+		void sweep(Heap *heap);
+		uintptr_t *try_recycle_chunks(size_t size);
+		void free(Heap *heap);
+		void free_overlap(Heap *heap);
+		void mark(uintptr_t *start, const uintptr_t *end, std::vector<Chunk *> &worklist);
+		void print_line(Chunk *chunk);
+		void print_worklist(std::vector<Chunk *> &list);
 
 	public:
 		/**
@@ -92,7 +99,7 @@ namespace GC
 			m_instance = new Heap();
 			return m_instance;
 		}
-		void collect(uint flags); // conditional collection
+		void collect(CollectOption flags); // conditional collection
 		void check_init();		  // print dummy things
 		void print_contents();	  // print dummy things
 		void set_profiler(bool mode);

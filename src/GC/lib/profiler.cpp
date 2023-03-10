@@ -33,14 +33,31 @@ namespace GC
         auto end = profiler->m_events.end();
 
         std::ofstream fstr = profiler->createFileStream();
+        char buffer[22];
+        std::tm *btm;
+        std::time_t tt;
+        Chunk *chunk;
 
         while (start != end)
         {
             auto event = *start++;
 
-            fstr << "--------------------------------"
-                 << event->TypeToString()
-                 << event->getTimeStamp
+            tt = event->getTimeStamp();
+            btm = std::localtime(&tt);
+            std::strftime(buffer, 22, "%a %T", btm);
+
+            fstr << "--------------------------------\n"
+                 << buffer
+                 << "\nEvent:\t" << event->TypeToString();
+
+            chunk = event->getChunk();
+
+            if (chunk) {
+                fstr << "\nChunk:\t" << chunk->start
+                     << "\n  Size: " << chunk->size
+                     << "\n  Mark: " << chunk->marked;
+            }
+            fstr << "--------------------------------\n" << std::endl;
         }
     }
 
@@ -48,11 +65,14 @@ namespace GC
     {
         std::time_t tt = std::time(NULL);
         std::tm *ptm = std::localtime(&tt);
-
         char buffer[32];
         std::strftime(buffer, 32, "/profiler/log_%a_%H_%M_%S.txt", ptm);
+        std::string filename(buffer);
+        
+        const std::string ABS_PATH = "/home/virre/dev/systemF/org/language/src/GC/";
+        std::string fullpath = ABS_PATH + filename;
 
-        std::ofstream fstr(buffer);
+        std::ofstream fstr(fullpath);
         return fstr;
     }
 }

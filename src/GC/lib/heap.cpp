@@ -175,6 +175,8 @@ namespace GC
 	 */
 	void Heap::mark(uintptr_t *start, const uintptr_t *end, vector<Chunk *> &worklist)
 	{
+		if (getProfilerMode())
+			Profiler::record(MarkStart);
 		int counter = 0;
 		// To find adresses thats in the worklist
 		for (; start < end; start++)
@@ -202,6 +204,8 @@ namespace GC
 
 					if (!chunk->marked)
 					{
+						if (getProfilerMode())
+							Profiler::record(ChunkMarked, chunk);
 						chunk->marked = true;
 						// Remove the marked chunk from the worklist
 						it = worklist.erase(it);
@@ -247,6 +251,7 @@ namespace GC
 			{
 				// Add the unmarked chunks to freed chunks and remove from
 				// the list of allocated chunks
+				Profiler::record(ChunkSwept, chunk);
 				heap->m_freed_chunks.push_back(chunk);
 				iter = heap->m_allocated_chunks.erase(iter);
 			}
@@ -336,8 +341,10 @@ namespace GC
 	 *
 	 * @param flags Bitmap of flags
 	 */
-	void Heap::collect(uint flags)
+	void Heap::collect(CollectOption flags)
 	{
+		if (getProfilerMode())
+			Profiler::record(CollectStart);
 
 		cout << "DEBUG COLLECT\nFLAGS: ";
 		if (flags & MARK)
