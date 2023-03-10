@@ -24,7 +24,6 @@ namespace GC
 	{
 
 	private:
-		// Private constructor according to the singleton pattern
 		Heap()
 		{
 			m_heap = static_cast<char *>(malloc(HEAP_SIZE));
@@ -32,14 +31,13 @@ namespace GC
 			m_allocated_size = 0;
 		}
 
-		// BEWARE only for testing, this should be adressed
 		~Heap()
 		{
 			std::free((char *)m_heap);
 		}
 
 		inline static Heap *the()
-		{					// TODO: make private
+		{
 			if (m_instance) // if m_instance is not a nullptr
 				return m_instance;
 			m_instance = new Heap();
@@ -71,7 +69,6 @@ namespace GC
 		uintptr_t *m_stack_top = nullptr;
 		bool m_profiler_enable = false;
 
-		// maybe change to std::list
 		std::vector<Chunk *> m_allocated_chunks;
 		std::vector<Chunk *> m_freed_chunks;
 
@@ -89,7 +86,7 @@ namespace GC
 
 		// DEBUG ONLY
 		static inline Heap *debug_the()
-		{					// TODO: make private
+		{
 			if (m_instance) // if m_instance is not a nullptr
 				return m_instance;
 			m_instance = new Heap();

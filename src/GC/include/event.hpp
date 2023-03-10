@@ -1,6 +1,6 @@
 #pragma once
 
-#include <chrono>
+#include <time.h>
 #include <iostream>
 #include <list>
 
@@ -20,34 +20,31 @@ namespace GC
         ReusedChunk
     };
 
-    using TimeStamp = std::chrono::_V2::system_clock::time_point;
-
     class GCEvent
     {
     private:
         // make const
         GCEventType m_type;
-        TimeStamp m_timestamp;
+        std::time_t m_timestamp;
         Chunk *m_chunk;
 
     public:
         GCEvent(GCEventType type)
         {
             m_type = type;
-            m_timestamp = std::chrono::system_clock::now();
+            m_timestamp = std::time(NULL);
         }
 
         GCEvent(GCEventType type, Chunk *chunk)
         {
             m_type = type;
-            m_timestamp = std::chrono::system_clock::now();
+            m_timestamp = std::time(NULL);
             m_chunk = chunk;
         }
 
         GCEventType getType();
-        TimeStamp getTimeStamp();
+        std::time_t getTimeStamp();
         Chunk *getChunk();
-
-        void print(std::ostream &out);
+        const char *TypeToString();
     };
 }
