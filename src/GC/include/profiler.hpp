@@ -23,9 +23,11 @@ namespace GC {
         inline static Profiler *m_instance = nullptr;
         std::vector<GCEvent *> m_events;
 
+        std::ofstream createFileStream();
+
     public:
         static void record(GCEventType type);
         static void record(GCEventType type, Chunk *chunk);
-        static void printTrace();
+        static void dumpTrace();
     };
 }

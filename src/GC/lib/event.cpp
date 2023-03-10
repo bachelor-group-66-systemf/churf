@@ -6,21 +6,36 @@
 #include "event.hpp"
 #include "heap.hpp"
 
-namespace GC {
-    
-    GCEventType GCEvent::getType() {
+namespace GC
+{
+
+    GCEventType GCEvent::getType()
+    {
         return m_type;
     }
 
-    TimeStamp GCEvent::getTimeStamp() {
+    std::time_t GCEvent::getTimeStamp()
+    {
         return m_timestamp;
     }
 
-    Chunk *GCEvent::getChunk() {
+    Chunk *GCEvent::getChunk()
+    {
         return m_chunk;
     }
 
-    void GCEvent::print(std::ostream &out) {
-        assert(false && "TODO: unimplemented");
+    inline const char *GCEvent::TypeToString()
+    {
+        switch (m_type)
+        {
+            case CollectStart:  return "CollectStart";
+            case MarkStart:     return "MarkStart";
+            case ChunkMarked:   return "ChunkMarked";
+            case ChunkSwept:    return "ChunkSwept";
+            case ChunkFreed:    return "ChunkFreed";
+            case NewChunk:      return "NewChunk";
+            case ReusedChunk:   return "ReusedChunk";
+            default:            return "[Unknown]";
+        }
     }
 }
