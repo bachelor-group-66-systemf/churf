@@ -83,6 +83,7 @@ instance Print Exp where
   prt i = \case
     EId n       -> prPrec i 3 $ concatD [prtId 0 n]
     ELit _ (LInt i1) -> prPrec i 3 $ concatD [prt 0 i1]
+    ELit _ LBool -> prPrec i 0 (concatD [doc (showString "Ture")])
     ELet bs e    -> prPrec i 3 $ concatD
                     [ doc $ showString "let"
                     , prt 0 bs

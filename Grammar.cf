@@ -17,7 +17,8 @@ ELet.   Exp  ::= "let" Ident "=" Exp "in" Exp ;
 EAbs.   Exp  ::= "\\" Ident "." Exp ;
 ECase.  Exp ::= "case" Exp "of" "{" [Inj]  "}";
 
-LInt. Literal ::= Integer ;
+LInt.  Literal ::= Integer ;
+LBool. Literal ::= "Ture" ;
 
 Inj. Inj ::= Init "=>" Exp ;
 terminator Inj ";" ;
