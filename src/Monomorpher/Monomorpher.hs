@@ -199,7 +199,7 @@ morphExp expectedType exp = case exp of
 
 -- Creates a new identifier for a function with an assigned type
 newName :: M.Type -> T.Bind -> Ident
-newName t (T.Bind (Ident bindName, _) _ _) = Ident (bindName ++ "_" ++ newName' t)
+newName t (T.Bind (Ident bindName, _) _ _) = Ident (bindName ++ "$" ++ newName' t)
  where
   newName' :: M.Type -> String
   newName' (M.TMono (Ident str)) = str
