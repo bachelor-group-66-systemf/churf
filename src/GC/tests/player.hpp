@@ -35,4 +35,13 @@ public:
         direction.y = dy;
     }
 
+    // This is probably neccessary to initialize an object with our GC
+    // Since allocation and construction cannot be done at the same time
+    void init(string n, Point pos, Point s, Point dir) {
+        name = n;
+        position = pos;
+        size = s;
+        direction = dir;
+    }
+
 };

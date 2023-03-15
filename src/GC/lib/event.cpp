@@ -24,7 +24,8 @@ namespace GC
         return m_chunk;
     }
 
-    inline const char *GCEvent::TypeToString()
+    // Try to remove inline
+    const char *GCEvent::TypeToString()
     {
         switch (m_type)
         {

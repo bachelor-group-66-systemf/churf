@@ -175,13 +175,12 @@ namespace GC
 	 */
 	void Heap::mark(uintptr_t *start, const uintptr_t *end, vector<Chunk *> &worklist)
 	{
+		cout << "--- Marked was called ---" << endl;
 		if (getProfilerMode())
 			Profiler::record(MarkStart);
-		int counter = 0;
 		// To find adresses thats in the worklist
 		for (; start < end; start++)
 		{
-			counter++;
 			auto it = worklist.begin();
 			auto stop = worklist.end();
 			// for (auto it = worklist.begin(); it != worklist.end();) {
@@ -195,8 +194,7 @@ namespace GC
 
 				cout << "Start points to:\t" << hex << *start << endl;
 				cout << "Chunk start:\t\t" << hex << c_start << endl;
-				cout << "Chunk end:\t\t" << hex << c_end << "\n"
-					 << endl;
+				cout << "Chunk end:\t\t" << hex << c_end << "\n" << endl;
 
 				// Check if the stack pointer aligns with the chunk
 				if (c_start <= *start && *start < c_end)
@@ -207,10 +205,16 @@ namespace GC
 						if (getProfilerMode())
 							Profiler::record(ChunkMarked, chunk);
 						chunk->marked = true;
+						cout << "Marked this chunk ^\n" << endl;
 						// Remove the marked chunk from the worklist
 						it = worklist.erase(it);
 						// Recursively call mark, to see if the reachable chunk further points to another chunk
-						mark((uintptr_t *)c_start, (uintptr_t *)c_end, worklist);
+						// Previously -> 
+						// mark((uintptr_t *)c_start, (uintptr_t *)c_end, worklist);
+						// Testing this, it should move to the next adress and end shouldn't be of concern
+						// since it is a static size of pointers
+						// New -> mark((uintptr_t *) c_end, (uintptr_t *) (c_end + sizeof(uintptr_t)), worklist);
+						mark_step(c_end, worklist);
 					}
 					else
 					{
@@ -223,7 +227,40 @@ namespace GC
 				}
 			}
 		}
-		cout << "Counter: " << counter << endl;
+	}
+
+	// Testing a strategy where if a pointer on the stack is pointing to a chunk, nested chunks,
+	// that are not located on the stack frame, will possibly be adjecent to the found chunk, 
+	// allowing for a different, more efficient strategy, that doesn't have to scan the stack frame
+	void Heap::mark_step(uintptr_t memory_location, vector<Chunk *> &worklist) {
+
+		auto it = worklist.begin();
+		auto end = worklist.end();
+
+		while (it != end) {
+
+			Chunk *chunk = *it;
+			auto c_start = reinterpret_cast<uintptr_t>(chunk->start);
+			auto c_size = reinterpret_cast<uintptr_t>(chunk->size);
+			auto c_end = reinterpret_cast<uintptr_t>(c_start + c_size);
+
+			if (c_start <= memory_location && memory_location < c_end) {
+
+				if (!chunk->marked) {
+					// Mark the chunk and erase it from the worklist
+					chunk->marked = true;
+					it = worklist.erase(it);
+					// Update the memory location we want to look at
+					memory_location = c_end;
+				}
+				else {
+					it++;
+				}
+			}
+			else {
+				it++;
+			}
+		}
 	}
 
 	/**

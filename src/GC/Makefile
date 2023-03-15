@@ -20,7 +20,7 @@ heap:
 
 h_test:
 	rm -f tests/h_test.out
-	$(CC) $(WFLAGS) $(STDFLAGS) $(LIB_INCL) tests/h_test.cpp lib/heap.cpp -o tests/h_test.out
+	$(CC) $(WFLAGS) $(STDFLAGS) $(LIB_INCL) tests/h_test.cpp lib/heap.cpp lib/profiler.cpp lib/event.cpp -o tests/h_test.out
 
 h_test_vg:
 	make h_test
@@ -40,7 +40,7 @@ linker_vg:
 
 game:
 	rm -f tests/game.out
-	$(CC) $(WFLAGS) $(STDFLAGS) $(LIB_INCL) tests/game.cpp lib/heap.cpp -o tests/game.out	
+	$(CC) $(WFLAGS) $(STDFLAGS) $(LIB_INCL) tests/game.cpp lib/heap.cpp lib/profiler.cpp lib/event.cpp -o tests/game.out	
 
 extern_lib:
 	rm -f lib/heap.o lib/libheap.so tests/extern_lib.out

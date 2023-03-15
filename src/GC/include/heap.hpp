@@ -78,6 +78,7 @@ namespace GC
 		void mark(uintptr_t *start, const uintptr_t *end, std::vector<Chunk *> &worklist);
 		void print_line(Chunk *chunk);
 		void print_worklist(std::vector<Chunk *> &list);
+		void mark_step(uintptr_t memory_location, std::vector<Chunk *> &worklist);
 
 	public:
 		/**

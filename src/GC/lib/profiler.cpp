@@ -32,7 +32,7 @@ namespace GC
         auto start = profiler->m_events.begin();
         auto end = profiler->m_events.end();
 
-        std::ofstream fstr = profiler->createFileStream();
+        std::ofstream fstr = profiler->createFileStream(); // this is now found
         char buffer[22];
         std::tm *btm;
         std::time_t tt;
@@ -42,15 +42,15 @@ namespace GC
         {
             auto event = *start++;
 
-            tt = event->getTimeStamp();
+            tt = event->getTimeStamp(); // this is found
             btm = std::localtime(&tt);
             std::strftime(buffer, 22, "%a %T", btm);
 
             fstr << "--------------------------------\n"
                  << buffer
-                 << "\nEvent:\t" << event->TypeToString();
+                 << "\nEvent:\t" << event->TypeToString(); // this is not found
 
-            chunk = event->getChunk();
+            chunk = event->getChunk(); // this is found
 
             if (chunk) {
                 fstr << "\nChunk:\t" << chunk->start
@@ -61,7 +61,7 @@ namespace GC
         }
     }
 
-    std::ofstream createFileStream()
+    std::ofstream Profiler::createFileStream()
     {
         std::time_t tt = std::time(NULL);
         std::tm *ptm = std::localtime(&tt);

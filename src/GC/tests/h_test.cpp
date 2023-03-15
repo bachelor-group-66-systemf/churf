@@ -12,10 +12,12 @@ Node *create_chain(int depth) {
         last_node->id = depth;
         last_node->child = nullptr;
         nodes.push_back(last_node);
-        for (int i = 0; i < depth; i++) {
+        for (size_t i = 0; i < depth; i++) {
             Node *node = static_cast<Node *>(GC::Heap::alloc(sizeof(Node)));
             node->id = depth-i;
-            node->child = nodes[i-1];
+            node->child = nodes[i];
+            //node->child = nodes.at(i-1);
+            std::cout << "Child of node: " << node << " is: " << node->child << std::endl;
             nodes.push_back(node);
         }
         for (size_t i = 0; i < nodes.size(); i++) {
@@ -84,11 +86,14 @@ int main() {
 
     Node *root = static_cast<Node *>(gc->alloc(sizeof(Node)));
     root = test_chain(3, false);
+    Node *root_child = root->child;
     std::cout << "Adress of root:\t" << &root << std::endl;
     std::cout << "Root points to:\t" << root << std::endl;
-    std::cout << "Root child:\t" << root->child << std::endl;
+    std::cout << "Root child:\t" << root_child << std::endl;
+    std::cout << "Root child, child:\t" << root_child->child << std::endl;
 
-    gc->collect(MARK);     
+
+    gc->collect(GC::MARK);     
     gc->print_contents();
     return 0;
 }
