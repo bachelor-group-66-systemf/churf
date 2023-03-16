@@ -7,6 +7,7 @@ class Point {
 public:
 
     int x, y;
+    Point() {}
     Point(int _x, int _y) : x(_x), y(_y) {} 
 };
 
@@ -20,6 +21,8 @@ private:
     Point direction;
 
 public:
+
+    Player() {}
 
     Player(string n, Point pos, Point s, Point dir) 
         : name(n), position(pos.x, pos.y), size(s.x, s.y), direction(dir.x, dir.y)

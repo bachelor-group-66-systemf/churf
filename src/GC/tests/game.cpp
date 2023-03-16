@@ -3,8 +3,9 @@
 #include "player.hpp"
 #include "heap.hpp"
 
-#define X_LENGTH 1000;
-#define Y_LENGTH 500;
+#define X_LENGTH 1000
+#define Y_LENGTH 500
+#define MAX_PLAYERS 100
 
 /*
 * Description: 
@@ -20,19 +21,32 @@
 *   all objects gets allocated, but only Game object gets marked.
 */
 
+
 class Game {
 
 private:
 
-    std::vector<Player> players;
-    Point dimensions;
+    //std::vector<Player*> *players;
+    std::vector<Player> *players;
+    Point *dimensions;
 
 public:
 
-    Game() : dimensions(1000, 500) {}
+    Game() {
+        dimensions->x = X_LENGTH;
+        dimensions->y = Y_LENGTH;
+    }
 
-    void add_player(Player& p) {
-        players.push_back(p);
+    void init() {
+        //players = static_cast<std::vector<Player*>*>(GC::Heap::alloc(sizeof(Player*) * MAX_PLAYERS)); 
+        players = static_cast<std::vector<Player>*>(GC::Heap::alloc(sizeof(Player) * MAX_PLAYERS));
+        dimensions = static_cast<Point*>(GC::Heap::alloc(sizeof(Point)));
+        dimensions->x = X_LENGTH;
+        dimensions->y = Y_LENGTH;
+    }
+
+    void add_player(Player *p) {
+        players->push_back(*p);
     }
 
     Player* create_player(string s, Point pos, Point size, Point dir) {
@@ -49,12 +63,11 @@ public:
     void create_players(int nr) {
         for (int i = 0; i < nr; i++) {
             Player *p = create_player(std::to_string(i), Point(i, i), Point(2, 2), Point(0, 0)); 
-            add_player(*p);
+            add_player(p);
         }
     }
 
 };
-
 
 int main() {
     GC::Heap::init();
@@ -62,6 +75,7 @@ int main() {
     gc->check_init();
 
     Game *game = static_cast<Game*>(gc->alloc(sizeof(Game)));
+    game->init();
     game->create_players(2);
 
     std::cout << "Player size: " << sizeof(Player) << std::endl;

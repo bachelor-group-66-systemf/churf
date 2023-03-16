@@ -7,7 +7,8 @@
 #include <stdlib.h>
 #include <vector>
 
-#include "../include/heap.hpp"
+//#include "../include/heap.hpp"
+#include <heap.hpp>
 
 using std::cout, std::endl, std::vector, std::hex, std::dec;
 
@@ -175,11 +176,11 @@ namespace GC
 	 */
 	void Heap::mark(uintptr_t *start, const uintptr_t *end, vector<Chunk *> &worklist)
 	{
-		cout << "--- Marked was called ---" << endl;
+		cout << "--- mark() was called ---\n" << endl;
 		if (getProfilerMode())
 			Profiler::record(MarkStart);
 		// To find adresses thats in the worklist
-		for (; start < end; start++)
+		for (; start <= end; start++)
 		{
 			auto it = worklist.begin();
 			auto stop = worklist.end();
@@ -192,6 +193,7 @@ namespace GC
 				auto c_size = reinterpret_cast<uintptr_t>(chunk->size);
 				auto c_end = reinterpret_cast<uintptr_t>(c_start + c_size);
 
+				cout << "Value of Start:\t\t" << start << endl;
 				cout << "Start points to:\t" << hex << *start << endl;
 				cout << "Chunk start:\t\t" << hex << c_start << endl;
 				cout << "Chunk end:\t\t" << hex << c_end << "\n" << endl;
@@ -209,12 +211,8 @@ namespace GC
 						// Remove the marked chunk from the worklist
 						it = worklist.erase(it);
 						// Recursively call mark, to see if the reachable chunk further points to another chunk
-						// Previously -> 
-						// mark((uintptr_t *)c_start, (uintptr_t *)c_end, worklist);
-						// Testing this, it should move to the next adress and end shouldn't be of concern
-						// since it is a static size of pointers
-						// New -> mark((uintptr_t *) c_end, (uintptr_t *) (c_end + sizeof(uintptr_t)), worklist);
-						mark_step(c_end, worklist);
+						mark((uintptr_t *)c_start, (uintptr_t *)c_end, worklist);
+						//mark_step(c_start, c_end, worklist);
 					}
 					else
 					{
@@ -232,33 +230,47 @@ namespace GC
 	// Testing a strategy where if a pointer on the stack is pointing to a chunk, nested chunks,
 	// that are not located on the stack frame, will possibly be adjecent to the found chunk, 
 	// allowing for a different, more efficient strategy, that doesn't have to scan the stack frame
-	void Heap::mark_step(uintptr_t memory_location, vector<Chunk *> &worklist) {
+	void Heap::mark_step(uintptr_t start, uintptr_t end, vector<Chunk *> &worklist) {
 
-		auto it = worklist.begin();
-		auto end = worklist.end();
+		// Should loop through the chunk size, such that if the object holds a pointer,
+		// wherever that pointer is located in the object, that pointer, to another chunk,
+		// gets detected
 
-		while (it != end) {
+		cout << "--- mark_step() was called ---\n" << endl;
+		for (; start <= end; start += sizeof(uintptr_t)) { 
 
-			Chunk *chunk = *it;
-			auto c_start = reinterpret_cast<uintptr_t>(chunk->start);
-			auto c_size = reinterpret_cast<uintptr_t>(chunk->size);
-			auto c_end = reinterpret_cast<uintptr_t>(c_start + c_size);
+			auto it = worklist.begin();
+			auto end = worklist.end();
+			
+			while (it != end) {
 
-			if (c_start <= memory_location && memory_location < c_end) {
+				Chunk *chunk = *it;
+				auto c_start = reinterpret_cast<uintptr_t>(chunk->start);
+				auto c_size = reinterpret_cast<uintptr_t>(chunk->size);
+				auto c_end = reinterpret_cast<uintptr_t>(c_start + c_size);
 
-				if (!chunk->marked) {
-					// Mark the chunk and erase it from the worklist
-					chunk->marked = true;
-					it = worklist.erase(it);
-					// Update the memory location we want to look at
-					memory_location = c_end;
+				cout << "Value of Start:\t\t" << start << endl;
+				cout << "Chunk start:\t\t" << hex << c_start << endl;
+				cout << "Chunk end:\t\t" << hex << c_end << "\n" << endl;
+
+				if (c_start <= start && start < c_end) {
+
+					if (!chunk->marked) {
+						// Mark the chunk and erase it from the worklist
+						chunk->marked = true;
+						it = worklist.erase(it);
+						cout << "Marked this chunk ^\n" << endl;
+						// Update the memory location we want to look at
+						//memory_location = c_end;
+						mark_step(c_start, c_end, worklist);
+					}
+					else {
+						it++;
+					}
 				}
 				else {
 					it++;
 				}
-			}
-			else {
-				it++;
 			}
 		}
 	}
