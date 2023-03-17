@@ -18,6 +18,7 @@ namespace GC
 	enum CollectOption {
 		MARK=0x1,
 		SWEEP=0x2,
+		MARK_SWEEP = 0x3,
 		FREE=0x4,
 		COLLECT_ALL=0x7
 	};
@@ -103,6 +104,7 @@ namespace GC
 		void collect(CollectOption flags); // conditional collection
 		void check_init();		  // print dummy things
 		void print_contents();	  // print dummy things
+		void print_allocated_chunks(Heap *heap); // print the contents in m_allocated_chunks
 		void set_profiler(bool mode);
 	};
 }

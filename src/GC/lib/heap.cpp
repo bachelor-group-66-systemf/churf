@@ -185,7 +185,7 @@ namespace GC
 			auto it = worklist.begin();
 			auto stop = worklist.end();
 			// for (auto it = worklist.begin(); it != worklist.end();) {
-			while (it != stop)
+			while (it != stop) // while (it != stop)
 			{
 				Chunk *chunk = *it;
 
@@ -193,10 +193,10 @@ namespace GC
 				auto c_size = reinterpret_cast<uintptr_t>(chunk->size);
 				auto c_end = reinterpret_cast<uintptr_t>(c_start + c_size);
 
-				cout << "Value of Start:\t\t" << start << endl;
+/* 				cout << "Value of Start:\t\t" << start << endl;
 				cout << "Start points to:\t" << hex << *start << endl;
 				cout << "Chunk start:\t\t" << hex << c_start << endl;
-				cout << "Chunk end:\t\t" << hex << c_end << "\n" << endl;
+				cout << "Chunk end:\t\t" << hex << c_end << "\n" << endl; */
 
 				// Check if the stack pointer aligns with the chunk
 				if (c_start <= *start && *start < c_end)
@@ -212,6 +212,7 @@ namespace GC
 						it = worklist.erase(it);
 						// Recursively call mark, to see if the reachable chunk further points to another chunk
 						mark((uintptr_t *)c_start, (uintptr_t *)c_end, worklist);
+
 						//mark_step(c_start, c_end, worklist);
 					}
 					else
@@ -283,10 +284,11 @@ namespace GC
 	 */
 	void Heap::sweep(Heap *heap)
 	{
+		cout << "--- sweep() was called ---" << endl;
 		auto iter = heap->m_allocated_chunks.begin();
 		auto stop = heap->m_allocated_chunks.end();
-		// for (auto it = heap->m_allocated_chunks.begin(); it != heap->m_allocated_chunks.end();) {
-		while (iter != stop)
+		// This cannot "iter != stop", results in seg fault, since the end gets updated, I think.
+		while (iter != heap->m_allocated_chunks.end())
 		{
 			Chunk *chunk = *iter;
 
@@ -318,12 +320,14 @@ namespace GC
 	 */
 	void Heap::free(Heap *heap)
 	{
+		cout << "--- free() was called ---" << endl;
 		if (heap->m_freed_chunks.size() > FREE_THRESH)
 		{
 			while (heap->m_freed_chunks.size())
 			{
 				auto chunk = heap->m_freed_chunks.back();
 				heap->m_freed_chunks.pop_back();
+				cout << "Freed chunk was deleted" << endl;
 				delete chunk;
 			}
 		}
@@ -392,6 +396,8 @@ namespace GC
 	 */
 	void Heap::collect(CollectOption flags)
 	{
+		set_profiler(true);
+
 		if (getProfilerMode())
 			Profiler::record(CollectStart);
 
@@ -503,5 +509,12 @@ namespace GC
 	{
 		auto heap = Heap::the();
 		heap->m_profiler_enable = mode;
+	}
+
+	void Heap::print_allocated_chunks(Heap *heap) {
+		cout << "--- Allocated Chunks ---\n" << endl;
+		for (auto chunk : heap->m_allocated_chunks) {
+			print_line(chunk);
+		}
 	}
 }

@@ -26,8 +26,8 @@ class Game {
 
 private:
 
-    //std::vector<Player*> *players;
-    std::vector<Player> *players;
+    std::vector<Player*> *players;
+    //std::vector<Player> *players;
     Point *dimensions;
 
 public:
@@ -38,18 +38,18 @@ public:
     }
 
     void init() {
-        //players = static_cast<std::vector<Player*>*>(GC::Heap::alloc(sizeof(Player*) * MAX_PLAYERS)); 
-        players = static_cast<std::vector<Player>*>(GC::Heap::alloc(sizeof(Player) * MAX_PLAYERS));
+        players = static_cast<std::vector<Player*>*>(GC::Heap::alloc(sizeof(Player*) * MAX_PLAYERS)); 
+        //players = static_cast<std::vector<Player>*>(GC::Heap::alloc(sizeof(Player) * MAX_PLAYERS));
         dimensions = static_cast<Point*>(GC::Heap::alloc(sizeof(Point)));
         dimensions->x = X_LENGTH;
         dimensions->y = Y_LENGTH;
     }
 
     void add_player(Player *p) {
-        players->push_back(*p);
+        players->push_back(p);
     }
 
-    Player* create_player(string s, Point pos, Point size, Point dir) {
+    Player* create_player(string *s, Point *pos, Point *size, Point *dir) {
         Player *p = static_cast<Player*>(GC::Heap::alloc(sizeof(Player)));
         /* 
         Cannot allocate by new, since it the allocates outside of "out" heap. That also lead so us having to
@@ -62,7 +62,13 @@ public:
 
     void create_players(int nr) {
         for (int i = 0; i < nr; i++) {
-            Player *p = create_player(std::to_string(i), Point(i, i), Point(2, 2), Point(0, 0)); 
+
+            std::string *str = static_cast<std::string*>(GC::Heap::alloc(sizeof(std::string)));
+            Point *pos = static_cast<Point*>(GC::Heap::alloc(sizeof(Point)));
+            Point *size = static_cast<Point*>(GC::Heap::alloc(sizeof(Point)));
+            Point *dir = static_cast<Point*>(GC::Heap::alloc(sizeof(Point)));
+
+            Player *p = create_player(str, pos, size, dir); 
             add_player(p);
         }
     }

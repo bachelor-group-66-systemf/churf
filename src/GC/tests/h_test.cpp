@@ -78,11 +78,12 @@ int main() {
     // long *l = static_cast<long *>(gc->alloc(sizeof(long))); // 0x6-0xd  | 0x
     
     // This is allocated outside of the scope of the GC (if gc->init() isn't called), thus garbage
-    /* long *longs[21];
+/*     long *longs;
     std::cout << "Pointer to ints:\t" << longs << std::endl;
     for (int i = 0; i < 21; i++) {
-        longs[i] = static_cast<long *>(gc->alloc(sizeof(long)));
-    } */
+        longs = static_cast<long *>(gc->alloc(sizeof(long)));
+        longs++;
+    }  */
 
     Node *root = static_cast<Node *>(gc->alloc(sizeof(Node)));
     root = test_chain(3, false);
@@ -93,7 +94,7 @@ int main() {
     std::cout << "Root child, child:\t" << root_child->child << std::endl;
 
 
-    gc->collect(GC::MARK);     
+    gc->collect(GC::COLLECT_ALL);     
     gc->print_contents();
     return 0;
 }
