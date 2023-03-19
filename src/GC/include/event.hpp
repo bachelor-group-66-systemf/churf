@@ -43,9 +43,9 @@ namespace GC
             m_chunk = chunk;
         }
 
-        GCEventType getType();
-        std::time_t getTimeStamp();
-        Chunk *getChunk();
-        const char *TypeToString();
+        GCEventType get_type();
+        std::time_t get_time_stamp();
+        Chunk *get_chunk();
+        const char *type_to_string();
     };
 }

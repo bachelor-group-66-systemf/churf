@@ -107,7 +107,7 @@ namespace GC
 		// Check if there are any freed chunks large enough for current request
 		for (size_t i = 0; i < heap->m_freed_chunks.size(); i++)
 		{
-			auto chunk = getAt(heap->m_freed_chunks, i);
+			auto chunk = Heap::get_at(heap->m_freed_chunks, i);
 			auto iter = heap->m_freed_chunks.begin();
 			advance(iter, i);
 			if (chunk->size > size)
@@ -177,7 +177,7 @@ namespace GC
 	void Heap::mark(uintptr_t *start, const uintptr_t *end, vector<Chunk *> &worklist)
 	{
 		cout << "--- mark() was called ---\n" << endl;
-		if (getProfilerMode())
+		if (Heap::get_profiler_mode())
 			Profiler::record(MarkStart);
 		// To find adresses thats in the worklist
 		for (; start <= end; start++)
@@ -204,7 +204,7 @@ namespace GC
 
 					if (!chunk->marked)
 					{
-						if (getProfilerMode())
+						if (Heap::get_profiler_mode())
 							Profiler::record(ChunkMarked, chunk);
 						chunk->marked = true;
 						cout << "Marked this chunk ^\n" << endl;
@@ -356,13 +356,13 @@ namespace GC
 		std::vector<Chunk *> filtered;
 		size_t i = 0;
 		// filtered.push_back(heap->m_freed_chunks.at(i++));
-		filtered.push_back(getAt(heap->m_freed_chunks, i++));
+		filtered.push_back(Heap::get_at(heap->m_freed_chunks, i++));
 		cout << filtered.back()->start << endl;
 		for (; i < heap->m_freed_chunks.size(); i++)
 		{
 			auto prev = filtered.back();
 			// auto next = heap->m_freed_chunks.at(i);
-			auto next = getAt(heap->m_freed_chunks, i);
+			auto next = Heap::get_at(heap->m_freed_chunks, i);
 			auto p_start = (uintptr_t)(prev->start);
 			auto p_size = (uintptr_t)(prev->size);
 			auto n_start = (uintptr_t)(next->start);
@@ -398,7 +398,7 @@ namespace GC
 	{
 		set_profiler(true);
 
-		if (getProfilerMode())
+		if (Heap::get_profiler_mode())
 			Profiler::record(CollectStart);
 
 		cout << "DEBUG COLLECT\nFLAGS: ";

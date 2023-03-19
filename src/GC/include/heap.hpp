@@ -47,7 +47,7 @@ namespace GC
 			return m_instance;
 		}
 
-		inline static Chunk *getAt(std::vector<Chunk *> &list, size_t n)
+		inline static Chunk *get_at(std::vector<Chunk *> &list, size_t n)
 		{
 			auto iter = list.begin();
 			if (!n)
@@ -56,7 +56,7 @@ namespace GC
 			return *iter;
 		}
 
-		inline static bool getProfilerMode() {
+		inline static bool get_profiler_mode() {
 			auto heap = Heap::the();
 			return heap->m_profiler_enable;
 		}

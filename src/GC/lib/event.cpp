@@ -9,23 +9,23 @@
 namespace GC
 {
 
-    GCEventType GCEvent::getType()
+    GCEventType GCEvent::get_type()
     {
         return m_type;
     }
 
-    std::time_t GCEvent::getTimeStamp()
+    std::time_t GCEvent::get_time_stamp()
     {
         return m_timestamp;
     }
 
-    Chunk *GCEvent::getChunk()
+    Chunk *GCEvent::get_chunk()
     {
         return m_chunk;
     }
 
     // Try to remove inline
-    const char *GCEvent::TypeToString()
+    const char *GCEvent::type_to_string()
     {
         switch (m_type)
         {

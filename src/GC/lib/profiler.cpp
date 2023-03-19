@@ -26,13 +26,13 @@ namespace GC
         profiler->m_events.push_back(event);
     }
 
-    void Profiler::dumpTrace()
+    void Profiler::dump_trace()
     {
         auto profiler = Profiler::the();
         auto start = profiler->m_events.begin();
         auto end = profiler->m_events.end();
 
-        std::ofstream fstr = profiler->createFileStream(); 
+        std::ofstream fstr = profiler->create_file_stream(); 
         char buffer[22];
         std::tm *btm;
         std::time_t tt;
@@ -42,15 +42,15 @@ namespace GC
         {
             auto event = *start++;
 
-            tt = event->getTimeStamp(); 
+            tt = event->get_time_stamp(); 
             btm = std::localtime(&tt);
             std::strftime(buffer, 22, "%a %T", btm);
 
             fstr << "--------------------------------\n"
                  << buffer
-                 << "\nEvent:\t" << event->TypeToString(); 
+                 << "\nEvent:\t" << event->type_to_string(); 
 
-            chunk = event->getChunk(); 
+            chunk = event->get_chunk(); 
 
             if (chunk) {
                 fstr << "\nChunk:\t" << chunk->start
@@ -61,7 +61,7 @@ namespace GC
         }
     }
 
-    std::ofstream Profiler::createFileStream()
+    std::ofstream Profiler::create_file_stream()
     {
         std::time_t tt = std::time(NULL);
         std::tm *ptm = std::localtime(&tt);
@@ -69,8 +69,8 @@ namespace GC
         std::strftime(buffer, 32, "/profiler/log_%a_%H_%M_%S.txt", ptm);
         std::string filename(buffer);
         
-        //const std::string ABS_PATH = "/home/virre/dev/systemF/org/language/src/GC/";
-        const std::string ABS_PATH = "/Users/valtermiari/Desktop/DV/Bachelors/code/language/src/GC";
+        const std::string ABS_PATH = "/home/virre/dev/systemF/org/language/src/GC/";
+        // const std::string ABS_PATH = "/Users/valtermiari/Desktop/DV/Bachelors/code/language/src/GC";
         std::string fullpath = ABS_PATH + filename;
 
         std::ofstream fstr(fullpath);
