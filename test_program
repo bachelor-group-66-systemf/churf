@@ -1,2 +1,9 @@
-id : 'a -> 'a ;
-id = \x. x ;
+data Bool () where {
+    True : Bool ()
+    False : Bool ()
+};
+
+main : Bool () -> _Int ;
+main x = case x of {
+    1 => 0
+}
