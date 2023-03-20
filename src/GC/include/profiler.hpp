@@ -11,7 +11,10 @@ namespace GC {
     class Profiler {
     private:
         Profiler() { }
-        ~Profiler() { }
+        ~Profiler() {
+            for (GCEvent *c : m_events)
+                delete c;
+        }
 
         inline static Profiler *the() {
             if (m_instance)
@@ -28,7 +31,9 @@ namespace GC {
 
     public:
         static void record(GCEventType type);
+        static void record(GCEventType type, size_t size);
         static void record(GCEventType type, Chunk *chunk);
         static void dump_trace();
+        static void dispose();
     };
 }

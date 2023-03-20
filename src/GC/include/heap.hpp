@@ -56,13 +56,13 @@ namespace GC
 			return *iter;
 		}
 
-		inline static bool get_profiler_mode() {
+		inline bool profiler_enabled() {
 			auto heap = Heap::the();
 			return heap->m_profiler_enable;
 		}
 
 		inline static Heap *m_instance = nullptr;
-		const char *m_heap;
+		char *m_heap;
 		size_t m_size;
 		size_t m_allocated_size;
 		uintptr_t *m_stack_top = nullptr;
@@ -73,7 +73,7 @@ namespace GC
 
 		void collect();
 		void sweep(Heap *heap);
-		uintptr_t *try_recycle_chunks(size_t size);
+		Chunk *try_recycle_chunks(size_t size);
 		void free(Heap *heap);
 		void free_overlap(Heap *heap);
 		void mark(uintptr_t *start, const uintptr_t *end, std::vector<Chunk *> &worklist);

@@ -19,9 +19,17 @@ namespace GC
         profiler->m_events.push_back(event);
     }
 
+    void Profiler::record(GCEventType type, size_t size)
+    {
+        auto event = new GCEvent(type, size);
+        auto profiler = Profiler::the();
+        profiler->m_events.push_back(event);
+    }
+
     void Profiler::record(GCEventType type, Chunk *chunk)
     {
-        auto event = new GCEvent(type, chunk);
+        auto chunk_copy = new Chunk(chunk);
+        auto event = new GCEvent(type, chunk_copy);
         auto profiler = Profiler::the();
         profiler->m_events.push_back(event);
     }
@@ -49,16 +57,25 @@ namespace GC
             fstr << "--------------------------------\n"
                  << buffer
                  << "\nEvent:\t" << event->type_to_string(); 
+            
+
 
             chunk = event->get_chunk(); 
 
             if (chunk) {
-                fstr << "\nChunk:\t" << chunk->start
+                fstr << "\nChunk:  " << chunk->start
                      << "\n  Size: " << chunk->size
                      << "\n  Mark: " << chunk->marked;
             }
             fstr << "--------------------------------\n" << std::endl;
         }
+    }
+
+    void Profiler::dispose() {
+        Profiler::record(ProfilerDispose);
+        Profiler::dump_trace();
+        auto profiler = Profiler::the();
+        delete profiler;
     }
 
     std::ofstream Profiler::create_file_stream()

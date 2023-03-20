@@ -12,8 +12,8 @@ namespace GC
         size_t size;
 
         // Default constructor
-        Chunk() 
-        {}
+        Chunk() {}
+        Chunk(const Chunk *const c) : marked(c->marked), start(c->start), size(c->size) {}
 
         // -- Temporary --
         // A copy constructor, keep track of how many times the vectors that hold chunks
@@ -21,7 +21,7 @@ namespace GC
         // Shouldn't be all that relevant if we use vectors with Chunk-pointers.
         Chunk(const Chunk& c) : marked(c.marked), start(c.start), size(c.size)
         {
-            std::cout << "Chunk was copied" << std::endl;
+            // std::cout << "Chunk was copied" << std::endl;
         }
     };
 }
