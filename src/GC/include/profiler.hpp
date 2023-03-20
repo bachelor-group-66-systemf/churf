@@ -27,7 +27,7 @@ namespace GC {
         std::vector<GCEvent *> m_events;
 
         std::ofstream create_file_stream();
-        
+        std::string get_log_folder();        
 
     public:
         static void record(GCEventType type);

@@ -422,7 +422,9 @@ namespace GC
 	{
 		set_profiler(true);
 
-		if (Heap::get_profiler_mode())
+		auto heap = Heap::the();
+
+		if (heap->profiler_enabled())
 			Profiler::record(CollectStart);
 
 		cout << "DEBUG COLLECT\nFLAGS: ";
@@ -433,8 +435,6 @@ namespace GC
 		if (flags & FREE)
 			cout << "\n - FREE";
 		cout << "\n";
-
-		auto heap = Heap::the();
 
 		// get the frame adress, whwere local variables and saved registers are located
 		auto stack_bottom = reinterpret_cast<uintptr_t *>(__builtin_frame_address(0));

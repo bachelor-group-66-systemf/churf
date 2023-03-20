@@ -60,6 +60,6 @@ namespace GC
         GCEventType get_type();
         std::time_t get_time_stamp();
         Chunk *get_chunk();
-        const char *type_to_string();
+        const char *const type_to_string();
     };
 }

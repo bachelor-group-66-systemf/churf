@@ -4,6 +4,8 @@
 #include <fstream>
 #include <time.h>
 #include <vector>
+#include <unistd.h>
+#include <stdexcept>
 
 #include "chunk.hpp"
 #include "event.hpp"
@@ -80,17 +82,46 @@ namespace GC
 
     std::ofstream Profiler::create_file_stream()
     {
+        // get current time
         std::time_t tt = std::time(NULL);
         std::tm *ptm = std::localtime(&tt);
+
+        // format to string
         char buffer[32];
-        std::strftime(buffer, 32, "/profiler/log_%a_%H_%M_%S.txt", ptm);
+        std::strftime(buffer, 32, "/log_%a_%H_%M_%S.txt", ptm);
         std::string filename(buffer);
         
-        const std::string ABS_PATH = "/home/virre/dev/systemF/org/language/src/GC/";
-        // const std::string ABS_PATH = "/Users/valtermiari/Desktop/DV/Bachelors/code/language/src/GC";
-        std::string fullpath = ABS_PATH + filename;
+        // const std::string ABS_PATH = "/home/virre/dev/systemF/org/language/src/GC/";
+        // // const std::string ABS_PATH = "/Users/valtermiari/Desktop/DV/Bachelors/code/language/src/GC";
+        // std::string fullpath = ABS_PATH + filename;
+
+        const std::string fullpath = get_log_folder() + filename;
 
         std::ofstream fstr(fullpath);
         return fstr;
+    }
+
+    std::string get_log_folder()
+    {
+        char buffer[1024];
+        // chars read from path
+        ssize_t len = readlink("/proc/self/exe", buffer, sizeof(buffer)-1);
+
+        // if readlink fails
+        if (len == -1)
+        {
+            throw std::runtime_error(std::string("Error: readlink failed on '/proc/self/exe/'"));
+        }
+
+        buffer[len] = '\0';
+
+        // convert to string for string operators
+        auto path = std::string(buffer);
+        
+        // remove filename
+        size_t last_slash = path.find_last_of('/');
+        std::string folder = path.substr(0, last_slash);
+
+        return folder;
     }
 }

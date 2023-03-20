@@ -24,19 +24,21 @@ namespace GC
         return m_chunk;
     }
 
-    // Try to remove inline
-    const char *GCEvent::type_to_string()
+    const char *const GCEvent::type_to_string()
     {
         switch (m_type)
         {
-            case CollectStart:  return "CollectStart";
-            case MarkStart:     return "MarkStart";
-            case ChunkMarked:   return "ChunkMarked";
-            case ChunkSwept:    return "ChunkSwept";
-            case ChunkFreed:    return "ChunkFreed";
-            case NewChunk:      return "NewChunk";
-            case ReusedChunk:   return "ReusedChunk";
-            default:            return "[Unknown]";
+            case HeapInit:          return "HeapInit";
+            case AllocStart:        return "AllocStart";
+            case CollectStart:      return "CollectStart";
+            case MarkStart:         return "MarkStart";
+            case ChunkMarked:       return "ChunkMarked";
+            case ChunkSwept:        return "ChunkSwept";
+            case ChunkFreed:        return "ChunkFreed";
+            case NewChunk:          return "NewChunk";
+            case ReusedChunk:       return "ReusedChunk";
+            case ProfilerDispose:   return "ProfilerDispose";
+            default:                return "[Unknown]";
         }
     }
 }
