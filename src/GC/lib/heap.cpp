@@ -380,11 +380,14 @@ namespace GC
 		std::vector<Chunk *> filtered;
 		size_t i = 0;
 		// filtered.push_back(heap->m_freed_chunks.at(i++));
-		filtered.push_back(Heap::get_at(heap->m_freed_chunks, i++));
+		// filtered.push_back(Heap::get_at(heap->m_freed_chunks, i++));
+		auto prev = Heap::get_at(heap->m_freed_chunks, i++);
+		prev->marked = true;
+		filtered.push_back(prev);
 		cout << filtered.back()->start << endl;
 		for (; i < heap->m_freed_chunks.size(); i++)
 		{
-			auto prev = filtered.back();
+			prev = filtered.back();
 			// auto next = heap->m_freed_chunks.at(i);
 			auto next = Heap::get_at(heap->m_freed_chunks, i);
 			auto p_start = (uintptr_t)(prev->start);
@@ -392,10 +395,25 @@ namespace GC
 			auto n_start = (uintptr_t)(next->start);
 			if (n_start >= (p_start + p_size))
 			{
+				next->marked = true;
 				filtered.push_back(next);
 			}
 		}
 		heap->m_freed_chunks.swap(filtered);
+		
+		bool profiler_enabled = heap->profiler_enabled();
+		// after swap m_freed_chunks contains still available chunks
+		// and filtered contains all the chunks, so delete unused chunks
+		for (Chunk *chunk : filtered)
+		{
+			// if chunk was filtered away, delete it
+			if (!chunk->marked)
+			{
+				if (profiler_enabled)
+					Profiler::record(ChunkFreed, chunk);
+				delete chunk;
+			}
+		}
 	}
 
 	// ----- ONLY DEBUGGING -----------------------------------------------------------------------
