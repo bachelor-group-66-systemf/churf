@@ -413,6 +413,10 @@ namespace GC
 					Profiler::record(ChunkFreed, chunk);
 				delete chunk;
 			}
+			else
+			{
+				chunk->marked = false;
+			}
 		}
 	}
 
