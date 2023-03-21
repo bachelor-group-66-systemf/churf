@@ -3,7 +3,13 @@ data Bool () where {
     False : Bool ()
 };
 
-main : Bool () -> _Int ;
+data Maybe ('a) where {
+    Nothing : Maybe ('a)
+    Just : 'a -> Maybe ('a)
+};
+
+main : Bool () -> Maybe (Bool ()) ;
 main x = case x of {
-    1 => 0
+    True => Nothing;
+    False => Just 0
 }

@@ -23,12 +23,13 @@ data Poly = Forall [Ident] Type
     deriving (Show)
 
 newtype Ctx = Ctx {vars :: Map Ident Poly}
+    deriving Show
 
 data Env = Env
     { count :: Int
     , sigs :: Map Ident Type
     , constructors :: Map Ident Type
-    }
+    } deriving Show
 
 type Error = String
 type Subst = Map Ident Type
