@@ -157,27 +157,31 @@ morphBind expectedType b@(T.Bind (Ident name, _) args exp) = do
     exp' <- morphExp expectedType exp
     addOutputBind $ M.Bind (newName expectedType b, expectedType) [] exp'
 
+-- Morphs function applications, such as EApp and EAdd
+morphApp :: M.Type -> T.Exp -> T.Exp -> EnvM M.Exp
+morphApp expectedType e1 e2 = do
+    t2  <- getMonoFromPoly $ getExpType e2 -- TODO: make better helper
+    e2' <- morphExp t2 e2
+    e1' <- morphExp (M.TArr t2 expectedType) e1
+    return $ M.EApp (M.TArr t2 expectedType) e1' e2'
+    --t2  <- getMonoFromPoly $ getExpType e2
+    --e2' <- morphExp t2 e2
+    --t1  <- getMonoFromPoly $ getExpType e1
+    --e1' <- morphExp t1 e1
+    --return $ M.EApp expectedType e1' e2'
+
 morphExp :: M.Type -> T.Exp -> EnvM M.Exp
 morphExp expectedType exp = case exp of
-  T.ELit t lit   -> do t' <- getMonoFromPoly t  -- These steps are abundant
-                       return $ M.ELit t' lit
-  T.EApp _ e1 e2 -> do t2  <- getMonoFromPoly $ getExpType e2
-                       e2' <- morphExp t2 e2
-                       t1  <- getMonoFromPoly $ getExpType e1
-                       e1' <- morphExp t1 e1
-                       return $ M.EApp expectedType e1' e2'
-  T.EAdd _ e1 e2 -> do t2  <- getMonoFromPoly $ getExpType e2
-                       e2' <- morphExp t2 e2
-                       t1  <- getMonoFromPoly $ getExpType e1
-                       e1' <- morphExp t1 e1
-                       return $ M.EAdd expectedType e1' e2'
-  -- Add local vars to locals, this will never be called after the lambda lifter
-  T.EAbs _ (ident, _) e -> do let (M.TArr _ t) = expectedType
-                              error "EAbs found in Monomorpher, should not be possible"
-                              addLocal ident
-                              morphExp t e
-
-  T.EId (ident@(Ident istr), t) -> do 
+  T.ELit t lit   -> do 
+    t' <- getMonoFromPoly t  -- These steps are abundant
+    return $ M.ELit t' lit
+  T.EApp _ e1 e2 -> do
+    morphApp expectedType e1 e2
+  T.EAdd _ e1 e2 -> do
+    morphApp expectedType e1 e2
+  T.EAbs _ (_, _) _ -> do
+    error "EAbs found in Monomorpher, should not be possible"
+  T.EId (ident@(Ident istr), t) -> do
     maybeLocal <- localExists ident
     if maybeLocal then do
       t' <- getMonoFromPoly t
