@@ -8,6 +8,7 @@ import           Codegen.LlvmIr                (CallingConvention (..),
                                                 LLVMType (..), LLVMValue (..),
                                                 Visibility (..), llvmIrToString)
 import           Codegen.LlvmIr                as LIR
+import           Control.Applicative           ((<|>))
 import           Control.Monad.State           (StateT, execStateT, foldM_,
                                                 gets, modify)
 import qualified Data.Bifunctor                as BI
@@ -136,6 +137,7 @@ generateCode (Program scs) = do
 compileScs :: [Bind] -> CompilerState ()
 compileScs []                             = do
     -- as a last step create all the constructors
+    -- //TODO maybe merge this with the data type match?
     c <- gets (Map.toList . constructors)
     mapM_ (\((id, t), ci) -> do
             let t' = type2LlvmType t
@@ -208,7 +210,12 @@ compileScs (DataType id@(GA.Ident outer_id) ts : xs) = do
 mainContent :: LLVMValue -> [LLVMIr]
 mainContent var =
     [ UnsafeRaw $
-        "call i32 (ptr, ...) @printf(ptr noundef @.str, i64 noundef " <> show var <> ")\n"
+        "%2 = alloca %Craig\n" <>
+        "    store %Craig %1, ptr %2\n" <>
+        "    %3 = bitcast %Craig* %2 to i64*\n" <>
+        "    %4 = load i64, ptr %3\n" <>
+        "    call i32 (ptr, ...) @printf(ptr noundef @.str, i64 noundef %4)\n"
+      --    "call i32 (ptr, ...) @printf(ptr noundef @.str, i64 noundef " <> show var <> ")\n"
     , -- , SetVariable (GA.Ident "p") (Icmp LLEq I64 (VInteger 2) (VInteger 2))
       -- , BrCond (VIdent (GA.Ident "p")) (GA.Ident "b_1") (GA.Ident "b_2")
       -- , Label (GA.Ident "b_1")
@@ -279,10 +286,6 @@ emitECased t e cases = do
         emit $ Br label
 
 
-emitAbs :: Type -> Id -> Exp -> CompilerState ()
-emitAbs _t tid e = do
-    emit . Comment $
-        "Lambda escaped previous stages: \\" <> show tid <> " . " <> show e
 emitLet :: Bind -> Exp -> CompilerState ()
 emitLet xs e = do
     emit $
@@ -307,13 +310,16 @@ emitApp t e1 e2 = appEmitter t e1 e2 []
                 args <- traverse exprToValue newStack
                 vs <- getNewVar
                 funcs <- gets functions
-                let visibility = maybe Local (const Global) $ Map.lookup id funcs
+                consts <- gets constructors
+                let visibility = maybe Local (const Global) $
+                        const Global <$ Map.lookup id consts
+                        <|>
+                        const Global <$ Map.lookup id funcs
+                        -- this piece of code could probably be improved, i.e remove the double `const Global`
                     args'      = map (first valueGetType . dupe) args
                     call       = Call FastCC (type2LlvmType t) visibility (GA.Ident name) args'
                 emit $ SetVariable (GA.Ident $ show vs) call
-            x -> do
-                emit . Comment $ "The unspeakable happened: "
-                emit . Comment $ show x
+            x -> error $ "The unspeakable happened: " <> show x
 
 emitIdent :: GA.Ident -> CompilerState ()
 emitIdent id = do
@@ -346,43 +352,6 @@ emitSub t e1 e2 = do
     v2 <- exprToValue e2
     v <- getNewVar
     emit $ SetVariable (GA.Ident $ show v) (Sub (type2LlvmType t) v1 v2)
-
- -- emitMul :: Exp -> Exp -> CompilerState ()
- -- emitMul e1 e2 = do
- --     (v1,v2) <- binExprToValues e1 e2
- --     increaseVarCount
- --     v <- gets variableCount
- --     emit $ SetVariable $ GA.Ident $ show v
- --     emit $ Mul I64 v1 v2
-
- -- emitMod :: Exp -> Exp -> CompilerState ()
- -- emitMod e1 e2 = do
- --     -- `let m a b = rem (abs $ b + a) b`
- --     (v1,v2) <- binExprToValues e1 e2
- --     increaseVarCount
- --     vadd <- gets variableCount
- --     emit $ SetVariable $ GA.Ident $ show vadd
- --     emit $ Add I64 v1 v2
- --
- --     increaseVarCount
- --     vabs <- gets variableCount
- --     emit $ SetVariable $ GA.Ident $ show vabs
- --     emit $ Call I64 (GA.Ident "llvm.abs.i64")
- --         [ (I64, VIdent (GA.Ident $ show vadd))
- --         , (I1, VInteger 1)
- --         ]
- --     increaseVarCount
- --     v <- gets variableCount
- --     emit $ SetVariable $ GA.Ident $ show v
- --     emit $ Srem I64 (VIdent (GA.Ident $ show vabs)) v2
-
- -- emitDiv :: Exp -> Exp -> CompilerState ()
- -- emitDiv e1 e2 = do
- --     (v1,v2) <- binExprToValues e1 e2
- --     increaseVarCount
- --     v <- gets variableCount
- --     emit $ SetVariable $ GA.Ident $ show v
- --     emit $ Div I64 v1 v2
 
 exprToValue :: Exp -> CompilerState LLVMValue
 exprToValue = \case
