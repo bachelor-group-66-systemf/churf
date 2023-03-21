@@ -11,7 +11,7 @@
 
 #define HEAP_SIZE 65536
 #define FREE_THRESH (uint)20
-#define DEBUG
+// #define DEBUG
 
 namespace GC
 {
@@ -28,19 +28,14 @@ namespace GC
 	{
 
 	private:
-		Heap()
-		{
-			m_heap = static_cast<char *>(malloc(HEAP_SIZE));
-			m_size = 0;
-			m_allocated_size = 0;
-		}
+		Heap() : m_heap(static_cast<char *>(malloc(HEAP_SIZE))) {}
 
 		~Heap()
 		{
 			std::free((char *)m_heap);
 		}
 
-		inline static Heap *the()
+		static Heap *the()
 		{
 			if (m_instance) // if m_instance is not a nullptr
 				return m_instance;
@@ -48,7 +43,7 @@ namespace GC
 			return m_instance;
 		}
 
-		inline static Chunk *get_at(std::vector<Chunk *> &list, size_t n)
+		static Chunk *get_at(std::vector<Chunk *> &list, size_t n)
 		{
 			auto iter = list.begin();
 			if (!n)
@@ -62,12 +57,12 @@ namespace GC
 			return heap->m_profiler_enable;
 		}
 
-		inline static Heap *m_instance = nullptr;
-		char *m_heap;
-		size_t m_size;
-		size_t m_allocated_size;
-		uintptr_t *m_stack_top = nullptr;
-		bool m_profiler_enable = false;
+		char *const m_heap;
+		size_t m_size {0};
+		inline static Heap *m_instance {nullptr};
+		// size_t m_allocated_size {0};
+		uintptr_t *m_stack_top {nullptr};
+		bool m_profiler_enable {false};
 
 		std::vector<Chunk *> m_allocated_chunks;
 		std::vector<Chunk *> m_freed_chunks;
@@ -95,7 +90,7 @@ namespace GC
 		static void *alloc(size_t size);
 
 #ifdef DEBUG
-		static inline Heap *debug_the()
+		static Heap *debug_the()
 		{
 			if (m_instance) // if m_instance is not a nullptr
 				return m_instance;

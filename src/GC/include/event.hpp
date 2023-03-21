@@ -27,30 +27,15 @@ namespace GC
     class GCEvent
     {
     private:
-        // make const
-        GCEventType m_type;
-        std::time_t m_timestamp;
-        Chunk *m_chunk;
-        size_t m_size;
+        const GCEventType m_type;
+        const std::time_t m_timestamp {std::time(NULL)};
+        const Chunk *m_chunk {nullptr};
+        const size_t m_size {0};
 
     public:
-        GCEvent(GCEventType type)
-        {
-            m_type = type;
-            m_timestamp = std::time(NULL);
-            m_chunk = nullptr;
-            m_size = 0;
-        }
-
-        GCEvent(GCEventType type, Chunk *chunk) : GCEvent(type)
-        {
-            m_chunk = chunk;
-        }
-
-        GCEvent(GCEventType type, size_t size) : GCEvent(type)
-        {
-            m_size = size;
-        }
+        GCEvent(GCEventType type) : m_type(type) {}
+        GCEvent(GCEventType type, Chunk *chunk) : m_type(type), m_chunk(chunk) {}
+        GCEvent(GCEventType type, size_t size) : m_type(type), m_size(size) {}
 
         ~GCEvent() {
             if (m_chunk != nullptr)
@@ -59,7 +44,7 @@ namespace GC
 
         GCEventType get_type();
         std::time_t get_time_stamp();
-        Chunk *get_chunk();
+        const Chunk *get_chunk();
         size_t get_size();
         const char *type_to_string();
     };

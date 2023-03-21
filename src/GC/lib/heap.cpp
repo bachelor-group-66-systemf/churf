@@ -7,32 +7,32 @@
 #include <stdlib.h>
 #include <vector>
 
-// #include "../include/heap.hpp"
-// #include <heap.hpp>
 #include "heap.hpp"
 
 using std::cout, std::endl, std::vector, std::hex, std::dec;
 
 namespace GC
 {
-
 	/**
 	 * Initialises the heap singleton and saves the address
-	 * of the calling stack frame as the stack_top. Presumeably
-	 * this address points to the stack frame of the compiled
-	 * LLVM executable after linking.
+	 * of the calling function's stack frame as the stack_top.
+	 * Presumeably this address points to the stack frame of
+	 * the compiled LLVM executable after linking.
 	 */
 	void Heap::init()
 	{
 		Heap *heap = Heap::the();
 		if (heap->profiler_enabled())
 			Profiler::record(HeapInit);
-#pragma clang diagnostic ignored "-Wframe-address" // clang complains because arg for __b_f_a is not 0
+// clang complains because arg for __b_f_a is not 0 which is unsafe
+#pragma clang diagnostic ignored "-Wframe-address"
 		heap->m_stack_top = static_cast<uintptr_t *>(__builtin_frame_address(1));
 	}
 
 	/**
-	 * Disposes the heap at program exit.
+	 * Disposes the heap and the profiler at program exit
+	 * which also triggers a heap log file dumped if the
+	 * profiler is enabled.
 	 */
 	void Heap::dispose()
 	{
@@ -60,16 +60,16 @@ namespace GC
 		if (profiler_enabled)
 			Profiler::record(AllocStart, size);
 
-		if (size < 0)
+		if (size == 0)
 		{
-			cout << "Heap: Cannot alloc less than 0B. No bytes allocated." << endl;
+			cout << "Heap: Cannot alloc 0B. No bytes allocated." << endl;
 			return nullptr;
 		}
 
 		if (heap->m_size + size > HEAP_SIZE)
 		{
 			heap->collect();
-			// If collect failed, crash with OOM error
+			// If memory is not enough after collect, crash with OOM error
 			assert(heap->m_size + size <= HEAP_SIZE && "Heap: Out Of Memory");
 		}
 
@@ -79,24 +79,21 @@ namespace GC
 		{
 			if (profiler_enabled)
 				Profiler::record(ReusedChunk, reused_chunk);
-			return static_cast<void *>(reused_chunk->start);
+			return static_cast<void *>(reused_chunk->m_start);
 		}
 
 		// If no free chunks was found (reused_chunk is a nullptr),
 		// then create a new chunk
-		auto new_chunk = new Chunk;
-		new_chunk->size = size;
-		new_chunk->start = (uintptr_t *)(heap->m_heap + heap->m_size);
+		auto new_chunk = new Chunk(size, (uintptr_t *)(heap->m_heap + heap->m_size));
 
 		heap->m_size += size;
-
 		heap->m_allocated_chunks.push_back(new_chunk);
 
 		if (profiler_enabled)
 			Profiler::record(NewChunk, new_chunk);
 
 		// new_chunk should probably be a unique pointer, if that isn't implicit already
-		return new_chunk->start;
+		return new_chunk->m_start;
 	}
 
 	/**
@@ -124,15 +121,12 @@ namespace GC
 			auto chunk = Heap::get_at(heap->m_freed_chunks, i);
 			auto iter = heap->m_freed_chunks.begin();
 			advance(iter, i);
-			if (chunk->size > size)
+			if (chunk->m_size > size)
 			{
 				// Split the chunk, use one part and add the remaining part to
 				// the list of freed chunks
-				size_t diff = chunk->size - size;
-
-				auto chunk_complement = new Chunk;
-				chunk_complement->size = diff;
-				chunk_complement->start = chunk->start + chunk->size;
+				size_t diff = chunk->m_size - size;
+				auto chunk_complement = new Chunk(diff, chunk->m_start + chunk->m_size);
 
 				heap->m_freed_chunks.erase(iter);
 				heap->m_freed_chunks.push_back(chunk_complement);
@@ -140,7 +134,7 @@ namespace GC
 
 				return chunk;
 			}
-			else if (chunk->size == size)
+			else if (chunk->m_size == size)
 			{
 				// Reuse the whole chunk
 				heap->m_freed_chunks.erase(iter);
@@ -148,6 +142,7 @@ namespace GC
 				return chunk;
 			}
 		}
+		// If no chunk was found, return nullptr
 		return nullptr;
 	}
 
@@ -160,16 +155,18 @@ namespace GC
 	 */
 	void Heap::collect()
 	{
-		// Get instance
 		auto heap = Heap::the();
 
 		if (heap->profiler_enabled())
 			Profiler::record(CollectStart);
 
-		// get current stack
+		// get current stack frame
 		auto stack_bottom = reinterpret_cast<uintptr_t *>(__builtin_frame_address(0));
 
-		uintptr_t *stack_top = heap->m_stack_top != nullptr ? heap->m_stack_top : (uintptr_t *)0;
+		if (heap->m_stack_top == nullptr)
+			assert(false && "Heap is not initialized, read the docs!");
+
+		uintptr_t *stack_top = heap->m_stack_top;
 
 		auto work_list = heap->m_allocated_chunks;
 		mark(stack_bottom, stack_top, work_list);
@@ -197,39 +194,31 @@ namespace GC
 		bool profiler_enabled = heap->profiler_enabled();
 		if (profiler_enabled)
 			Profiler::record(MarkStart);
+
 		// To find adresses thats in the worklist
 		for (; start <= end; start++)
 		{
 			auto it = worklist.begin();
 			auto stop = worklist.end();
-			// for (auto it = worklist.begin(); it != worklist.end();) {
 			while (it != stop)
 			{
 				Chunk *chunk = *it;
-
-				auto c_start = reinterpret_cast<uintptr_t>(chunk->start);
-				auto c_size = reinterpret_cast<uintptr_t>(chunk->size);
+				auto c_start = reinterpret_cast<uintptr_t>(chunk->m_start);
+				auto c_size = reinterpret_cast<uintptr_t>(chunk->m_size);
 				auto c_end = reinterpret_cast<uintptr_t>(c_start + c_size);
 
-/* 				cout << "Value of Start:\t\t" << start << endl;
-				cout << "Start points to:\t" << hex << *start << endl;
-				cout << "Chunk start:\t\t" << hex << c_start << endl;
-				cout << "Chunk end:\t\t" << hex << c_end << "\n" << endl; */
-
-				// Check if the stack pointer aligns with the chunk
+				// Check if the stack pointer points to something within the chunk
 				if (c_start <= *start && *start < c_end)
 				{
-					if (!chunk->marked)
+					if (!chunk->m_marked)
 					{
 						if (profiler_enabled)
 							Profiler::record(ChunkMarked, chunk);
-						chunk->marked = true;
-						// Remove the marked chunk from the worklist
+						chunk->m_marked = true;
 						it = worklist.erase(it);
+
 						// Recursively call mark, to see if the reachable chunk further points to another chunk
 						mark((uintptr_t *)c_start, (uintptr_t *)c_end, worklist);
-
-						//mark_step(c_start, c_end, worklist);
 					}
 					else
 					{
@@ -261,9 +250,9 @@ namespace GC
 			Chunk *chunk = *iter;
 
 			// Unmark the marked chunks for the next iteration.
-			if (chunk->marked)
+			if (chunk->m_marked)
 			{
-				chunk->marked = false;
+				chunk->m_marked = false;
 				++iter;
 			}
 			else
@@ -325,35 +314,32 @@ namespace GC
 	{
 		std::vector<Chunk *> filtered;
 		size_t i = 0;
-		// filtered.push_back(heap->m_freed_chunks.at(i++));
-		// filtered.push_back(Heap::get_at(heap->m_freed_chunks, i++));
 		auto prev = Heap::get_at(heap->m_freed_chunks, i++);
-		prev->marked = true;
+		prev->m_marked = true;
 		filtered.push_back(prev);
-		cout << filtered.back()->start << endl;
+		cout << filtered.back()->m_start << endl;
 		for (; i < heap->m_freed_chunks.size(); i++)
 		{
 			prev = filtered.back();
-			// auto next = heap->m_freed_chunks.at(i);
 			auto next = Heap::get_at(heap->m_freed_chunks, i);
-			auto p_start = (uintptr_t)(prev->start);
-			auto p_size = (uintptr_t)(prev->size);
-			auto n_start = (uintptr_t)(next->start);
+			auto p_start = (uintptr_t)(prev->m_start);
+			auto p_size = (uintptr_t)(prev->m_size);
+			auto n_start = (uintptr_t)(next->m_start);
 			if (n_start >= (p_start + p_size))
 			{
-				next->marked = true;
+				next->m_marked = true;
 				filtered.push_back(next);
 			}
 		}
 		heap->m_freed_chunks.swap(filtered);
 		
 		bool profiler_enabled = heap->profiler_enabled();
-		// after swap m_freed_chunks contains still available chunks
+		// After swap m_freed_chunks contains still available chunks
 		// and filtered contains all the chunks, so delete unused chunks
 		for (Chunk *chunk : filtered)
 		{
 			// if chunk was filtered away, delete it
-			if (!chunk->marked)
+			if (!chunk->m_marked)
 			{
 				if (profiler_enabled)
 					Profiler::record(ChunkFreed, chunk);
@@ -361,13 +347,12 @@ namespace GC
 			}
 			else
 			{
-				chunk->marked = false;
+				chunk->m_marked = false;
 			}
 		}
 	}
 
-	// ----- ONLY DEBUGGING -----------------------------------------------------------------------
-
+#ifdef DEBUG
 	/**
 	 * Prints the result of Heap::init() and a dummy value
 	 * for the current stack frame for reference.
@@ -430,9 +415,9 @@ namespace GC
 			Chunk *ref = worklist.back();
 			worklist.pop_back();
 			Chunk *child = (Chunk *)ref; // this is probably not correct
-			if (child != nullptr && !child->marked)
+			if (child != nullptr && !child->m_marked)
 			{
-				child->marked = true;
+				child->m_marked = true;
 				worklist.push_back(child);
 				mark_test(worklist);
 			}
@@ -448,9 +433,9 @@ namespace GC
 			if (*start % 8 == 0)
 			{ // all pointers must be aligned as double words
 				Chunk *ref = (Chunk *)*start;
-				if (ref != nullptr && !ref->marked)
+				if (ref != nullptr && !ref->m_marked)
 				{
-					ref->marked = true;
+					ref->m_marked = true;
 					worklist.push_back(ref);
 					mark_test(worklist);
 				}
@@ -461,14 +446,14 @@ namespace GC
 	// For testing purposes
 	void Heap::print_line(Chunk *chunk)
 	{
-		cout << "Marked: " << chunk->marked << "\nStart adr: " << chunk->start << "\nSize: " << chunk->size << " B\n"
+		cout << "Marked: " << chunk->m_marked << "\nStart adr: " << chunk->m_start << "\nSize: " << chunk->m_size << " B\n"
 			 << endl;
 	}
 
 	void Heap::print_worklist(std::vector<Chunk *> &list)
 	{
 		for (auto cp : list)
-			cout << "Chunk at:\t" << cp->start << "\nSize:\t\t" << cp->size << "\n";
+			cout << "Chunk at:\t" << cp->m_start << "\nSize:\t\t" << cp->m_size << "\n";
 		cout << endl;
 	}
 
@@ -509,4 +494,5 @@ namespace GC
 			print_line(chunk);
 		}
 	}
+#endif
 }

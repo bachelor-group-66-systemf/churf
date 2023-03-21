@@ -29,6 +29,10 @@ namespace GC
 
     void Profiler::record(GCEventType type, Chunk *chunk)
     {
+        // Create a copy of chunk to store in the profiler
+        // because in free() chunks are deleted and cannot
+        // be referenced by the profiler. These copied
+        // chunks are deleted by the profiler on dispose().
         auto chunk_copy = new Chunk(chunk);
         auto event = new GCEvent(type, chunk_copy);
         auto profiler = Profiler::the();
@@ -41,11 +45,14 @@ namespace GC
         auto start = profiler->m_events.begin();
         auto end = profiler->m_events.end();
 
+        // File output stream
         std::ofstream fstr = profiler->create_file_stream(); 
+        // Buffer for timestamp
         char buffer[22];
+        // Time variables
         std::tm *btm;
         std::time_t tt;
-        Chunk *chunk;
+        const Chunk *chunk;
 
         while (start != end)
         {
@@ -63,18 +70,23 @@ namespace GC
 
             chunk = event->get_chunk(); 
 
-            if (chunk) {
-                fstr << "\nChunk:  " << chunk->start
-                     << "\n  Size: " << chunk->size
-                     << "\n  Mark: " << chunk->marked;
+            if (event->get_type() == AllocStart)
+            {
+                fstr << "\nSize: " << event->get_size();
             }
-            // else if (event->get)
+            else if (chunk)
+            {
+                fstr << "\nChunk:  " << chunk->m_start
+                     << "\n  Size: " << chunk->m_size
+                     << "\n  Mark: " << chunk->m_marked;
+            }
             fstr << "\n";
         }
         fstr << "--------------------------------" << std::endl;
     }
 
-    void Profiler::dispose() {
+    void Profiler::dispose()
+    {
         Profiler::record(ProfilerDispose);
         Profiler::dump_trace();
         auto profiler = Profiler::the();

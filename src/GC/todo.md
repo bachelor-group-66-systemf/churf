@@ -12,6 +12,3 @@ Deliver to samuel
 
 ## Tests TODO
 - Write complex datastructures for tests with larger programs
-
-## Profiler grejer
-- Fixa användning av `Profiler::record(GCEventType type, size_t size)` i både alloc och dump_trace

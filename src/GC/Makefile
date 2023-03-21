@@ -60,7 +60,7 @@ static_lib:
 	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -c -o lib/heap.o lib/heap.cpp -fPIC
 # create static library
 	ar r lib/gcoll.a lib/event.o lib/profiler.o lib/heap.o
-	
+
 # create test program
 static_lib_test: static_lib
 	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -o tests/extern_lib.out tests/extern_lib.cpp lib/gcoll.a

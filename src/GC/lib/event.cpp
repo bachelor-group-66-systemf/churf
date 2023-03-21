@@ -18,7 +18,7 @@ namespace GC
         return m_timestamp;
     }
 
-    Chunk *GCEvent::get_chunk()
+    const Chunk *GCEvent::get_chunk()
     {
         return m_chunk;
     }
