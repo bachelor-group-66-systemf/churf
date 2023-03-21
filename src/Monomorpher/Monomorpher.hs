@@ -140,7 +140,7 @@ getExpType (T.ELit t _)    = t
 getExpType (T.EApp t _ _)  = t
 getExpType (T.EAdd t _ _)  = t
 getExpType (T.EAbs t _ _)  = t
-getExpType (T.ELet _ _)    = error "Lets not allowed🛑👮"
+getExpType (T.ELet _ _)    = error "lets not allowed🛑👮"
 
 -- | If ident not already in env's output, morphed bind to output
 -- (and all referenced binds within this bind).
@@ -173,29 +173,31 @@ morphExp expectedType exp = case exp of
                        return $ M.EAdd expectedType e1' e2'
   -- Add local vars to locals, this will never be called after the lambda lifter
   T.EAbs _ (ident, _) e -> do let (M.TArr _ t) = expectedType
-                              error "should not be able to happen"
+                              error "EAbs found in Monomorpher, should not be possible"
                               addLocal ident
                               morphExp t e
 
-  T.EId (ident, t) ->      do maybeLocal <- localExists ident
-                              if maybeLocal then do
-                                t' <- getMonoFromPoly t
-                                return $ M.EId (ident, t')
-                              else do
-                                clearLocals
-                                bind <- getInputBind ident
-                                case bind of
-                                  Nothing    -> error "Wowzers!"
-                                  Just bind' -> do
-                                    maybeCurrentFunc <- isCurrentFunc ident
-                                    t' <- getMonoFromPoly t
-                                    if maybeCurrentFunc then -- Recursive call?
-                                      return ()
-                                    else
-                                      morphBind t' bind'
-                                    return $ M.EId (ident, t')
+  T.EId (ident@(Ident istr), t) -> do 
+    maybeLocal <- localExists ident
+    if maybeLocal then do
+      t' <- getMonoFromPoly t
+      return $ M.EId (ident, t')
+    else do
+      clearLocals
+      bind <- getInputBind ident
+      case bind of
+        Nothing -> 
+          error $ "bind of name: " ++ istr ++ " not found"
+        Just bind' -> do
+          maybeCurrentFunc <- isCurrentFunc ident
+          t' <- getMonoFromPoly t
+          if maybeCurrentFunc then -- Recursive call?
+            return ()
+          else
+            morphBind t' bind'
+          return $ M.EId (ident, t')
 
-  T.ELet (T.Bind {}) _ -> error "Lets not possible yet."
+  T.ELet (T.Bind {}) _ -> error "lets not possible yet"
 
 -- Creates a new identifier for a function with an assigned type
 newName :: M.Type -> T.Bind -> Ident
