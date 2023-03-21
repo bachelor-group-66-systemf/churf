@@ -5,6 +5,13 @@
 
 namespace GC
 {
+    /**
+     * The basic element of what can be stored on
+     * the heap. A chunk contains a start address
+     * on the actual heap, the size of memory that
+     * is allocated at that address and if the
+     * chunk is reachable (marked).
+    */
     struct Chunk
     {
         bool m_marked {false};

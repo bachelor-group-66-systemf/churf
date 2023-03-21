@@ -9,7 +9,9 @@
 
 namespace GC
 {
-
+    /**
+     * Types of events that can occur on the heap.
+    */
     enum GCEventType
     {
         HeapInit,
@@ -24,6 +26,9 @@ namespace GC
         ProfilerDispose
     };
 
+    /**
+     * Stores metadeta about an event on the heap.
+    */
     class GCEvent
     {
     private:

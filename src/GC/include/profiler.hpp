@@ -16,6 +16,15 @@ namespace GC {
                 delete c;
         }
 
+        /**
+         * Returns the instance of the Profiler singleton.
+         * If m_instance is the nullptr and the profiler
+         * is not initialized yet, initialize it and return
+         * the pointer to it. Otherwise return the previously
+         * initialized pointer.
+         * 
+         * @returns The pointer to the profiler singleton.
+        */
         static Profiler *the()
         {
             if (m_instance)

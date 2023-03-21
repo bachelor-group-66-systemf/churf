@@ -13,6 +13,11 @@
 
 namespace GC
 {
+    /**
+     * Records an event independent of a chunk.
+     * 
+     * @param type  The type of event to record.
+    */
     void Profiler::record(GCEventType type)
     {
         auto event = new GCEvent(type);
@@ -20,6 +25,14 @@ namespace GC
         profiler->m_events.push_back(event);
     }
 
+    /**
+     * This overload is only used with an AllocStart
+     * event.
+     * 
+     * @param type  The type of event to record.
+     * 
+     * @param size  The size of requested to alloc().
+    */
     void Profiler::record(GCEventType type, size_t size)
     {
         auto event = new GCEvent(type, size);
@@ -27,6 +40,14 @@ namespace GC
         profiler->m_events.push_back(event);
     }
 
+    /**
+     * Records an event related to a chunk.
+     * 
+     * @param type  The type of event to record.
+     * 
+     * @param chunk The chunk the event is connected
+     *              to.
+    */
     void Profiler::record(GCEventType type, Chunk *chunk)
     {
         // Create a copy of chunk to store in the profiler
@@ -39,6 +60,10 @@ namespace GC
         profiler->m_events.push_back(event);
     }
 
+    /**
+     * Prints the history of the recorded events
+     * to a log file in the /tests/logs folder.
+    */
     void Profiler::dump_trace()
     {
         auto profiler = Profiler::the();
@@ -85,6 +110,12 @@ namespace GC
         fstr << "--------------------------------" << std::endl;
     }
 
+    /**
+     * Deletes the profiler singleton and all
+     * the events recorded after recording
+     * the ProfilerDispose event and dumping
+     * the history to a log file.
+    */
     void Profiler::dispose()
     {
         Profiler::record(ProfilerDispose);
@@ -93,6 +124,13 @@ namespace GC
         delete profiler;
     }
 
+    /**
+     * Creates a filestream for the future
+     * log file to print the history to in
+     * dump_trace().
+     * 
+     * @returns The output stream to the file.
+    */
     std::ofstream Profiler::create_file_stream()
     {
         // get current time
@@ -114,6 +152,15 @@ namespace GC
         return fstr;
     }
 
+    /**
+     * This function retrieves the current path of the
+     * executable to use for log files.
+     * 
+     * @returns The path to the logs folder.
+     * 
+     * @throws  A runtime error if the call
+     *          to readlink() fails.
+    */
     std::string Profiler::get_log_folder()
     {
         char buffer[1024];
