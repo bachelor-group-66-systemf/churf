@@ -1,15 +1,24 @@
-data Bool () where {
-    True : Bool ()
-    False : Bool ()
-};
+-- data Bool () where {
+--     True : Bool ()
+--     False : Bool ()
+-- };
 
 data Maybe ('a) where {
     Nothing : Maybe ('a)
     Just : 'a -> Maybe ('a)
 };
 
-main : Bool () -> Maybe (Bool ()) ;
-main x = case x of {
-    True => Nothing;
-    False => Just 0
-}
+-- main : Bool () -> Maybe (Bool ()) ;
+-- main x =
+--     case x of {
+--         True => Nothing;
+--         False => Just True
+--     };
+
+fun : Maybe (_Int) -> _Int ;
+fun a =
+    case a of {
+        Just b => b;
+        Nothing => 0
+    };
+
