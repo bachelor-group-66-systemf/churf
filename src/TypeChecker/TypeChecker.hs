@@ -377,6 +377,9 @@ inst (Forall xs t) = do
 compose :: Subst -> Subst -> Subst
 compose m1 m2 = M.map (apply m1) m2 `M.union` m1
 
+-- TODO: Split this class into two separate classes, one for free variables
+--       and one for applying substitutions
+
 -- | A class representing free variables functions
 class FreeVars t where
     -- | Get all free variables from t
