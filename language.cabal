@@ -37,6 +37,8 @@ executable language
       Renamer.Renamer
       TypeChecker.TypeChecker
       TypeChecker.TypeCheckerIr
+      Monomorphizer.Monomorphizer
+      Monomorphizer.MonomorphizerIr
 --      Interpreter
       Codegen.Codegen
       Codegen.LlvmIr

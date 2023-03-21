@@ -1,26 +1,29 @@
 posMul : _Int -> _Int -> _Int;
-posMul a b = case b of {
+posMul a b = a + b; {-case b of {
     0 => 0;
     _ => a + posMul a (b - 1)
-};
-
-facc : _Int -> _Int;
-facc a = case a of {
-    1 => 1;
-    _ => posMul a (facc (a - 1))
-};
-
-minimization : (_Int -> _Int) -> _Int -> _Int;
-minimization p x = case p x of { 
-    1 => x;
-    _ => minimization p (x + 1)
-};
-
-checkFac : _Int -> _Int;
-checkFac x = case facc x of {
-    0 => 1;
-    _ => 0
-};
+};-}
 
 main : _Int;
-main = minimization checkFac 1
+main = posMul 5 10;
+-- 
+-- facc : _Int -> _Int;
+-- facc a = case a of {
+--     1 => 1;
+--     _ => posMul a (facc (a - 1))
+-- };
+-- 
+-- minimization : (_Int -> _Int) -> _Int -> _Int;
+-- minimization p x = case p x of { 
+--     1 => x;
+--     _ => minimization p (x + 1)
+-- };
+-- 
+-- checkFac : _Int -> _Int;
+-- checkFac x = case facc x of {
+--     0 => 1;
+--     _ => 0
+-- };
+-- 
+-- main : _Int;
+-- main = minimization checkFac 1
