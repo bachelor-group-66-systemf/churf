@@ -9,7 +9,6 @@
 
 #include "chunk.hpp"
 #include "event.hpp"
-#include "heap.hpp"
 #include "profiler.hpp"
 
 namespace GC
@@ -69,7 +68,7 @@ namespace GC
                      << "\n  Size: " << chunk->size
                      << "\n  Mark: " << chunk->marked;
             }
-            fstr << "--------------------------------\n" << std::endl;
+            fstr << "\n--------------------------------" << std::endl;
         }
     }
 
@@ -101,7 +100,7 @@ namespace GC
         return fstr;
     }
 
-    std::string get_log_folder()
+    std::string Profiler::get_log_folder()
     {
         char buffer[1024];
         // chars read from path
@@ -122,6 +121,6 @@ namespace GC
         size_t last_slash = path.find_last_of('/');
         std::string folder = path.substr(0, last_slash);
 
-        return folder;
+        return folder + "/logs";
     }
 }

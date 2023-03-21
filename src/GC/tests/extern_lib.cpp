@@ -14,6 +14,8 @@ int main() {
     init_gc(heap);
     frame_test(heap);
 
+    heap->dispose();
+
     return 0;
 }
 
@@ -52,6 +54,7 @@ void init_gc(GC::Heap *heap){
     std::cout << "\n\n   INITIALIZING THE HEAP" << std::endl;
     std::cout << "===========================" << std::endl;
     heap->init();
+    heap->set_profiler(true);
     std::cout << "===========================" << std::endl;
 }
 

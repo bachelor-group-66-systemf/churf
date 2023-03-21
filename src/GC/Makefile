@@ -43,9 +43,26 @@ game:
 	$(CC) $(WFLAGS) $(STDFLAGS) $(LIB_INCL) tests/game.cpp lib/heap.cpp lib/profiler.cpp lib/event.cpp -o tests/game.out	
 
 extern_lib:
+# remove old files
 	rm -f lib/heap.o lib/libheap.so tests/extern_lib.out
+# compile heap to object file
 	$(CC) $(STDFLAGS) -c -fPIC -o lib/heap.o lib/heap.cpp
+
 	$(CC) $(STDFLAGS) -shared -o lib/libheap.so lib/heap.o
 	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -v tests/extern_lib.cpp lib/heap.cpp -o tests/extern_lib.out
 	$(CC) $(STDFLAGS) $(LIB_INCL) $(LIB_SO) -v -Wall -o tests/extern_lib.out tests/extern_lib.cpp -lheap
 	LD_LIBRARY_PATH=$(LIB_LINK) tests/extern_lib.out
+
+static_lib:
+# remove old files
+	rm -f lib/event.o lib/profiler.o lib/heap.o lib/gcoll.a tests/extern_lib.out
+# compile object files
+	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -c -o lib/event.o lib/event.cpp -fPIC
+	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -c -o lib/profiler.o lib/profiler.cpp -fPIC
+	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -c -o lib/heap.o lib/heap.cpp -fPIC
+# create static library
+	ar r lib/gcoll.a lib/event.o lib/profiler.o lib/heap.o
+	
+# create test program
+static_lib_test: static_lib
+	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -o tests/extern_lib.out tests/extern_lib.cpp lib/gcoll.a

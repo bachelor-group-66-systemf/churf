@@ -4,7 +4,6 @@
 
 #include "chunk.hpp"
 #include "event.hpp"
-#include "heap.hpp"
 
 namespace GC {
 
