@@ -15,6 +15,7 @@ import qualified Data.Bifunctor                as BI
 import           Data.List.Extra               (trim)
 import           Data.Map                      (Map)
 import qualified Data.Map                      as Map
+import           Data.Maybe                    (fromMaybe)
 import           Data.Tuple.Extra              (dupe, first, second)
 import qualified Grammar.Abs                   as GA
 import           Grammar.ErrM                  (Err)
@@ -311,10 +312,10 @@ emitApp t e1 e2 = appEmitter t e1 e2 []
                 vs <- getNewVar
                 funcs <- gets functions
                 consts <- gets constructors
-                let visibility = maybe Local (const Global) $
-                        const Global <$ Map.lookup id consts
+                let visibility = fromMaybe Local $
+                        Global <$ Map.lookup id consts
                         <|>
-                        const Global <$ Map.lookup id funcs
+                        Global <$ Map.lookup id funcs
                         -- this piece of code could probably be improved, i.e remove the double `const Global`
                     args'      = map (first valueGetType . dupe) args
                     call       = Call FastCC (type2LlvmType t) visibility (GA.Ident name) args'
