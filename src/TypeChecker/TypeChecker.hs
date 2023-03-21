@@ -54,7 +54,15 @@ freshenData (Data (Constr name ts) constrs) = do
     let xs = (S.toList . free) =<< ts
     frs <- traverse (const fresh) xs
     let m = M.fromList $ zip xs frs
-    return $ Data (Constr name (map (freshenType m) ts)) (map (\(Constructor ident t) -> Constructor ident (freshenType m t)) constrs)
+    return $
+        Data
+            (Constr name (map (freshenType m) ts))
+            ( map
+                ( \(Constructor ident t) ->
+                    Constructor ident (freshenType m t)
+                )
+                constrs
+            )
 
 {- | Freshen all polymorphic variables, regardless of name
 | freshenType "d" (a -> b -> c) becomes (d -> d -> d)
@@ -199,8 +207,8 @@ algoW = \case
             )
         applySt s1 $ do
             s2 <- unify t t'
-            let composition = s2 `compose` s1
-            return (composition, t, apply composition e')
+            let comp = s2 `compose` s1
+            return (comp, t, apply comp e')
 
     -- \| ------------------
     -- \|   Γ ⊢ i : Int, ∅
@@ -253,11 +261,11 @@ algoW = \case
             -- applySt s2 $ do
             s3 <- unify (apply s2 t0) (TMono "Int")
             s4 <- unify (apply s3 t1) (TMono "Int")
-            let composition = s4 `compose` s3 `compose` s2 `compose` s1
+            let comp = s4 `compose` s3 `compose` s2 `compose` s1
             return
-                ( composition
+                ( comp
                 , TMono "Int"
-                , apply composition $ T.EAdd (TMono "Int") e0' e1'
+                , apply comp $ T.EAdd (TMono "Int") e0' e1'
                 )
 
     -- \| Γ ⊢ e₀ : τ₀, S₀    S₀Γ ⊢ e₁ : τ₁, S1
@@ -273,8 +281,8 @@ algoW = \case
             -- applySt s1 $ do
             s2 <- unify (apply s1 t0) (TArr t1 fr)
             let t = apply s2 fr
-            let composition = s2 `compose` s1 `compose` s0
-            return (composition, t, apply composition $ T.EApp t e0' e1')
+            let comp = s2 `compose` s1 `compose` s0
+            return (comp, t, apply comp $ T.EApp t e0' e1')
 
     -- \| Γ ⊢ e₀ : τ, S₀     S₀Γ, x : S̅₀Γ̅(τ) ⊢ e₁ : τ', S₁
     -- \| ----------------------------------------------
@@ -288,14 +296,14 @@ algoW = \case
         let t' = generalize (apply s1 env) t1
         withBinding name t' $ do
             (s2, t2, e1') <- algoW e1
-            let composition = s2 `compose` s1
-            return (composition, t2, apply composition $ T.ELet (T.Bind (name, t2) e0') e1')
+            let comp = s2 `compose` s1
+            return (comp, t2, apply comp $ T.ELet (T.Bind (name, t2) e0') e1')
     ECase caseExpr injs -> do
         (sub, t, e') <- algoW caseExpr
         (subst, injs, ret_t) <- checkCase t injs
-        let composition = subst `compose` sub
-        let t' = apply composition ret_t
-        return (composition, t', T.ECase t' e' injs)
+        let comp = subst `compose` sub
+        let t' = apply comp ret_t
+        return (comp, t', T.ECase t' e' injs)
 
 -- | Unify two types producing a new substitution
 unify :: Type -> Type -> Infer Subst
@@ -420,13 +428,20 @@ instance FreeVars T.Exp where
     free = error "free not implemented for T.Exp"
     apply :: Subst -> T.Exp -> T.Exp
     apply s = \case
-        T.EId (ident, t) -> T.EId (ident, apply s t)
-        T.ELit t lit -> T.ELit (apply s t) lit
-        T.ELet (T.Bind (ident, t) e1) e2 -> T.ELet (T.Bind (ident, apply s t) (apply s e1)) (apply s e2)
-        T.EApp t e1 e2 -> T.EApp (apply s t) (apply s e1) (apply s e2)
-        T.EAdd t e1 e2 -> T.EAdd (apply s t) (apply s e1) (apply s e2)
-        T.EAbs t1 (ident, t2) e -> T.EAbs (apply s t1) (ident, apply s t2) (apply s e)
-        T.ECase t e injs -> T.ECase (apply s t) (apply s e) (apply s injs)
+        T.EId (ident, t) ->
+            T.EId (ident, apply s t)
+        T.ELit t lit ->
+            T.ELit (apply s t) lit
+        T.ELet (T.Bind (ident, t) e1) e2 ->
+            T.ELet (T.Bind (ident, apply s t) (apply s e1)) (apply s e2)
+        T.EApp t e1 e2 ->
+            T.EApp (apply s t) (apply s e1) (apply s e2)
+        T.EAdd t e1 e2 ->
+            T.EAdd (apply s t) (apply s e1) (apply s e2)
+        T.EAbs t1 (ident, t2) e ->
+            T.EAbs (apply s t1) (ident, apply s t2) (apply s e)
+        T.ECase t e injs ->
+            T.ECase (apply s t) (apply s e) (apply s injs)
 
 instance FreeVars T.Inj where
     free :: T.Inj -> Set Ident
@@ -460,7 +475,8 @@ withBinding i p = local (\st -> st{vars = M.insert i p (vars st)})
 
 -- | Run the monadic action with several additional bindings
 withBindings :: (Monad m, MonadReader Ctx m) => [(Ident, Poly)] -> m a -> m a
-withBindings xs = local (\st -> st{vars = foldl' (flip (uncurry M.insert)) (vars st) xs})
+withBindings xs =
+    local (\st -> st{vars = foldl' (flip (uncurry M.insert)) (vars st) xs})
 
 -- | Insert a function signature into the environment
 insertSig :: Ident -> Type -> Infer ()
@@ -476,8 +492,20 @@ insertConstr i t =
 checkCase :: Type -> [Inj] -> Infer (Subst, [T.Inj], Type)
 checkCase expT injs = do
     (injTs, injs, returns) <- unzip3 <$> mapM checkInj injs
-    (sub1, _) <- foldM (\(sub, acc) x -> (\a -> (a `compose` sub, a `apply` acc)) <$> unify x acc) (nullSubst, expT) injTs
-    (sub2, returns_type) <- foldM (\(sub, acc) x -> (\a -> (a `compose` sub, a `apply` acc)) <$> unify x acc) (nullSubst, head returns) (tail returns)
+    (sub1, _) <-
+        foldM
+            ( \(sub, acc) x ->
+                (\a -> (a `compose` sub, a `apply` acc)) <$> unify x acc
+            )
+            (nullSubst, expT)
+            injTs
+    (sub2, returns_type) <-
+        foldM
+            ( \(sub, acc) x ->
+                (\a -> (a `compose` sub, a `apply` acc)) <$> unify x acc
+            )
+            (nullSubst, head returns)
+            (tail returns)
     return (sub2 `compose` sub1, injs, returns_type)
 
 {- | fst = type of init
@@ -495,7 +523,9 @@ inferInit = \case
     InitLit lit -> return (litType lit, mempty)
     InitConstr fn vars -> do
         gets (M.lookup fn . constructors) >>= \case
-            Nothing -> throwError $ "Constructor: " ++ printTree fn ++ " does not exist"
+            Nothing ->
+                throwError $
+                    "Constructor: " ++ printTree fn ++ " does not exist"
             Just a -> do
                 case unsnoc $ flattenType a of
                     Nothing -> throwError "Partial pattern match not allowed"
