@@ -68,8 +68,10 @@ namespace GC
                      << "\n  Size: " << chunk->size
                      << "\n  Mark: " << chunk->marked;
             }
-            fstr << "\n--------------------------------" << std::endl;
+            // else if (event->get)
+            fstr << "\n";
         }
+        fstr << "--------------------------------" << std::endl;
     }
 
     void Profiler::dispose() {

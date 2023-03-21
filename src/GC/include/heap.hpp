@@ -11,6 +11,7 @@
 
 #define HEAP_SIZE 65536
 #define FREE_THRESH (uint)20
+#define DEBUG
 
 namespace GC
 {
@@ -93,7 +94,7 @@ namespace GC
 		static void dispose();
 		static void *alloc(size_t size);
 
-		// DEBUG ONLY
+#ifdef DEBUG
 		static inline Heap *debug_the()
 		{
 			if (m_instance) // if m_instance is not a nullptr
@@ -106,5 +107,6 @@ namespace GC
 		void print_contents();	  // print dummy things
 		void print_allocated_chunks(Heap *heap); // print the contents in m_allocated_chunks
 		void set_profiler(bool mode);
+#endif
 	};
 }

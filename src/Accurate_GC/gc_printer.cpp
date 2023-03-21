@@ -1,4 +1,4 @@
-/* #include "llvm/CodeGen/GCMetadataPrinter.h"
+#include "llvm/CodeGen/GCMetadataPrinter.h"
 #include "llvm/Support/Compiler.h"
 
 using namespace llvm;
@@ -13,4 +13,4 @@ namespace {
 
   GCMetadataPrinterRegistry::Add<MyGCPrinter>
   X("gc", "The bespoken garbage collector.");
-} */
+}

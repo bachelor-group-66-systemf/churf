@@ -22,8 +22,13 @@ namespace GC
     {
         return m_chunk;
     }
+    
+    size_t GCEvent::get_size()
+    {
+        return m_size;
+    }
 
-    const char *const GCEvent::type_to_string()
+    const char *GCEvent::type_to_string()
     {
         switch (m_type)
         {

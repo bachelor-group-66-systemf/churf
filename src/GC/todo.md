@@ -1,16 +1,17 @@
 # Garbage collection
 
 ## Project
-
-Goal for next week (24/2):
-- Write more complex tests
+Deliver to samuel
 
 ## GC TODO:
-- Kolla linking med Valter/Victor
-- Fixa en a-fil/static lib till Samuel
-- Kolla vektor vs list complexity
-- Se om det är bättre att lagra Chunk och inte Chunk* i data strukturerna, 
-då är alla efter varandra i minnet.
+- Code cleanup
+- Dokumentera
+    - Dokumentera alla filer och funktioner
+    - Skriva reference guide för Samuel
+- PR till master
 
 ## Tests TODO
 - Write complex datastructures for tests with larger programs
+
+## Profiler grejer
+- Fixa användning av `Profiler::record(GCEventType type, size_t size)` i både alloc och dump_trace

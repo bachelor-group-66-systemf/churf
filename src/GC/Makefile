@@ -20,22 +20,20 @@ heap:
 
 h_test:
 	rm -f tests/h_test.out
-	$(CC) $(WFLAGS) $(STDFLAGS) $(LIB_INCL) tests/h_test.cpp lib/heap.cpp lib/profiler.cpp lib/event.cpp -o tests/h_test.out
+#	$(CC) $(WFLAGS) $(STDFLAGS) $(LIB_INCL) tests/h_test.cpp lib/heap.cpp lib/profiler.cpp lib/event.cpp -o tests/h_test.out
+	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -o tests/h_test.out tests/h_test.cpp lib/gcoll.a
 
-h_test_vg:
-	make h_test
+h_test_vg: h_test
 	valgrind $(VGFLAGS) tests/h_test.out
 
-h_test_dbg:
-	make h_test
+h_test_dbg: h_test
 	lldb tests/h_test.out launch
 
 linker:
 	rm -f tests/linker.out
 	$(CC) $(WFLAGS) $(STDFLAGS) $(LIB_INCL) tests/linker.cpp lib/heap.cpp -o tests/linker.out
 
-linker_vg:
-	make linker
+linker_vg: linker
 	valgrind $(VGFLAGS) tests/linker.out
 
 game:

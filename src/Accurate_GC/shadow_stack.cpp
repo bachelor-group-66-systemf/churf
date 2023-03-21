@@ -1,4 +1,4 @@
-/* /// The map for a single function's stack frame.  One of these is
+/// The map for a single function's stack frame.  One of these is
 ///        compiled as constant data into the executable for each function.
 ///
 /// Storage of metadata values is elided if the %metadata parameter to
@@ -60,4 +60,4 @@ void traverseStackMap() {
             Constant *RootMetadata = RI->Metadata;
         }
     }
-} */
+}

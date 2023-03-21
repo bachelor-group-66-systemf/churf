@@ -68,6 +68,7 @@ void test_some_types() {
 int main() {
     GC::Heap::init();
     GC::Heap *gc = GC::Heap::debug_the();
+    gc->set_profiler(true);
     gc->check_init();
     auto stack_start = reinterpret_cast<uintptr_t *>(__builtin_frame_address(0));
     std::cout << "Stack start from main:\t" << stack_start << std::endl;
@@ -96,5 +97,7 @@ int main() {
 
     gc->collect(GC::COLLECT_ALL);     
     gc->print_contents();
+
+    gc->dispose();
     return 0;
 }

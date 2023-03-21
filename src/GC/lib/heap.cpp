@@ -27,6 +27,7 @@ namespace GC
 		Heap *heap = Heap::the();
 		if (heap->profiler_enabled())
 			Profiler::record(HeapInit);
+#pragma clang diagnostic ignored "-Wframe-address" // clang complains because arg for __b_f_a is not 0
 		heap->m_stack_top = static_cast<uintptr_t *>(__builtin_frame_address(1));
 	}
 
@@ -194,7 +195,6 @@ namespace GC
 	{
 		Heap *heap = Heap::the();
 		bool profiler_enabled = heap->profiler_enabled();
-		cout << "--- mark() was called ---\n" << endl;
 		if (profiler_enabled)
 			Profiler::record(MarkStart);
 		// To find adresses thats in the worklist
@@ -224,7 +224,6 @@ namespace GC
 						if (profiler_enabled)
 							Profiler::record(ChunkMarked, chunk);
 						chunk->marked = true;
-						cout << "Marked this chunk ^\n" << endl;
 						// Remove the marked chunk from the worklist
 						it = worklist.erase(it);
 						// Recursively call mark, to see if the reachable chunk further points to another chunk
@@ -245,55 +244,6 @@ namespace GC
 		}
 	}
 
-	// Testing a strategy where if a pointer on the stack is pointing to a chunk, nested chunks,
-	// that are not located on the stack frame, will possibly be adjecent to the found chunk, 
-	// allowing for a different, more efficient strategy, that doesn't have to scan the stack frame
-	void Heap::mark_step(uintptr_t start, uintptr_t end, vector<Chunk *> &worklist) {
-
-		// Should loop through the chunk size, such that if the object holds a pointer,
-		// wherever that pointer is located in the object, that pointer, to another chunk,
-		// gets detected
-
-		cout << "--- mark_step() was called ---\n" << endl;
-		for (; start <= end; start += sizeof(uintptr_t))
-		{
-			auto it = worklist.begin();
-			auto end = worklist.end();
-			
-			while (it != end)
-			{
-				Chunk *chunk = *it;
-				auto c_start = reinterpret_cast<uintptr_t>(chunk->start);
-				auto c_size = reinterpret_cast<uintptr_t>(chunk->size);
-				auto c_end = reinterpret_cast<uintptr_t>(c_start + c_size);
-
-				cout << "Value of Start:\t\t" << start << endl;
-				cout << "Chunk start:\t\t" << hex << c_start << endl;
-				cout << "Chunk end:\t\t" << hex << c_end << "\n" << endl;
-
-				if (c_start <= start && start < c_end)
-				{
-					if (!chunk->marked) {
-						// Mark the chunk and erase it from the worklist
-						chunk->marked = true;
-						it = worklist.erase(it);
-						cout << "Marked this chunk ^\n" << endl;
-						// Update the memory location we want to look at
-						//memory_location = c_end;
-						mark_step(c_start, c_end, worklist);
-					}
-					else
-					{
-						it++;
-					}
-				}
-				else
-				{
-					it++;
-				}
-			}
-		}
-	}
 
 	/**
 	 * Sweeps the heap, unmarks the marked chunks for the next cycle,
@@ -303,9 +253,7 @@ namespace GC
 	 */
 	void Heap::sweep(Heap *heap)
 	{
-		cout << "--- sweep() was called ---" << endl;
 		auto iter = heap->m_allocated_chunks.begin();
-		auto stop = heap->m_allocated_chunks.end();
 		bool profiler_enabled = heap->profiler_enabled();
 		// This cannot "iter != stop", results in seg fault, since the end gets updated, I think.
 		while (iter != heap->m_allocated_chunks.end())
@@ -341,7 +289,6 @@ namespace GC
 	 */
 	void Heap::free(Heap *heap)
 	{
-		cout << "--- free() was called ---" << endl;
 		if (heap->m_freed_chunks.size() > FREE_THRESH)
 		{
 			bool profiler_enabled = heap->profiler_enabled();
@@ -352,7 +299,6 @@ namespace GC
 				if (profiler_enabled)
 					Profiler::record(ChunkFreed, chunk);
 				delete chunk;
-				cout << "Freed chunk was deleted" << endl;
 			}
 		}
 		// if there are chunks but not more than FREE_THRESH
