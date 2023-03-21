@@ -15,10 +15,9 @@ data Maybe ('a) where {
 --         False => Just True
 --     };
 
-fun : Maybe (_Int) -> _Int ;
+fun : Maybe ('a) -> 'a ;
 fun a =
     case a of {
-        Just b => b;
-        Nothing => 0
+        Just c => c
     };
 

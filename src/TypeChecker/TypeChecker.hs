@@ -290,18 +290,12 @@ algoW = \case
             (s2, t2, e1') <- algoW e1
             let composition = s2 `compose` s1
             return (composition, t2, apply composition $ T.ELet (T.Bind (name, t2) e0') e1')
-
-    -- TODO: give caseExpr a concrete type before proceeding
-    -- probably by returning substitutions in the functions used in this body
     ECase caseExpr injs -> do
         (sub, t, e') <- algoW caseExpr
-        (subst, inj_t, ret_t) <- checkCase t injs
+        (subst, injs, ret_t) <- checkCase t injs
         let composition = subst `compose` sub
-        let t' = apply composition t
-        trace ("COMPOSITION: " ++ show composition) return ()
-        trace ("T: " ++ show t) return ()
-        trace ("T': " ++ show t') return ()
-        return (composition, t', T.ECase t' e' (map (\(Inj i _) -> T.Inj (i, inj_t) e') injs))
+        let t' = apply composition ret_t
+        return (composition, t', T.ECase t' e' injs)
 
 -- | Unify two types producing a new substitution
 unify :: Type -> Type -> Infer Subst
@@ -349,7 +343,7 @@ I.E. { a = a -> b } is an unsolvable constraint since there is no substitution
 where these are equal
 -}
 occurs :: Ident -> Type -> Infer Subst
-occurs i t@(TPol a) = return (M.singleton i t)
+occurs i t@(TPol _) = return (M.singleton i t)
 occurs i t =
     if S.member i (free t)
         then
@@ -479,22 +473,22 @@ insertConstr i t =
 
 -------- PATTERN MATCHING ---------
 
-checkCase :: Type -> [Inj] -> Infer (Subst, Type, Type)
+checkCase :: Type -> [Inj] -> Infer (Subst, [T.Inj], Type)
 checkCase expT injs = do
-    (injs, returns) <- mapAndUnzipM checkInj injs
-    (sub, injs_type) <- foldM (\(sub, acc) x -> (\a -> (a `compose` sub, a `apply` acc)) <$> unify x acc) (nullSubst, expT) injs
-    (_, returns_type) <- foldM (\(sub, acc) x -> (\a -> (a `compose` sub, a `apply` acc)) <$> unify x acc) (nullSubst, head returns) (tail returns)
-    return (sub, injs_type, returns_type)
+    (injTs, injs, returns) <- unzip3 <$> mapM checkInj injs
+    (sub1, _) <- foldM (\(sub, acc) x -> (\a -> (a `compose` sub, a `apply` acc)) <$> unify x acc) (nullSubst, expT) injTs
+    (sub2, returns_type) <- foldM (\(sub, acc) x -> (\a -> (a `compose` sub, a `apply` acc)) <$> unify x acc) (nullSubst, head returns) (tail returns)
+    return (sub2 `compose` sub1, injs, returns_type)
 
 {- | fst = type of init
    | snd = type of expr
 -}
-checkInj :: Inj -> Infer (Type, Type)
+checkInj :: Inj -> Infer (Type, T.Inj, Type)
 checkInj (Inj it expr) = do
     (initT, vars) <- inferInit it
     let converted = map (second (Forall [])) vars
-    (exprT, _) <- withBindings converted (inferExp expr)
-    return (initT, exprT)
+    (exprT, e) <- withBindings converted (inferExp expr)
+    return (initT, T.Inj (it, initT) e, exprT)
 
 inferInit :: Init -> Infer (Type, [T.Id])
 inferInit = \case
@@ -508,7 +502,6 @@ inferInit = \case
                     Just (vs, ret) ->
                         case length vars `compare` length vs of
                             EQ -> do
-                                trace ("IDS AND TYPES: " ++ show (zip vars vs)) return ()
                                 return (ret, zip vars vs)
                             _ -> throwError "Partial pattern match not allowed"
     InitCatch -> (,mempty) <$> fresh
@@ -519,5 +512,3 @@ flattenType a = [a]
 
 litType :: Literal -> Type
 litType (LInt _) = TMono "Int"
-
-ctrace a = trace (show a) a
