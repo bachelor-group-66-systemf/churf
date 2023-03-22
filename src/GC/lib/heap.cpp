@@ -183,6 +183,10 @@ namespace GC
 	 * the root chunk and mark those chunks.
 	 * If a chunk is marked it is removed from the worklist, since it's no longer of
 	 * concern for this method.
+	 * 
+	 * Time complexity: 0(N^2 * log(N)) as upper bound. 
+	 * 					Where N is either the size of the worklist or the size of
+	 * 					the stack frame, depending on which is the largest.
 	 *
 	 * @param start    Pointer to the start of the stack frame.
 	 * @param end      Pointer to the end of the stack frame.
@@ -238,6 +242,10 @@ namespace GC
 	 * Sweeps the heap, unmarks the marked chunks for the next cycle,
 	 * adds the unmarked nodes to the list of freed chunks; to be freed.
 	 *
+	 * Time complexity: O(N^2), where N is the number of allocated chunks. 
+	 * 					It is quadratic, in the worst case, 
+	 * 					since each call to erase() is linear.  
+	 *
 	 * @param heap Pointer to the heap singleton instance.
 	 */
 	void Heap::sweep(Heap *heap)
@@ -272,6 +280,10 @@ namespace GC
 	 * by the sweep phase. If there are more than a certain
 	 * amount of free chunks, delete the free chunks to
 	 * avoid cluttering.
+	 * 
+	 * Time complexity: O(N^2), where N is the freed chunks.
+	 * 					If free_overlap() is called, it runs in O(N^2),
+	 * 					otherwise O(N).
 	 *
 	 * @param heap  Heap singleton instance, only for avoiding
 	 *              redundant calls to the singleton get
@@ -303,12 +315,16 @@ namespace GC
 	 * Checks for overlaps between freed chunks of memory
 	 * and removes overlapping chunks while prioritizing
 	 * the chunks at lower addresses.
+	 * 
+	 * Time complexity: O(N^2), where N is the number of freed chunks.
+	 * 					At each iteration get_at() is called, which is linear.
 	 *
 	 * @param heap  Heap singleton instance, only for avoiding
 	 *              redundant calls to the singleton get
 	 *
 	 * @note Maybe this should be changed to prioritizing
-	 *       larger chunks.
+	 *       larger chunks. Should remove get_at() to indexing,
+	 * 		 since that's constant.
 	 */
 	void Heap::free_overlap(Heap *heap) // borde göra en record(ChunkFreed) på onödiga chunks
 	{
