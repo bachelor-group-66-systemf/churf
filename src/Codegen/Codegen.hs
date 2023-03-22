@@ -151,13 +151,14 @@ compileScs []                             = do
 
              -- set the first byte to the index of the constructor
             emit $ SetVariable ptr $
-                GetElementPtrInbounds t' (Ref t')
-                                      (VIdent top I8) I32 (VInteger 0) I32 (VInteger 0)
+                GetElementPtr t' (Ref t') (VIdent top I8)
+                                      I64 (VInteger 0)
+                                      I32 (VInteger 0)
             emit $ Store I8 (VInteger $ numCI ci ) (Ref I8) ptr
 
              -- get a pointer of the correct type
             ptr' <- GA.Ident . show <$> getNewVar
-            emit $ SetVariable ptr' (Bitcast (Ref t') ptr (Ref $ CustomType id))
+            emit $ SetVariable ptr' (Bitcast (Ref t') top (Ref $ CustomType id))
 
              --emit $ UnsafeRaw "\n"
 
@@ -166,9 +167,10 @@ compileScs []                             = do
                 emit $ Comment (show arg_t' <>" "<> arg_n <> " " <> show i )
                 elemPtr <- GA.Ident . show <$> getNewVar
                 emit $ SetVariable elemPtr (
-                    GetElementPtrInbounds (CustomType id) (Ref (CustomType id))
-                                          (VIdent ptr' Ptr) I32
-                                          (VInteger 0) I32 (VInteger i))
+                    GetElementPtr (CustomType id) (Ref (CustomType id))
+                                          (VIdent ptr' Ptr)
+                                          I64 (VInteger 0)
+                                          I32 (VInteger i))
                 emit $ Store arg_t' (VIdent (GA.Ident arg_n) arg_t') Ptr elemPtr
                 -- %2 = getelementptr inbounds %Foo_AInteger, %Foo_AInteger* %1, i32 0, i32 1
                 -- store i32 42, i32* %2
@@ -178,6 +180,7 @@ compileScs []                             = do
             --emit $ UnsafeRaw "\n"
 
             -- load and return the constructed value
+            emit $ Comment "Return the newly constructed value"
             load <- GA.Ident . show <$> getNewVar
             emit $ SetVariable load (Load t' Ptr top)
             emit $ Ret t' (VIdent load t')
@@ -213,9 +216,9 @@ mainContent var =
     [ UnsafeRaw $
         "%2 = alloca %Craig\n" <>
         "    store %Craig %1, ptr %2\n" <>
-        "    %3 = bitcast %Craig* %2 to i64*\n" <>
-        "    %4 = load i64, ptr %3\n" <>
-        "    call i32 (ptr, ...) @printf(ptr noundef @.str, i64 noundef %4)\n"
+        "    %3 = bitcast %Craig* %2 to i72*\n" <>
+        "    %4 = load i72, ptr %3\n" <>
+        "    call i32 (ptr, ...) @printf(ptr noundef @.str, i72 noundef %4)\n"
       --    "call i32 (ptr, ...) @printf(ptr noundef @.str, i64 noundef " <> show var <> ")\n"
     , -- , SetVariable (GA.Ident "p") (Icmp LLEq I64 (VInteger 2) (VInteger 2))
       -- , BrCond (VIdent (GA.Ident "p")) (GA.Ident "b_1") (GA.Ident "b_2")
@@ -234,7 +237,7 @@ mainContent var =
 defaultStart :: [LLVMIr]
 defaultStart = [ UnsafeRaw "target triple = \"x86_64-pc-linux-gnu\"\n"
                , UnsafeRaw "target datalayout = \"e-m:o-i64:64-f80:128-n8:16:32:64-S128\"\n"
-               , UnsafeRaw "@.str = private unnamed_addr constant [3 x i8] c\"%i\n\", align 1\n"
+               , UnsafeRaw "@.str = private unnamed_addr constant [3 x i8] c\"%x\n\", align 1\n"
                , UnsafeRaw "declare i32 @printf(ptr noalias nocapture, ...)\n"
                ]
 
