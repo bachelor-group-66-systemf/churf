@@ -21,6 +21,7 @@ import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Maybe (fromMaybe)
 import Data.Tuple.Extra (dupe)
+import Data.Coerce (coerce)
 import Grammar.Abs
 
 -- | Rename all variables and local binds
@@ -30,15 +31,15 @@ rename (Program defs) = Program <$> renameDefs defs
 renameDefs :: [Def] -> Either String [Def]
 renameDefs defs = runIdentity $ runExceptT $ evalStateT (runRn $ mapM renameDef defs) initCxt
   where
-    initNames = Map.fromList [dupe name | DBind (Bind name _ _) <- defs]
+    initNames = Map.fromList [dupe (coerce name) | DBind (Bind name _ _) <- defs]
 
     renameDef :: Def -> Rn Def
     renameDef = \case
         DSig (Sig name typ) -> DSig . Sig name <$> renameTVars typ
         DBind (Bind name vars rhs) -> do
-            (new_names, vars') <- newNames initNames vars
+            (new_names, vars') <- newNames initNames (coerce vars)
             rhs' <- snd <$> renameExp new_names rhs
-            pure . DBind $ Bind name vars' rhs'
+            pure . DBind $ Bind name (coerce vars') rhs'
         DData (Data (Indexed cname types) constrs) -> do
             tvars' <- mapM nextNameTVar tvars
             let tvars_lt = zip tvars tvars'
@@ -90,11 +91,11 @@ newtype Rn a = Rn {runRn :: StateT Cxt (ExceptT String Identity) a}
     deriving (Functor, Applicative, Monad, MonadState Cxt)
 
 -- | Maps old to new name
-type Names = Map LIdent LIdent
+type Names = Map Ident Ident
 
 renameExp :: Names -> Exp -> Rn (Names, Exp)
 renameExp old_names = \case
-    EId n -> pure (old_names, EId . fromMaybe n $ Map.lookup n old_names)
+    EId n -> pure (coerce old_names, EId . fromMaybe n $ Map.lookup n (coerce old_names))
     ELit lit -> pure (old_names, ELit lit)
     EApp e1 e2 -> do
         (env1, e1') <- renameExp old_names e1
@@ -107,14 +108,14 @@ renameExp old_names = \case
 
     -- TODO fix shadowing
     ELet name rhs e -> do
-        (new_names, name') <- newName old_names name
+        (new_names, name') <- newName old_names (coerce name)
         (new_names', rhs') <- renameExp new_names rhs
         (new_names'', e') <- renameExp new_names' e
-        pure (new_names'', ELet name' rhs' e')
+        pure (new_names'', ELet (coerce name') rhs' e')
     EAbs par e -> do
-        (new_names, par') <- newName old_names par
+        (new_names, par') <- newName old_names (coerce par)
         (new_names', e') <- renameExp new_names e
-        pure (new_names', EAbs par' e')
+        pure (new_names', EAbs (coerce par') e')
     EAnn e t -> do
         (new_names, e') <- renameExp old_names e
         t' <- renameTVars t
@@ -138,8 +139,8 @@ renameInj ns (Inj init e) = do
 renameInit :: Names -> Init -> Rn (Names, Init)
 renameInit ns i = case i of
     InitConstructor cs vars -> do
-        (ns_new, vars') <- newNames ns vars
-        return (ns_new, InitConstructor cs vars')
+        (ns_new, vars') <- newNames ns (coerce vars)
+        return (ns_new, InitConstructor cs (coerce vars'))
     rest -> return (ns, rest)
 
 renameTVars :: Type -> Rn Type
@@ -169,26 +170,26 @@ substitute tvar1 tvar2 typ = case typ of
     substitute' = substitute tvar1 tvar2
 
 -- | Create a new name and add it to name environment.
-newName :: Names -> LIdent -> Rn (Names, LIdent)
+newName :: Names -> Ident -> Rn (Names, Ident)
 newName env old_name = do
     new_name <- makeName old_name
     pure (Map.insert old_name new_name env, new_name)
 
 -- | Create multiple names and add them to the name environment
-newNames :: Names -> [LIdent] -> Rn (Names, [LIdent])
+newNames :: Names -> [Ident] -> Rn (Names, [Ident])
 newNames = mapAccumM newName
 
 -- | Annotate name with number and increment the number @prefix ⇒ prefix_number@.
-makeName :: LIdent -> Rn LIdent
-makeName (LIdent prefix) = do
+makeName :: Ident -> Rn Ident
+makeName (Ident prefix) = do
     i <- gets var_counter
-    let name = LIdent $ prefix ++ "_" ++ show i
+    let name = Ident $ prefix ++ "_" ++ show i
     modify $ \cxt -> cxt{var_counter = succ cxt.var_counter}
     pure name
 
 nextNameTVar :: TVar -> Rn TVar
 nextNameTVar (MkTVar (LIdent s)) = do
     i <- gets tvar_counter
-    let tvar = MkTVar . LIdent $ s ++ "_" ++ show i
+    let tvar = MkTVar $ coerce $ s ++ "_" ++ show i
     modify $ \cxt -> cxt{tvar_counter = succ cxt.tvar_counter}
     pure tvar

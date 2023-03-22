@@ -51,14 +51,14 @@ ELit.   Exp4 ::= Lit ;
 EApp.   Exp3 ::= Exp3 Exp4 ;
 EAdd.   Exp1 ::= Exp1 "+" Exp2 ;
 ELet.   Exp  ::= "let" LIdent "=" Exp "in" Exp ; 
-EAbs.   Exp  ::= "\\" LIdent "." Exp ;
+EAbs.   Exp  ::= "\\" Ident "." Exp ;
 ECase.  Exp  ::= "case" Exp "of" "{" [Inj] "}";
 
 -------------------------------------------------------------------------------
 -- * LITERALS
 -------------------------------------------------------------------------------
 
-LInt. Lit ::= Integer ;
+LInt. Lit  ::= Integer ;
 LChar. Lit ::= Char ;
 
 -------------------------------------------------------------------------------

@@ -12,7 +12,7 @@ import Renamer.Renamer (rename)
 import System.Environment (getArgs)
 import System.Exit (exitFailure, exitSuccess)
 
--- import TypeChecker.TypeChecker (typecheck)
+import TypeChecker.TypeChecker (typecheck)
 
 main :: IO ()
 main =
@@ -32,9 +32,9 @@ main' s = do
     renamed <- fromRenamerErr . rename $ parsed
     putStrLn $ printTree renamed
 
-    -- putStrLn "\n-- TypeChecker --"
-    -- typechecked <- fromTypeCheckerErr $ typecheck renamed
-    -- putStrLn $ show typechecked
+    putStrLn "\n-- TypeChecker --"
+    typechecked <- fromTypeCheckerErr $ typecheck renamed
+    putStrLn $ printTree typechecked
 
     -- putStrLn "\n-- Lambda Lifter --"
     -- let lifted = lambdaLift typechecked

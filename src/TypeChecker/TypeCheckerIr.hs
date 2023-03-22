@@ -12,9 +12,7 @@ import Grammar.Abs (
     Ident (..),
     Init (..),
     Lit (..),
-    TVar (..),
  )
-import Grammar.Abs qualified as GA (Type (..))
 import Grammar.Print
 import Prelude
 import Prelude qualified as C (Eq, Ord, Read, Show)
@@ -23,13 +21,13 @@ import Prelude qualified as C (Eq, Ord, Read, Show)
 data Poly = Forall [Ident] Type
     deriving (Show)
 
-newtype Ctx = Ctx {vars :: Map Ident Poly}
+newtype Ctx = Ctx {vars :: Map Ident Type}
     deriving (Show)
 
 data Env = Env
     { count :: Int
-    , sigs :: Map Ident GA.Type
-    , constructors :: Map Ident GA.Type
+    , sigs :: Map Ident Type
+    , constructors :: Map Ident Type
     }
     deriving (Show)
 
@@ -40,6 +38,9 @@ type Infer = StateT Env (ReaderT Ctx (ExceptT Error Identity))
 
 newtype Program = Program [Def]
     deriving (C.Eq, C.Ord, C.Show, C.Read)
+
+data TVar = MkTVar Ident
+    deriving (Show, Eq, Ord, Read)
 
 data Type
     = TLit Ident
@@ -130,7 +131,7 @@ prtIdP i (name, t) =
 instance Print Exp where
     prt i = \case
         EId n -> prPrec i 3 $ concatD [prtId 0 n, doc $ showString "\n"]
-        ELit _ lit -> prPrec i 3 $ concatD [prt 0 lit, doc $ showString "\n"]
+        ELit lit -> prPrec i 3 $ concatD [prt 0 lit, doc $ showString "\n"]
         ELet bs e ->
             prPrec i 3 $
                 concatD
@@ -140,34 +141,31 @@ instance Print Exp where
                     , prt 0 e
                     , doc $ showString "\n"
                     ]
-        EApp _ e1 e2 ->
+        EApp e1 e2 ->
             prPrec i 2 $
                 concatD
                     [ prt 2 e1
                     , prt 3 e2
                     ]
-        EAdd t e1 e2 ->
+        EAdd e1 e2 ->
             prPrec i 1 $
                 concatD
                     [ doc $ showString "@"
-                    , prt 0 t
                     , prt 1 e1
                     , doc $ showString "+"
                     , prt 2 e2
                     , doc $ showString "\n"
                     ]
-        EAbs t n e ->
+        EAbs n e ->
             prPrec i 0 $
                 concatD
                     [ doc $ showString "@"
-                    , prt 0 t
-                    , doc $ showString "\\"
                     , prtId 0 n
                     , doc $ showString "."
                     , prt 0 e
                     , doc $ showString "\n"
                     ]
-        ECase t exp injs ->
+        ECase exp injs ->
             prPrec
                 i
                 0
@@ -179,7 +177,6 @@ instance Print Exp where
                     , prt 0 injs
                     , doc (showString "}")
                     , doc (showString ":")
-                    , prt 0 t
                     , doc $ showString "\n"
                     ]
                 )
@@ -195,6 +192,9 @@ instance Print [Inj] where
     prt _ [] = concatD []
     prt _ [x] = concatD [prt 0 x]
     prt _ (x : xs) = concatD [prt 0 x, doc (showString ";"), prt 0 xs]
+
+instance Print TVar where
+    prt i (MkTVar id) = prt i id
 
 instance Print Type where
     prt i = \case
