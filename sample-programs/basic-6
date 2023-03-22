@@ -1,0 +1,10 @@
+data Bool () where {
+    True : Bool ()
+    False : Bool ()
+};
+
+main : Bool () -> _Int ;
+main b = case b of {
+    False => 0;
+    True => 0
+}

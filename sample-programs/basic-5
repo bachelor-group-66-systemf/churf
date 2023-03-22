@@ -1,8 +1,8 @@
--- double : _Int -> _Int ;
--- double n = n + n;
+double : _Int -> _Int ;
+double n = n + n;
 
 id : 'a -> 'a ;
 id x = x ;
 
-main : ('a -> 'b -> 'c) ;
-main = id ;
+main : _Int ;
+main = id double 5;

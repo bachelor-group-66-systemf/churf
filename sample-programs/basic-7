@@ -1,0 +1,10 @@
+data Bool () where {
+    True : Bool ()
+    False : Bool ()
+};
+
+ifThenElse : Bool () -> 'a -> 'a -> 'a;
+ifThenElse b if else = case b of {
+        True => if;
+        False => else
+    }
