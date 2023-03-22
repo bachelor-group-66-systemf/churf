@@ -123,6 +123,7 @@ namespace GC
 		static void init();
 		static void dispose();
 		static void *alloc(size_t size);
+		void set_profiler(bool mode);
 
 #ifdef DEBUG
 		static Heap *debug_the()
@@ -136,7 +137,6 @@ namespace GC
 		void check_init();		  // print dummy things
 		void print_contents();	  // print dummy things
 		void print_allocated_chunks(Heap *heap); // print the contents in m_allocated_chunks
-		void set_profiler(bool mode);
 #endif
 	};
 }

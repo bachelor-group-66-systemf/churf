@@ -4,6 +4,7 @@
 #include <execinfo.h>
 #include <iostream>
 #include <setjmp.h>
+#include <stdexcept>
 #include <stdlib.h>
 #include <vector>
 
@@ -70,7 +71,7 @@ namespace GC
 		{
 			heap->collect();
 			// If memory is not enough after collect, crash with OOM error
-			assert(heap->m_size + size <= HEAP_SIZE && "Heap: Out Of Memory");
+			throw std::runtime_error(std::string("Error: Heap out of memory"));
 		}
 
 		// If a chunk was recycled, return the old chunk address
@@ -164,7 +165,7 @@ namespace GC
 		auto stack_bottom = reinterpret_cast<uintptr_t *>(__builtin_frame_address(0));
 
 		if (heap->m_stack_top == nullptr)
-			assert(false && "Heap is not initialized, read the docs!");
+			throw std::runtime_error(std::string("Error: Heap is not initialized, read the docs!"));
 
 		uintptr_t *stack_top = heap->m_stack_top;
 
