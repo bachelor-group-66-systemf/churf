@@ -12,6 +12,7 @@ import           Control.Applicative           ((<|>))
 import           Control.Monad.State           (StateT, execStateT, foldM_,
                                                 gets, modify)
 import qualified Data.Bifunctor                as BI
+import           Data.Functor                  ((<&>))
 import           Data.List.Extra               (trim)
 import           Data.Map                      (Map)
 import qualified Data.Map                      as Map
@@ -57,8 +58,8 @@ getVarCount :: CompilerState Integer
 getVarCount = gets variableCount
 
 -- | Increases the variable count and returns it from the CodeGenerator state
-getNewVar :: CompilerState Integer
-getNewVar = increaseVarCount >> getVarCount
+getNewVar :: CompilerState GA.Ident
+getNewVar = (increaseVarCount >> getVarCount) <&> (GA.Ident . show)
 
 -- | Increses the label count and returns a label from the CodeGenerator state
 getNewLabel :: CompilerState Integer
@@ -159,8 +160,8 @@ compileScs []                             = do
             let t' = type2LlvmType t
             let x = BI.second type2LlvmType <$> argumentsCI ci
             emit $ Define FastCC t' id x
-            top <- GA.Ident . show <$> getNewVar
-            ptr <- GA.Ident . show <$> getNewVar
+            top <- getNewVar
+            ptr <- getNewVar
             -- allocated the primary type
             emit $ SetVariable top (Alloca t')
 
@@ -172,7 +173,7 @@ compileScs []                             = do
             emit $ Store I8 (VInteger $ numCI ci ) (Ref I8) ptr
 
              -- get a pointer of the correct type
-            ptr' <- GA.Ident . show <$> getNewVar
+            ptr' <- getNewVar
             emit $ SetVariable ptr' (Bitcast (Ref t') top (Ref $ CustomType id))
 
              --emit $ UnsafeRaw "\n"
@@ -180,7 +181,7 @@ compileScs []                             = do
             foldM_ (\i (GA.Ident arg_n, arg_t)-> do
                 let arg_t' = type2LlvmType arg_t
                 emit $ Comment (show arg_t' <>" "<> arg_n <> " " <> show i )
-                elemPtr <- GA.Ident . show <$> getNewVar
+                elemPtr <- getNewVar
                 emit $ SetVariable elemPtr (
                     GetElementPtr (CustomType id) (Ref (CustomType id))
                                           (VIdent ptr' Ptr)
@@ -196,7 +197,7 @@ compileScs []                             = do
 
             -- load and return the constructed value
             emit $ Comment "Return the newly constructed value"
-            load <- GA.Ident . show <$> getNewVar
+            load <- getNewVar
             emit $ SetVariable load (Load t' Ptr top)
             emit $ Ret t' (VIdent load t')
             emit DefineEnd
@@ -278,13 +279,13 @@ emitECased t e cases = do
     lbl <- getNewLabel
     let label = GA.Ident $ "escape_" <> show lbl
     stackPtr <- getNewVar
-    emit $ SetVariable (GA.Ident $ show stackPtr) (Alloca ty)
+    emit $ SetVariable stackPtr (Alloca ty)
     mapM_ (emitCases ty label stackPtr vs) cs
     emit $ Label label
     res <- getNewVar
-    emit $ SetVariable (GA.Ident $ show res) (Load ty Ptr (GA.Ident $ show stackPtr))
+    emit $ SetVariable res (Load ty Ptr stackPtr)
   where
-    emitCases :: LLVMType -> GA.Ident -> Integer -> LLVMValue -> Injection -> CompilerState ()
+    emitCases :: LLVMType -> GA.Ident -> GA.Ident -> LLVMValue -> Injection -> CompilerState ()
     emitCases ty label stackPtr vs (Injection (MIR.CCons id) exp) = do
         cons <- gets constructors
         let r = fromJust $ Map.lookup id cons
@@ -292,12 +293,12 @@ emitECased t e cases = do
         lbl_failPos <- (\x -> GA.Ident $ "failed_" <> show x) <$> getNewLabel
         lbl_succPos <- (\x -> GA.Ident $ "success_" <> show x) <$> getNewLabel
 
-        consCheck <- GA.Ident . show <$> getNewVar
+        consCheck <- getNewVar
         emit $ SetVariable consCheck (Icmp LLEq I8 vs (VInteger $ numCI r))
         emit $ BrCond (VIdent consCheck ty) lbl_succPos lbl_failPos
         emit $ Label lbl_succPos
         val <- exprToValue (fst exp)
-        emit $ Store ty val Ptr (GA.Ident . show $ stackPtr)
+        emit $ Store ty val Ptr stackPtr
         emit $ Br label
         emit $ Label lbl_failPos
     emitCases ty label stackPtr vs (Injection (MIR.CLit i) exp) = do
@@ -307,16 +308,16 @@ emitECased t e cases = do
         ns <- getNewVar
         lbl_failPos <- (\x -> GA.Ident $ "failed_" <> show x) <$> getNewLabel
         lbl_succPos <- (\x -> GA.Ident $ "success_" <> show x) <$> getNewLabel
-        emit $ SetVariable (GA.Ident $ show ns) (Icmp LLEq ty vs i')
-        emit $ BrCond (VIdent (GA.Ident $ show ns) ty) lbl_succPos lbl_failPos
+        emit $ SetVariable ns (Icmp LLEq ty vs i')
+        emit $ BrCond (VIdent ns ty) lbl_succPos lbl_failPos
         emit $ Label lbl_succPos
         val <- exprToValue (fst exp)
-        emit $ Store ty val Ptr (GA.Ident . show $ stackPtr)
+        emit $ Store ty val Ptr stackPtr
         emit $ Br label
         emit $ Label lbl_failPos
     emitCases ty label stackPtr  _ (Injection MIR.CatchAll exp) = do
         val <- exprToValue (fst exp)
-        emit $ Store ty val Ptr (GA.Ident . show $ stackPtr)
+        emit $ Store ty val Ptr stackPtr
         emit $ Br label
 
 
@@ -352,7 +353,7 @@ emitApp t e1 e2 = appEmitter t e1 e2 []
                         -- this piece of code could probably be improved, i.e remove the double `const Global`
                     args'      = map (first valueGetType . dupe) args
                     call       = Call FastCC (type2LlvmType t) visibility (GA.Ident name) args'
-                emit $ SetVariable (GA.Ident $ show vs) call
+                emit $ SetVariable vs call
             x -> error $ "The unspeakable happened: " <> show x
 
 emitIdent :: GA.Ident -> CompilerState ()
@@ -385,7 +386,7 @@ emitSub t e1 e2 = do
     v1 <- exprToValue e1
     v2 <- exprToValue e2
     v <- getNewVar
-    emit $ SetVariable (GA.Ident $ show v) (Sub (type2LlvmType t) v1 v2)
+    emit $ SetVariable v (Sub (type2LlvmType t) v1 v2)
 
 exprToValue :: Exp -> CompilerState LLVMValue
 exprToValue = \case
@@ -399,9 +400,9 @@ exprToValue = \case
                 if numArgs fi == 0
                     then do
                         vc <- getNewVar
-                        emit $ SetVariable (GA.Ident $ show vc)
+                        emit $ SetVariable vc
                             (Call FastCC (type2LlvmType t) Global name [])
-                        pure $ VIdent (GA.Ident $ show vc) (type2LlvmType t)
+                        pure $ VIdent vc (type2LlvmType t)
                     else pure $ VFunction name Global (type2LlvmType t)
             Nothing -> pure $ VIdent name (type2LlvmType t)
     e -> do
