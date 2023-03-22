@@ -1,5 +1,5 @@
-add : _Int -> _Int -> _Int ;
+add : Int -> Int -> Int ;
 add x = \y. x+y;
 
-main : _Int ;
+main : Int ;
 main = (\z. z+z) ((add 4) 6) ;

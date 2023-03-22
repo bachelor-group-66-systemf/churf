@@ -1,22 +1,22 @@
-data Maybe ('a) where {
-    Nothing : Maybe ('a)
-    Just : 'a -> Maybe ('a)
+data Maybe (a) where {
+    Nothing : Maybe (a)
+    Just : forall a. a -> Maybe (a)
 };
 
-fromJust : Maybe ('a) -> 'a ;
+fromJust : Maybe (a) -> a ;
 fromJust a =
     case a of {
         Just a => a
     };
 
-fromMaybe : 'a -> Maybe ('a) -> 'a ;
+fromMaybe : a -> Maybe (a) -> a ;
 fromMaybe a b =
     case b of {
         Just a => a;
         Nothing => a
     };
 
-maybe : 'b -> ('a -> 'b) -> Maybe ('a) -> 'b;
+maybe : b -> (a -> b) -> Maybe (a) -> b;
 maybe b f ma =
     case ma of {
         Just a => f a;

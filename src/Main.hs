@@ -11,7 +11,8 @@ import Grammar.Print (printTree)
 import Renamer.Renamer (rename)
 import System.Environment (getArgs)
 import System.Exit (exitFailure, exitSuccess)
-import TypeChecker.TypeChecker (typecheck)
+
+-- import TypeChecker.TypeChecker (typecheck)
 
 main :: IO ()
 main =
@@ -28,12 +29,12 @@ main' s = do
     putStrLn $ printTree parsed
 
     putStrLn "\n-- Renamer --"
-    let renamed = rename parsed
+    renamed <- fromRenamerErr . rename $ parsed
     putStrLn $ printTree renamed
 
-    putStrLn "\n-- TypeChecker --"
-    typechecked <- fromTypeCheckerErr $ typecheck renamed
-    putStrLn $ show typechecked
+    -- putStrLn "\n-- TypeChecker --"
+    -- typechecked <- fromTypeCheckerErr $ typecheck renamed
+    -- putStrLn $ show typechecked
 
     -- putStrLn "\n-- Lambda Lifter --"
     -- let lifted = lambdaLift typechecked
@@ -50,6 +51,16 @@ fromCompilerErr =
     either
         ( \err -> do
             putStrLn "\nCOMPILER ERROR"
+            putStrLn err
+            exitFailure
+        )
+        pure
+
+fromRenamerErr :: Err a -> IO a
+fromRenamerErr =
+    either
+        ( \err -> do
+            putStrLn "\nRENAME ERROR"
             putStrLn err
             exitFailure
         )

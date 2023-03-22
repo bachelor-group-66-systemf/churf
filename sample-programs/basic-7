@@ -3,7 +3,7 @@ data Bool () where {
     False : Bool ()
 };
 
-ifThenElse : Bool () -> 'a -> 'a -> 'a;
+ifThenElse : forall a. Bool () -> a -> a -> a;
 ifThenElse b if else = case b of {
         True => if;
         False => else

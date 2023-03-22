@@ -3,7 +3,7 @@ data Bool () where {
     False : Bool ()
 };
 
-main : Bool () -> _Int ;
+main : Bool () -> Int ;
 main b = case b of {
     False => 0;
     True => 0

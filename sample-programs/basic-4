@@ -1,2 +1,2 @@
-f : _Int -> _Int ;
+f : Int -> Int ;
 f x = let g = (\y. y+1) in g (g x)
