@@ -15,6 +15,7 @@ import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Maybe (fromMaybe)
 import Data.Tuple.Extra (dupe)
+import Debug.Trace (trace)
 import Grammar.Abs
 
 -- | Rename all variables and local binds
@@ -70,9 +71,9 @@ renameExp old_names = \case
         (new_names, e') <- renameExp old_names e
         pure (new_names, EAnn e' t)
     ECase e injs -> do
-        (_, e') <- renameExp old_names e
-        (new_names, injs') <- renameInjs old_names injs
-        pure (new_names, ECase e' injs')
+        (new_names, e') <- renameExp old_names e
+        (new_names', injs') <- renameInjs new_names injs
+        pure (new_names', ECase e' injs')
 
 renameInjs :: Names -> [Inj] -> Rn (Names, [Inj])
 renameInjs ns xs = do
@@ -81,8 +82,16 @@ renameInjs ns xs = do
 
 renameInj :: Names -> Inj -> Rn (Names, Inj)
 renameInj ns (Inj init e) = do
-    (new_names, e') <- renameExp ns e
-    return (new_names, Inj init e')
+    (new_names, init') <- renameInit ns init
+    (new_names', e') <- renameExp new_names e
+    return (new_names', Inj init' e')
+
+renameInit :: Names -> Init -> Rn (Names, Init)
+renameInit ns i = case i of
+    InitConstr cs vars -> do
+        (ns_new, vars') <- newNames ns vars
+        return (ns_new, InitConstr cs vars')
+    rest -> return (ns, rest)
 
 -- | Create a new name and add it to name environment.
 newName :: Names -> Ident -> Rn (Names, Ident)
