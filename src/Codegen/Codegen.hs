@@ -12,7 +12,6 @@ import           Control.Applicative           ((<|>))
 import           Control.Monad.State           (StateT, execStateT, foldM_,
                                                 gets, modify)
 import qualified Data.Bifunctor                as BI
-import           Data.Functor                  ((<&>))
 import           Data.List.Extra               (trim)
 import           Data.Map                      (Map)
 import qualified Data.Map                      as Map
@@ -59,7 +58,7 @@ getVarCount = gets variableCount
 
 -- | Increases the variable count and returns it from the CodeGenerator state
 getNewVar :: CompilerState GA.Ident
-getNewVar = (increaseVarCount >> getVarCount) <&> (GA.Ident . show)
+getNewVar = (GA.Ident . show) <$> (increaseVarCount >> getVarCount)
 
 -- | Increses the label count and returns a label from the CodeGenerator state
 getNewLabel :: CompilerState Integer
