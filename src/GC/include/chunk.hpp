@@ -20,6 +20,6 @@ namespace GC
 
         Chunk(size_t size, uintptr_t *start) : m_size(size), m_start(start) {}
         Chunk(const Chunk *const c) : m_marked(c->m_marked), m_start(c->m_start), m_size(c->m_size) {}
-        Chunk(const Chunk& c) : m_marked(c.m_marked), m_start(c.m_start), m_size(c.m_size) {}
+        Chunk(const Chunk &c) : m_marked(c.m_marked), m_start(c.m_start), m_size(c.m_size) {}
     };
 }
