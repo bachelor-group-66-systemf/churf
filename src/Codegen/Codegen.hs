@@ -15,7 +15,7 @@ import qualified Data.Bifunctor                as BI
 import           Data.List.Extra               (trim)
 import           Data.Map                      (Map)
 import qualified Data.Map                      as Map
-import           Data.Maybe                    (fromMaybe)
+import           Data.Maybe                    (fromJust, fromMaybe)
 import           Data.Tuple.Extra              (dupe, first, second)
 import qualified Grammar.Abs                   as GA
 import           Grammar.ErrM                  (Err)
@@ -36,12 +36,12 @@ type CompilerState a = StateT CodeGenerator Err a
 data FunctionInfo = FunctionInfo
     { numArgs   :: Int
     , arguments :: [Id]
-    }
+    } deriving Show
 data ConstructorInfo = ConstructorInfo
     { numArgsCI   :: Int
     , argumentsCI :: [Id]
     , numCI       :: Integer
-    }
+    } deriving Show
 
 
 -- | Adds a instruction to the CodeGenerator state
@@ -116,15 +116,30 @@ run s = do
     putStrLn . trim =<< readCreateProcess (shell "lli") s'
 
 test :: Integer -> Program
-test v = Program [
-    DataType (GA.Ident "Craig") [
-        Constructor (GA.Ident "Bob") [MIR.Type (GA.Ident "_Int")]--,
+test v = Program
+    [ DataType (GA.Ident "Craig") [
+        Constructor (GA.Ident "Bob") [MIR.Type (GA.Ident "_Int")],
+        Constructor (GA.Ident "Betty") [MIR.Type (GA.Ident "_Int")]
+        ]
+    , DataType (GA.Ident "Alice") [
+        Constructor (GA.Ident "Eve") [MIR.Type (GA.Ident "_Int")]--,
         --(GA.Ident "Alice", [TInt, TInt])
-    ],
-    Bind (GA.Ident "fibonacci", MIR.Type (GA.Ident "_Int")) [(GA.Ident "x", MIR.Type (GA.Ident "_Int"))] (EId ("x", MIR.Type (GA.Ident "Craig")), MIR.Type (GA.Ident "Craig")),
-    Bind (GA.Ident "main", MIR.Type (GA.Ident "_Int")) []
-       (EApp (MIR.Type (GA.Ident "Craig")) (EId (GA.Ident "Craig_Bob", MIR.Type (GA.Ident "Craig")), MIR.Type (GA.Ident "Craig")) (ELit (LInt v), MIR.Type (GA.Ident "_Int")), MIR.Type (GA.Ident "Craig"))-- (EInt 92)
+        ]
+    , Bind (GA.Ident "fibonacci", MIR.Type (GA.Ident "_Int")) [(GA.Ident "x", MIR.Type (GA.Ident "_Int"))] (EId ("x", MIR.Type (GA.Ident "Craig")), MIR.Type (GA.Ident "Craig"))
+    , Bind (GA.Ident "main", MIR.Type (GA.Ident "_Int")) []
+        --(EApp (MIR.Type (GA.Ident "Craig")) (EId (GA.Ident "Craig_Bob", MIR.Type (GA.Ident "Craig")), MIR.Type (GA.Ident "Craig")) (ELit (LInt v), MIR.Type (GA.Ident "_Int")), MIR.Type (GA.Ident "Craig"))-- (EInt 92)
+        $ eCaseInt (EApp (MIR.Type (GA.Ident "Craig")) (EId (GA.Ident "Craig_Bob", MIR.Type (GA.Ident "Craig")), MIR.Type (GA.Ident "Craig")) (ELit (LInt v), MIR.Type (GA.Ident "_Int")), MIR.Type (GA.Ident "Craig"))
+            [ injectionCons "Craig_Betty" "Craig" (int 5)
+            --, injectionInt 5 (int 6)
+            , injectionCatchAll (int 10)
+            ]
     ]
+  where
+    injectionCons x y = Injection (CCons (GA.Ident x, MIR.Type (GA.Ident y)))
+    injectionInt x = Injection (CLit (LInt x))
+    injectionCatchAll = Injection CatchAll
+    eCaseInt x xs = (ECase (MIR.Type "_Int") x xs, MIR.Type "_Int")
+    int x = (ELit (LInt x), MIR.Type "_Int")
 
 {- | Compiles an AST and produces a LLVM Ir string.
   An easy way to actually "compile" this output is to
@@ -201,8 +216,8 @@ compileScs (Bind (name, _t) args exp : xs) = do
     modify $ \s -> s { variableCount = 0 }
     compileScs xs
 compileScs (DataType id@(GA.Ident outer_id) ts : xs) = do
-    let biggest_variant = maximum ((\(Constructor _ t) -> sum $ typeByteSize . type2LlvmType <$> t) <$> ts)
-    emit $ LIR.Type id [I8, Array biggest_variant I8]
+    let biggestVariant = maximum ((\(Constructor _ t) -> sum $ typeByteSize . type2LlvmType <$> t) <$> ts)
+    emit $ LIR.Type id [I8, Array biggestVariant I8]
     mapM_ (\(Constructor (GA.Ident inner_id) fi) -> do
             emit $ LIR.Type (GA.Ident $ outer_id <> "_" <> inner_id) (I8 : map type2LlvmType fi)
         ) ts
@@ -214,12 +229,12 @@ compileScs (DataType id@(GA.Ident outer_id) ts : xs) = do
 mainContent :: LLVMValue -> [LLVMIr]
 mainContent var =
     [ UnsafeRaw $
-        "%2 = alloca %Craig\n" <>
-        "    store %Craig %1, ptr %2\n" <>
-        "    %3 = bitcast %Craig* %2 to i72*\n" <>
-        "    %4 = load i72, ptr %3\n" <>
-        "    call i32 (ptr, ...) @printf(ptr noundef @.str, i72 noundef %4)\n"
-      --    "call i32 (ptr, ...) @printf(ptr noundef @.str, i64 noundef " <> show var <> ")\n"
+        -- "%2 = alloca %Craig\n" <>
+        -- "    store %Craig %1, ptr %2\n" <>
+        -- "    %3 = bitcast %Craig* %2 to i72*\n" <>
+        -- "    %4 = load i72, ptr %3\n" <>
+        -- "    call i32 (ptr, ...) @printf(ptr noundef @.str, i72 noundef %4)\n"
+          "call i32 (ptr, ...) @printf(ptr noundef @.str, i64 noundef " <> show var <> ")\n"
     , -- , SetVariable (GA.Ident "p") (Icmp LLEq I64 (VInteger 2) (VInteger 2))
       -- , BrCond (VIdent (GA.Ident "p")) (GA.Ident "b_1") (GA.Ident "b_2")
       -- , Label (GA.Ident "b_1")
@@ -268,8 +283,23 @@ emitECased t e cases = do
     emit $ Label label
     res <- getNewVar
     emit $ SetVariable (GA.Ident $ show res) (Load ty Ptr (GA.Ident $ show stackPtr))
-    where
+  where
     emitCases :: LLVMType -> GA.Ident -> Integer -> LLVMValue -> Injection -> CompilerState ()
+    emitCases ty label stackPtr vs (Injection (MIR.CCons id) exp) = do
+        cons <- gets constructors
+        let r = fromJust $ Map.lookup id cons
+
+        lbl_failPos <- (\x -> GA.Ident $ "failed_" <> show x) <$> getNewLabel
+        lbl_succPos <- (\x -> GA.Ident $ "success_" <> show x) <$> getNewLabel
+
+        consCheck <- GA.Ident . show <$> getNewVar
+        emit $ SetVariable consCheck (Icmp LLEq I8 vs (VInteger $ numCI r))
+        emit $ BrCond (VIdent consCheck ty) lbl_succPos lbl_failPos
+        emit $ Label lbl_succPos
+        val <- exprToValue (fst exp)
+        emit $ Store ty val Ptr (GA.Ident . show $ stackPtr)
+        emit $ Br label
+        emit $ Label lbl_failPos
     emitCases ty label stackPtr vs (Injection (MIR.CLit i) exp) = do
         let i' = case i of
                     LInt i  -> VInteger i

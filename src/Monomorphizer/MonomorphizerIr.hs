@@ -19,7 +19,7 @@ data Exp
 data Injection = Injection Case ExpT
     deriving (Show, Ord, Eq)
 
-data Case = CLit Lit | CatchAll
+data Case = CLit Lit | CCons Id | CatchAll
     deriving (Show, Ord, Eq)
 
 data Constructor = Constructor Ident [Type]
