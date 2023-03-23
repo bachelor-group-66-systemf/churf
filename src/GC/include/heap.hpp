@@ -75,19 +75,7 @@ namespace GC
 		 * saved as the limit for scanning the stack in collect.
 		 */
 
-		/**
-		 * This implementation of the() guarantees laziness
-		 * on the instance and a correct destruction with
-		 * the destructor.
-		 * 
-		 * @returns The singleton object.
-		*/
-		static Heap& the()
-		{
-			static Heap instance;
-			return instance;
-		}
-
+		static Heap &the();
 		static void init();
 		static void dispose();
 		static void *alloc(size_t size);
