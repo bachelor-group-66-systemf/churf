@@ -129,13 +129,15 @@ test v = Program
     , Bind (GA.Ident "main", MIR.Type (GA.Ident "_Int")) []
         --(EApp (MIR.Type (GA.Ident "Craig")) (EId (GA.Ident "Craig_Bob", MIR.Type (GA.Ident "Craig")), MIR.Type (GA.Ident "Craig")) (ELit (LInt v), MIR.Type (GA.Ident "_Int")), MIR.Type (GA.Ident "Craig"))-- (EInt 92)
         $ eCaseInt (EApp (MIR.Type (GA.Ident "Craig")) (EId (GA.Ident "Craig_Bob", MIR.Type (GA.Ident "Craig")), MIR.Type (GA.Ident "Craig")) (ELit (LInt v), MIR.Type (GA.Ident "_Int")), MIR.Type (GA.Ident "Craig"))
-            [ injectionCons "Craig_Betty" "Craig" (int 5)
+            [ injectionCons "Craig_Bob" "Craig" [CIdent (GA.Ident "x")] (EId (GA.Ident "x", MIR.Type (GA.Ident "_Int")), MIR.Type (GA.Ident "_Int"))
+            , injectionCons "Craig_Betty" "Craig" [CLit (LInt 5)] (int 2)
+            , Injection (CIdent (GA.Ident "z")) (int 3)
             --, injectionInt 5 (int 6)
             , injectionCatchAll (int 10)
             ]
     ]
   where
-    injectionCons x y = Injection (CCons (GA.Ident x, MIR.Type (GA.Ident y)))
+    injectionCons x y xs = Injection (CCons (GA.Ident x, MIR.Type (GA.Ident y)) xs)
     injectionInt x = Injection (CLit (LInt x))
     injectionCatchAll = Injection CatchAll
     eCaseInt x xs = (ECase (MIR.Type "_Int") x xs, MIR.Type "_Int")
@@ -173,11 +175,11 @@ compileScs []                             = do
 
              -- get a pointer of the correct type
             ptr' <- getNewVar
-            emit $ SetVariable ptr' (Bitcast (Ref t') top (Ref $ CustomType id))
+            emit $ SetVariable ptr' (Bitcast (Ref t') (VIdent top Ptr) (Ref $ CustomType id))
 
              --emit $ UnsafeRaw "\n"
 
-            foldM_ (\i (GA.Ident arg_n, arg_t)-> do
+            enumerateOneM_ (\i (GA.Ident arg_n, arg_t) -> do
                 let arg_t' = type2LlvmType arg_t
                 emit $ Comment (show arg_t' <>" "<> arg_n <> " " <> show i )
                 elemPtr <- getNewVar
@@ -187,10 +189,7 @@ compileScs []                             = do
                                           I64 (VInteger 0)
                                           I32 (VInteger i))
                 emit $ Store arg_t' (VIdent (GA.Ident arg_n) arg_t') Ptr elemPtr
-                -- %2 = getelementptr inbounds %Foo_AInteger, %Foo_AInteger* %1, i32 0, i32 1
-                -- store i32 42, i32* %2
-                pure $ i + 1-- + typeByteSize arg_t'
-                ) 1 (argumentsCI ci)
+                ) (argumentsCI ci)
 
             --emit $ UnsafeRaw "\n"
 
@@ -264,43 +263,74 @@ compileExp (EId (name, _))  = emitIdent name
 compileExp (EApp t e1 e2)   = emitApp t (fst e1) (fst e2)
 --compileExp (EAbs t ti e)   = emitAbs t ti e
 compileExp (ELet _ binds e) = undefined emitLet binds (fst e)
-compileExp (ECase t e cs)   = emitECased t (fst e) (map (t,) cs)
+compileExp (ECase t e cs)   = emitECased t e (map (t,) cs)
     -- go (EMul e1 e2)  = emitMul e1 e2
     -- go (EDiv e1 e2)  = emitDiv e1 e2
     -- go (EMod e1 e2)  = emitMod e1 e2
 
 --- aux functions ---
-emitECased :: Type -> Exp -> [(Type, Injection)] -> CompilerState ()
+emitECased :: Type -> ExpT -> [(Type, Injection)] -> CompilerState ()
 emitECased t e cases = do
     let cs = snd <$> cases
     let ty = type2LlvmType t
-    vs <- exprToValue e
+    let rt = type2LlvmType (snd e)
+    vs <- exprToValue (fst e)
     lbl <- getNewLabel
     let label = GA.Ident $ "escape_" <> show lbl
     stackPtr <- getNewVar
     emit $ SetVariable stackPtr (Alloca ty)
-    mapM_ (emitCases ty label stackPtr vs) cs
+    mapM_ (emitCases rt ty label stackPtr vs) cs
     emit $ Label label
     res <- getNewVar
     emit $ SetVariable res (Load ty Ptr stackPtr)
   where
-    emitCases :: LLVMType -> GA.Ident -> GA.Ident -> LLVMValue -> Injection -> CompilerState ()
-    emitCases ty label stackPtr vs (Injection (MIR.CCons id) exp) = do
+    emitCases :: LLVMType -> LLVMType -> GA.Ident -> GA.Ident -> LLVMValue -> Injection -> CompilerState ()
+    emitCases rt ty label stackPtr vs (Injection (MIR.CCons consId cs) exp) = do
         cons <- gets constructors
-        let r = fromJust $ Map.lookup id cons
+        let r = fromJust $ Map.lookup consId cons
 
         lbl_failPos <- (\x -> GA.Ident $ "failed_" <> show x) <$> getNewLabel
         lbl_succPos <- (\x -> GA.Ident $ "success_" <> show x) <$> getNewLabel
 
+        consVal <- getNewVar
+        emit $ SetVariable consVal (ExtractValue rt vs 0)
+
         consCheck <- getNewVar
-        emit $ SetVariable consCheck (Icmp LLEq I8 vs (VInteger $ numCI r))
+        emit $ SetVariable consCheck (Icmp LLEq I8 (VIdent consVal I8) (VInteger $ numCI r))
         emit $ BrCond (VIdent consCheck ty) lbl_succPos lbl_failPos
         emit $ Label lbl_succPos
+
+        castPtr <- getNewVar
+        castedPtr <- getNewVar
+        casted <- getNewVar
+        emit $ SetVariable castPtr (Alloca rt)
+        emit $ Store rt vs Ptr castPtr
+        emit $ SetVariable castedPtr (Bitcast Ptr (VIdent castPtr Ptr) Ptr)
+        emit $ SetVariable casted (Load (CustomType (fst consId)) Ptr castedPtr)
+
         val <- exprToValue (fst exp)
-        emit $ Store ty val Ptr stackPtr
+        enumerateOneM_ (\i c -> do
+                case c of
+                    CIdent x   -> do
+                        emit . Comment $ "ident " <> show x
+                        emit $ SetVariable x (ExtractValue (CustomType (fst consId)) (VIdent casted Ptr) i)
+                        emit $ Store ty val Ptr stackPtr
+                    CCons x cs -> error "nested constructor"
+                    CLit l     -> do
+                        testVar <- getNewVar
+                        emit $ SetVariable testVar (ExtractValue (CustomType (fst consId)) (VIdent casted Ptr) i)
+                        case l of
+                            LInt l  -> emit $ Icmp LLEq I64 (VIdent testVar Ptr) (VInteger l)
+                            LChar c -> emit $ Icmp LLEq I8 (VIdent testVar Ptr) (VChar c)
+                    CatchAll   -> emit . Comment $ "Catch all"
+                emit . Comment $ "return this " <> show val
+                emit . Comment . show $ c
+                emit . Comment . show $ i
+            ) cs
+        -- emit $ Store ty val Ptr stackPtr
         emit $ Br label
         emit $ Label lbl_failPos
-    emitCases ty label stackPtr vs (Injection (MIR.CLit i) exp) = do
+    emitCases rt ty label stackPtr vs (Injection (MIR.CLit i) exp) = do
         let i' = case i of
                     LInt i  -> VInteger i
                     LChar i -> VChar i
@@ -314,7 +344,17 @@ emitECased t e cases = do
         emit $ Store ty val Ptr stackPtr
         emit $ Br label
         emit $ Label lbl_failPos
-    emitCases ty label stackPtr  _ (Injection MIR.CatchAll exp) = do
+    emitCases rt ty label stackPtr vs (Injection (MIR.CIdent id) exp) = do
+        -- //TODO this is pretty disgusting and would heavily benefit from a rewrite
+        valPtr <- getNewVar
+        emit $ SetVariable valPtr (Alloca rt)
+        emit $ Store rt vs Ptr valPtr
+        emit $ SetVariable id (Load rt Ptr valPtr)
+        increaseVarCount
+        val <- exprToValue (fst exp)
+        emit $ Store ty val Ptr stackPtr
+        emit $ Br label
+    emitCases _ ty label stackPtr _ (Injection MIR.CatchAll exp) = do
         val <- exprToValue (fst exp)
         emit $ Store ty val Ptr stackPtr
         emit $ Br label
@@ -435,6 +475,7 @@ getType (ECase t _ _)     = type2LlvmType t
 
 valueGetType :: LLVMValue -> LLVMType
 valueGetType (VInteger _)      = I64
+valueGetType (VChar _)         = I8
 valueGetType (VIdent _ t)      = t
 valueGetType (VConstant s)     = Array (fromIntegral $  length s) I8
 valueGetType (VFunction _ _ t) = t
@@ -449,3 +490,7 @@ typeByteSize (Ref _)        = 8
 typeByteSize (Function _ _) = 8
 typeByteSize (Array n t)    = n * typeByteSize t
 typeByteSize (CustomType _) = 8
+
+enumerateOneM_ :: Monad m => (Integer -> a -> m b) -> [a] -> m ()
+enumerateOneM_ f = foldM_ (\i a -> f i a >> pure (i + 1)) 1
+

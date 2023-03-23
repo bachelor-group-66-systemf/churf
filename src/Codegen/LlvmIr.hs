@@ -106,6 +106,8 @@ data LLVMIr
     | Declare LLVMType Ident Params
     | SetVariable Ident LLVMIr
     | Variable Ident
+    -- extractvalue <aggregate type> <val>, <idx>{, <idx>}*
+    | ExtractValue LLVMType LLVMValue Integer
     | GetElementPtr LLVMType LLVMType LLVMValue LLVMType LLVMValue LLVMType LLVMValue
     | GetElementPtrInbounds LLVMType LLVMType LLVMValue LLVMType LLVMValue LLVMType LLVMValue
     | Add LLVMType LLVMValue LLVMValue
@@ -121,7 +123,7 @@ data LLVMIr
     | Alloca LLVMType
     | Store LLVMType LLVMValue LLVMType Ident
     | Load LLVMType LLVMType Ident
-    | Bitcast LLVMType Ident LLVMType
+    | Bitcast LLVMType LLVMValue LLVMType
     | Ret LLVMType LLVMValue
     | Comment String
     | UnsafeRaw String -- This should generally be avoided, and proper
@@ -151,8 +153,14 @@ llvmIrToString = go 0
                 -- getelementptr inbounds %Foo, %Foo* %x, i32 0, i32 0
                 concat
                     [ "getelementptr ", show t1, ", " , show t2
-                    , " ", show p, ", ", show t3, " ", show v1,
-                    ", ", show t4, " ", show v2, "\n" ]
+                    , " ", show p, ", ", show t3, " ", show v1
+                    , ", ", show t4, " ", show v2, "\n"
+                    ]
+            (ExtractValue t1 v i) -> do
+                concat
+                    [ "extractvalue ", show t1, " "
+                    , show v, ", ", show i, "\n"
+                    ]
             (GetElementPtrInbounds t1 t2 p t3 v1 t4 v2) -> do
                 -- getelementptr inbounds %Foo, %Foo* %x, i32 0, i32 0
                 concat
@@ -216,10 +224,10 @@ llvmIrToString = go 0
                     [ "load ", show t1, ", "
                     , show t2, " %", addr, "\n"
                     ]
-            (Bitcast t1 (Ident i) t2) ->
+            (Bitcast t1 v t2) ->
                 concat
-                    [ "bitcast ", show t1, " %"
-                    , i, " to ", show t2, "\n"
+                    [ "bitcast ", show t1, " "
+                    , show v, " to ", show t2, "\n"
                     ]
             (Icmp comp t v1 v2) ->
                 concat
