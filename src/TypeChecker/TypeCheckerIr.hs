@@ -1,6 +1,9 @@
 {-# LANGUAGE LambdaCase #-}
 
-module TypeChecker.TypeCheckerIr where
+module TypeChecker.TypeCheckerIr (
+    module TypeChecker.TypeCheckerIr,
+    module GA,
+) where
 
 import Control.Monad.Except
 import Control.Monad.Reader
@@ -8,6 +11,12 @@ import Control.Monad.State
 import Data.Functor.Identity (Identity)
 import Data.Map (Map)
 import Grammar.Abs (
+    Data (..),
+    Ident (..),
+    Init (..),
+    Lit (..),
+ )
+import Grammar.Abs qualified as GA (
     Data (..),
     Ident (..),
     Init (..),
