@@ -4,9 +4,6 @@
 Deliver to samuel
 
 ## GC TODO:
-- Dokumentera
-    - Dokumentera alla filer och funktioner
-    - Skriva reference guide för Samuel
 - PR till master
 
 ## Tests TODO

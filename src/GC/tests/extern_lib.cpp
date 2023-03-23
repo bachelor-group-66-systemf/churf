@@ -3,18 +3,18 @@
 
 #include "heap.hpp"
 
-GC::Heap *singleton_test();
-void init_gc(GC::Heap *heap);
-void frame_test(GC::Heap *heap);
+GC::Heap& singleton_test();
+void init_gc(GC::Heap& heap);
+void frame_test(GC::Heap& heap);
 
 int main() {
     std::cout << "in main" << std::endl;
-    auto heap = singleton_test();
+    GC::Heap &heap = singleton_test();
 
     init_gc(heap);
     frame_test(heap);
 
-    heap->dispose();
+    heap.dispose();
 
     return 0;
 }
@@ -28,12 +28,12 @@ int main() {
  * 
  * @return Pointer to the Heap singleton instance
 */
-GC::Heap *singleton_test() {
+GC::Heap& singleton_test() {
     std::cout << "TESTING SINGLETON INSTANCES" << std::endl;
     std::cout << "===========================" << std::endl;
-    std::cout << "Call 1:\t" << GC::Heap::debug_the() << std::endl;   // First call which initializes the singleton instance
-    GC::Heap *heap = GC::Heap::debug_the();                           // Second call which should return the initialized instance
-    std::cout << "Call 2:\t" << heap << std::endl;
+    std::cout << "Call 1:\t" << &GC::Heap::the() << std::endl;   // First call which initializes the singleton instance
+    GC::Heap &heap = GC::Heap::the();                           // Second call which should return the initialized instance
+    std::cout << "Call 2:\t" << &heap << std::endl;
     std::cout << "===========================" << std::endl;
     return heap;
 }
@@ -50,11 +50,11 @@ GC::Heap *singleton_test() {
  * @param heap The Heap pointer to the singleton instance.
  * 
 */
-void init_gc(GC::Heap *heap){
+void init_gc(GC::Heap& heap){
     std::cout << "\n\n   INITIALIZING THE HEAP" << std::endl;
     std::cout << "===========================" << std::endl;
-    heap->init();
-    heap->set_profiler(true);
+    heap.init();
+    heap.set_profiler(true);
     std::cout << "===========================" << std::endl;
 }
 
@@ -76,7 +76,7 @@ void init_gc(GC::Heap *heap){
  * 
  * @param heap The Heap instance
 */
-void frame_test(GC::Heap *heap) {
+void frame_test(GC::Heap& heap) {
     std::cout << "\n\n  TESTING FRAME ADDRESSES" << std::endl;
     std::cout << "===========================" << std::endl;
 
@@ -87,7 +87,7 @@ void frame_test(GC::Heap *heap) {
     auto prev_frame = reinterpret_cast<uintptr_t *>(__builtin_frame_address(1)); // addr of prev stack frame
     std::cout << "Previous stack frame:\t" << prev_frame << std::endl;
 
-    heap->check_init(); // prints the saved absolute top of the stack
+    heap.check_init(); // prints the saved absolute top of the stack
     // auto alloced = heap->alloc(sizeof(unsigned long));
     
     std::cout << "===========================" << std::endl;

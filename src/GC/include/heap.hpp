@@ -11,7 +11,7 @@
 
 #define HEAP_SIZE 65536
 #define FREE_THRESH (uint)20
-// #define DEBUG
+#define DEBUG
 
 namespace GC
 {
@@ -45,67 +45,22 @@ namespace GC
 			std::free((char *)m_heap);
 		}
 
-		/**
-		 * If m_instance is a nullptr (the singleton has not
-		 * been initialized yet) initialize the singleton
-		 * and return the pointer. Otherwise return the
-		 * previously initialized pointer.
-		 * 
-		 * @returns The pointer to the heap singleton.
-		*/
-		static Heap *the()
-		{
-			if (m_instance) // if m_instance is not a nullptr
-				return m_instance;
-			m_instance = new Heap();
-			return m_instance;
-		}
-
-		/**
-		 * Advances an iterator and returns an element
-		 * at position `n`.
-		 * 
-		 * @param list	The list to retrieve an element from.
-		 * 
-		 * @param n		The position to retrieve an element at.
-		 * 
-		 * @returns 	The pointer to the chunk at position n in list.
-		*/
-		static Chunk *get_at(std::vector<Chunk *> &list, size_t n)
-		{
-			auto iter = list.begin();
-			if (!n)
-				return *iter;
-			std::advance(iter, n);
-			return *iter;
-		}
-
-		/**
-		 * Returns a bool whether the profiler is enabled
-		 * or not.
-		 * 
-		 * @returns True or false if the profiler is enabled
-		 * 			or disabled respectively.
-		*/
-		inline bool profiler_enabled() {
-			auto heap = Heap::the();
-			return heap->m_profiler_enable;
-		}
-
 		char *const m_heap;
 		size_t m_size {0};
-		inline static Heap *m_instance {nullptr};
+		// static Heap *m_instance {nullptr};
 		uintptr_t *m_stack_top {nullptr};
 		bool m_profiler_enable {false};
 
 		std::vector<Chunk *> m_allocated_chunks;
 		std::vector<Chunk *> m_freed_chunks;
 
+		static bool profiler_enabled();
+		static Chunk *get_at(std::vector<Chunk *> &list, size_t n);
 		void collect();
-		void sweep(Heap *heap);
+		void sweep(Heap &heap);
 		Chunk *try_recycle_chunks(size_t size);
-		void free(Heap *heap);
-		void free_overlap(Heap *heap);
+		void free(Heap &heap);
+		void free_overlap(Heap &heap);
 		void mark(uintptr_t *start, const uintptr_t *end, std::vector<Chunk *> &worklist);
 		void print_line(Chunk *chunk);
 		void print_worklist(std::vector<Chunk *> &list);
@@ -113,26 +68,36 @@ namespace GC
 
 	public:
 		/**
-		 * These are the only two functions which are exposed
+		 * These are the only five functions which are exposed
 		 * as the API for LLVM. At the absolute start of the
 		 * program the developer has to call init() to ensure
 		 * that the address of the topmost stack frame is
 		 * saved as the limit for scanning the stack in collect.
 		 */
 
+		/**
+		 * This implementation of the() guarantees laziness
+		 * on the instance and a correct destruction with
+		 * the destructor.
+		 * 
+		 * @returns The singleton object.
+		*/
+		static Heap& the()
+		{
+			static Heap instance;
+			return instance;
+		}
+
 		static void init();
 		static void dispose();
 		static void *alloc(size_t size);
 		void set_profiler(bool mode);
 
+		// Stop the compiler from generating copy-methods
+		Heap(Heap const&) = delete;
+		Heap& operator=(Heap const&) = delete;
+
 #ifdef DEBUG
-		static Heap *debug_the()
-		{
-			if (m_instance) // if m_instance is not a nullptr
-				return m_instance;
-			m_instance = new Heap();
-			return m_instance;
-		}
 		void collect(CollectOption flags); // conditional collection
 		void check_init();		  // print dummy things
 		void print_contents();	  // print dummy things
