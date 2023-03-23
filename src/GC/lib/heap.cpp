@@ -14,7 +14,18 @@ using std::cout, std::endl, std::vector, std::hex, std::dec;
 
 namespace GC
 {
-	
+	/**
+	 * This implementation of the() guarantees laziness
+	 * on the instance and a correct destruction with
+	 * the destructor.
+	 * 
+	 * @returns The singleton object.
+	*/
+	Heap& Heap::the()
+	{
+		static Heap instance;
+		return instance;
+	}
 
 	/**
 	 * Initialises the heap singleton and saves the address
