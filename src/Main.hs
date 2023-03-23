@@ -2,17 +2,16 @@
 
 module Main where
 
--- import           Codegen.Codegen           (generateCode)
+import Codegen.Codegen (generateCode)
 import GHC.IO.Handle.Text (hPutStrLn)
 import Grammar.ErrM (Err)
 import Grammar.Par (myLexer, pProgram)
 import Grammar.Print (printTree)
+import Monomorphizer.Monomorphizer (monomorphize)
 
--- import           Interpreter        (interpret)
 import Control.Monad (when)
 import Data.List.Extra (isSuffixOf)
 
--- import           LambdaLifter.LambdaLifter (lambdaLift)
 import Renamer.Renamer (rename)
 import System.Directory (
     createDirectory,
@@ -54,9 +53,9 @@ main' debug s = do
     -- let lifted = lambdaLift typechecked
     -- printToErr $ printTree lifted
     --
-    -- printToErr "\n -- Printing compiler output to stdout --"
-    -- compiled <- fromCompilerErr $ generateCode lifted
-    -- putStrLn compiled
+    printToErr "\n -- Printing compiler output to stdout --"
+    compiled <- fromCompilerErr $ generateCode (monomorphize typechecked)
+    putStrLn compiled
 
     -- check <- doesPathExist "output"
     -- when check (removeDirectoryRecursive "output")
