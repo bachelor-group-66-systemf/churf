@@ -20,6 +20,8 @@
 -- If not, the bind transformer function is called on it with the
 -- expected type in this context. The result of this computation (a monomorphic 
 -- bind) is added to the resulting set of binds.
+    
+{-# LANGUAGE LambdaCase #-}
 
 module Monomorpher.Monomorpher (monomorphize, morphExp, morphBind) where
 
@@ -28,85 +30,69 @@ import qualified Monomorpher.MonomorpherIr as M
 
 import           Grammar.Abs   (Ident (Ident))
 
-import Control.Monad.State (MonadState (get), State, gets, modify, execState)
+import Debug.Trace
+import Control.Monad.State (MonadState, gets, modify, StateT (runStateT))
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Data.Maybe (fromJust)
-import Debug.Trace
-
--- | The environment of computations in this module.
-data Env = Env { -- | All binds in the program.
-                 input  :: Map.Map Ident T.Bind,
-                 -- | The monomorphized binds.
-                 output :: Map.Map Ident M.Bind,
-                 -- | Maps polymorphic identifiers with concrete types.
-                 polys  :: Map.Map Ident M.Type,
-                 -- | Local variables, not necessary if id's are annotated based
-                 -- on if they are local or global.
-                 locals :: Set.Set Ident,
-                 -- | The identifier of the current function.
-                 currentFunc :: Ident
-               } deriving (Show)
+import Control.Monad.Reader (Reader, MonadReader (local, ask), asks, runReader)
 
 -- | State Monad wrapper for "Env".
-type EnvM a = State Env a
+newtype EnvM a = EnvM (StateT Output (Reader Env) a)
+  deriving (Functor, Applicative, Monad, MonadState Output, MonadReader Env)
+
+type Output = Map.Map Ident Outputted
+-- When a bind is being processed, it is Incomplete in the state, also
+-- called marked.
+data Outputted = Incomplete | Complete M.Bind
+
+-- Static environment
+data Env = Env {
+  -- | All binds in the program.
+  input :: Map.Map Ident T.Bind,
+  -- | Maps polymorphic identifiers with concrete types.
+  polys :: Map.Map Ident M.Type,
+  -- | Local variables
+  locals :: Set.Set Ident
+}
+
+runEnvM :: Output -> Env -> EnvM () -> Output
+runEnvM o env (EnvM stateM) = snd $ runReader (runStateT stateM o) env
+
+
 
 -- | Creates the environment based on the input binds.
 createEnv :: [T.Bind] -> Env
 createEnv binds = Env { input  = Map.fromList kvPairs, 
-                        output = Map.empty,
                         polys  = Map.empty,
-                        locals = Set.empty,
-                        currentFunc = Ident "main" }
+                        locals = Set.empty }
  where
    kvPairs :: [(Ident, T.Bind)]
    kvPairs = map (\b@(T.Bind (ident, _) _ _) -> (ident, b)) binds
 
--- | Functions to add, clear and get whether id is a local variable.
-addLocal :: Ident -> EnvM ()
-addLocal ident = modify (\env -> env { locals = Set.insert ident (locals env) })
-
-addLocals :: [Ident] -> EnvM ()
-addLocals idents = modify (\env -> 
-  env { locals = Set.fromList idents `Set.union` locals env })
-
-clearLocals :: EnvM ()
-clearLocals = modify (\env -> env { locals = Set.empty })
-
 localExists :: Ident -> EnvM Bool
-localExists ident = do env <- get
-                       return $ Set.member ident (locals env)
-
--- | Gets whether ident is current function.
-isCurrentFunc :: Ident -> EnvM Bool
-isCurrentFunc ident = do env <- get
-                         return $ ident == currentFunc env
+localExists ident = asks (Set.member ident . locals)
 
 -- | Gets a polymorphic bind from an id.
 getInputBind :: Ident -> EnvM (Maybe T.Bind)
-getInputBind ident = gets (Map.lookup ident . input)
+getInputBind ident = asks (Map.lookup ident . input)
 
 -- | Add monomorphic function derived from a polymorphic one, to env.
 addOutputBind :: M.Bind -> EnvM ()
-addOutputBind b@(M.Bind (ident, _) _ _) = modify 
-  (\env -> env { output = Map.insert ident b (output env) })
+addOutputBind b@(M.Bind (ident, _) _ _) = modify (Map.insert ident (Complete b))
 
--- | Checks whether or not an ident is added to output binds.
-isBindOutputted :: Ident -> EnvM Bool
-isBindOutputted ident = do env <- get
-                           return $ Map.member ident (output env)
+-- | Marks a global bind as being processed, meaning that when encountered again,
+-- it should not be recursively processed.
+markBind :: Ident -> EnvM ()
+markBind ident = modify (Map.insert ident Incomplete)
+
+-- | Check if bind has been touched or not.
+isBindMarked :: Ident -> EnvM Bool
+isBindMarked ident = gets (Map.member ident)
 
 -- | Finds main bind
 getMain :: EnvM T.Bind
-getMain = gets (\env -> fromJust $ Map.lookup (T.Ident "main") (input env))
-
--- | Add polymorphic -> monomorphic type bindings regardless of bind.
--- The structue of the types should be the same.
-mapTypesInBind :: M.Type -> T.Bind -> EnvM ()
-mapTypesInBind t1 (T.Bind (_, t2) _ _) = modify modFunc
- where
-   modFunc env = env { polys = newPolys (polys env) }
-   newPolys oldPolys = Map.union oldPolys (Map.fromList (mapTypes t2 t1))
+getMain = asks (\env -> fromJust $ Map.lookup (T.Ident "main") (input env))
 
 -- NOTE: could make this function more optimized
 -- | Makes a kv pair list of polymorphic to monomorphic mappings, throws runtime
@@ -120,7 +106,7 @@ mapTypes _ _ = error "structure of types not the same!"
 
 -- | Gets the mapped monomorphic type of a polymorphic type in the current context.
 getMonoFromPoly :: T.Type -> EnvM M.Type
-getMonoFromPoly t = do env <- get
+getMonoFromPoly t = do env <- ask
                        return $ getMono (polys env) t
  where
   getMono :: Map.Map Ident M.Type -> T.Type -> M.Type
@@ -131,7 +117,7 @@ getMonoFromPoly t = do env <- get
     (T.TPol ident) -> case Map.lookup ident polys of
                          Just concrete -> concrete
                          Nothing       -> error $ 
-                           "type not found! type: " ++ show ident
+                           "type not found! type: " ++ show ident ++ ", error in previous compilation steps"
 
 -- Get type of expression
 getExpType :: T.Exp -> T.Type
@@ -144,18 +130,23 @@ getExpType (T.ELet _ _)    = error "lets not allowed🛑👮"
 
 -- | If ident not already in env's output, morphed bind to output
 -- (and all referenced binds within this bind).
-morphBind :: M.Type -> T.Bind -> EnvM ()
-morphBind expectedType b@(T.Bind (Ident name, _) args exp) = do
-  outputted <- isBindOutputted (Ident name)
-  if outputted then
-    -- Don't add anything!
-    return ()
-  else do
-    -- Add processed bind!
-    addLocals $ map fst args  -- Add all the local variables
-    mapTypesInBind expectedType b
-    exp' <- morphExp expectedType exp
-    addOutputBind $ M.Bind (newName expectedType b, expectedType) [] exp'
+-- Returns the annotated bind name.
+morphBind :: M.Type -> T.Bind -> EnvM Ident
+morphBind expectedType b@(T.Bind (Ident _, btype) args exp) =
+    local (\env -> env { locals = Set.fromList (map fst args),
+                         polys  = Map.fromList (mapTypes btype expectedType)
+                       }) $ do
+      -- The "new name" is used to find out if it is already marked or not.
+      let name' = newName expectedType b
+      bindMarked <- isBindMarked name'
+      -- Return with right name if already marked
+      if bindMarked then return name' else do
+        -- Mark so that this bind will not be processed in recursive or cyclic 
+        -- function calls
+        markBind name' 
+        exp' <- morphExp expectedType exp
+        addOutputBind $ M.Bind (name', expectedType) [] exp'
+        return name'
 
 -- Morphs function applications, such as EApp and EAdd
 morphApp :: M.Type -> T.Exp -> T.Exp -> EnvM M.Exp
@@ -182,24 +173,19 @@ morphExp expectedType exp = case exp of
   T.EAbs _ (_, _) _ -> do
     error "EAbs found in Monomorpher, should not be possible"
   T.EId (ident@(Ident istr), t) -> do
-    maybeLocal <- localExists ident
-    if maybeLocal then do
-      t' <- getMonoFromPoly t
+    isLocal <- localExists ident
+    t' <- getMonoFromPoly t
+    if isLocal then do
       return $ M.EId (ident, t')
     else do
-      clearLocals
       bind <- getInputBind ident
       case bind of
         Nothing -> 
-          error $ "bind of name: " ++ istr ++ " not found"
+          error $ "bind of name: " ++ istr ++ " not found, bug in previous compilation steps"
         Just bind' -> do
-          maybeCurrentFunc <- isCurrentFunc ident
-          t' <- getMonoFromPoly t
-          if maybeCurrentFunc then -- Recursive call?
-            return ()
-          else
-            morphBind t' bind'
-          return $ M.EId (ident, t')
+          -- New bind to process
+          newBindName <- morphBind t' bind'
+          return $ M.EId (newBindName, t')
 
   T.ELet (T.Bind {}) _ -> error "lets not possible yet"
 
@@ -211,16 +197,21 @@ newName t (T.Bind (Ident bindName, _) _ _) = Ident (bindName ++ "$" ++ newName' 
   newName' (M.TMono (Ident str)) = str
   newName' (M.TArr t1 t2)        = newName' t1 ++ "_" ++ newName' t2
 
--- TODO: make sure that monomorphic binds are not processed again
--- | Does the monomorphization.
+-- Monomorphization step
 monomorphize :: T.Program -> M.Program
-monomorphize (T.Program binds) = M.Program $ (map snd . Map.toList) outputMap
+monomorphize (T.Program binds) = M.Program $ getBindsFromOutput 
+    (runEnvM Map.empty (createEnv binds) monomorphize')
  where
-  outputMap :: Map.Map Ident M.Bind
-  outputMap = output $ execState monomorphize' (createEnv binds)
-
   monomorphize' :: EnvM ()
   monomorphize' = do
     main <- getMain
     morphBind (M.TMono $ M.Ident "Int") main
+    return ()
+
+getBindsFromOutput :: Output -> [M.Bind]
+getBindsFromOutput outputMap = (map snd . Map.toList) $ fmap 
+                                 (\case
+                                    Incomplete -> error ""
+                                    Complete b -> b ) 
+                                  outputMap
 
