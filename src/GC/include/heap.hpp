@@ -66,6 +66,10 @@ namespace GC
 		void print_worklist(std::vector<Chunk *> &list);
 		void mark_step(uintptr_t start, uintptr_t end, std::vector<Chunk *> &worklist);
 
+		// Temporary
+		Chunk *try_recycle_chunks_new(size_t size);
+		void free_overlap_new(Heap &heap);
+
 	public:
 		/**
 		 * These are the only five functions which are exposed

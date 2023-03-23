@@ -542,5 +542,83 @@ namespace GC
 			print_line(chunk);
 		}
 	}
+
+	Chunk *Heap::try_recycle_chunks_new(size_t size)
+	{
+		Heap &heap = Heap::the();
+		// Check if there are any freed chunks large enough for current request
+		for (size_t i = 0; i < heap.m_freed_chunks.size(); i++)
+		{
+			auto chunk = heap.m_freed_chunks[i]; //Heap::get_at(heap.m_freed_chunks, i);
+			auto iter = heap.m_freed_chunks.begin();
+			//advance(iter, i);
+			i++;
+			if (chunk->m_size > size)
+			{
+				// Split the chunk, use one part and add the remaining part to
+				// the list of freed chunks
+				size_t diff = chunk->m_size - size;
+				auto chunk_complement = new Chunk(diff, chunk->m_start + chunk->m_size);
+
+				heap.m_freed_chunks.erase(iter);
+				heap.m_freed_chunks.push_back(chunk_complement);
+				heap.m_allocated_chunks.push_back(chunk);
+
+				return chunk;
+			}
+			else if (chunk->m_size == size)
+			{
+				// Reuse the whole chunk
+				heap.m_freed_chunks.erase(iter);
+				heap.m_allocated_chunks.push_back(chunk);
+				return chunk;
+			}
+		}
+		// If no chunk was found, return nullptr
+		return nullptr;
+	}
+
+	void Heap::free_overlap_new(Heap &heap) // borde göra en record(ChunkFreed) på onödiga chunks
+	{
+		std::vector<Chunk *> filtered;
+		size_t i = 0;
+		auto prev = heap.m_freed_chunks[i++]; //Heap::get_at(heap.m_freed_chunks, i++);
+		prev->m_marked = true;
+		filtered.push_back(prev);
+		cout << filtered.back()->m_start << endl;
+		for (; i < heap.m_freed_chunks.size(); i++)
+		{
+			prev = filtered.back();
+			auto next = heap.m_freed_chunks[i]; //Heap::get_at(heap.m_freed_chunks, i);
+			auto p_start = (uintptr_t)(prev->m_start);
+			auto p_size = (uintptr_t)(prev->m_size);
+			auto n_start = (uintptr_t)(next->m_start);
+			if (n_start >= (p_start + p_size))
+			{
+				next->m_marked = true;
+				filtered.push_back(next);
+			}
+		}
+		heap.m_freed_chunks.swap(filtered);
+		
+		bool profiler_enabled = heap.m_profiler_enable;
+		// After swap m_freed_chunks contains still available chunks
+		// and filtered contains all the chunks, so delete unused chunks
+		for (Chunk *chunk : filtered)
+		{
+			// if chunk was filtered away, delete it
+			if (!chunk->m_marked)
+			{
+				if (profiler_enabled)
+					Profiler::record(ChunkFreed, chunk);
+				delete chunk;
+			}
+			else
+			{
+				chunk->m_marked = false;
+			}
+		}
+	}
+
 #endif
 }
