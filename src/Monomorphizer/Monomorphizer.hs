@@ -18,7 +18,7 @@ monoDef (T.DBind bind) = DBind $ monoBind bind
 monoDef (T.DData d)    = DData d
 
 monoBind :: T.Bind -> Bind
-monoBind (T.Bind name args (e, t)) = Bind name args (monoExpr e, monoType t)
+monoBind (T.Bind name args (e, t)) = Bind (monoId name) (map monoId args) (monoExpr e, monoType t)
 
 monoExpr :: T.Exp -> M.Exp
 monoExpr = \case
@@ -40,7 +40,7 @@ monoexpt :: T.ExpT -> M.ExpT
 monoexpt (e, t) = (monoExpr e, monoType t)
 
 monoId :: T.Id -> Id
-monoId = id
+monoId (n,t) = (n, monoType t)
 
 monoLit :: T.Lit -> Lit
 monoLit (T.LInt i)  = LInt i

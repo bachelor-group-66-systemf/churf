@@ -3,8 +3,10 @@ module Monomorphizer.MonomorphizerIr (module Monomorphizer.MonomorphizerIr, modu
 import           Grammar.Abs               (Data (..), Ident (..), Init (..))
 import qualified Grammar.Abs               as GA (Data (..), Ident (..),
                                                   Init (..))
-import qualified TypeChecker.TypeCheckerIr as RE (Id, Indexed)
-import           TypeChecker.TypeCheckerIr (Id, Indexed)
+import qualified TypeChecker.TypeCheckerIr as RE (Indexed)
+import           TypeChecker.TypeCheckerIr (Indexed)
+
+type Id = (Ident, Type)
 
 newtype Program = Program [Def]
     deriving (Show, Ord, Eq)
