@@ -74,7 +74,7 @@ getFunctions bs = Map.fromList $ go bs
     go (MIR.DBind (MIR.Bind id args _) : xs) =
         (id, FunctionInfo{numArgs = length args, arguments = args})
             : go xs
-    go (MIR.DData (MIR.Data n cons) : xs) = undefined
+    go (MIR.DData (MIR.Constructor n cons) : xs) = undefined
         {-do map
                 ( \(Constructor id xs) ->
                     ( (id, MIR.TLit n)
@@ -96,8 +96,8 @@ createArgs xs = fst $ foldl (\(acc, l) t -> (acc ++ [(GA.Ident ("arg_" <> show l
 getConstructors :: [MIR.Def] -> Map Ident ConstructorInfo
 getConstructors bs = Map.fromList $ go bs
   where
-    go []                                 = []
-    go (MIR.DData (MIR.Data n cons) : xs) = undefined
+    go []                                        = []
+    go (MIR.DData (MIR.Constructor n cons) : xs) = undefined
         {-do
             fst
                 ( foldl
@@ -117,7 +117,7 @@ getConstructors bs = Map.fromList $ go bs
                     cons
                 )
             <> go xs-}
-    go (_ : xs)                           = go xs
+    go (_ : xs)                                  = go xs
 
 initCodeGenerator :: [MIR.Def] -> CodeGenerator
 initCodeGenerator scs =
@@ -260,7 +260,7 @@ compileScs (MIR.DBind (MIR.Bind (name, _t) args exp) : xs) = do
     emit DefineEnd
     modify $ \s -> s{variableCount = 0}
     compileScs xs
-compileScs (MIR.DData (MIR.Data outer_id ts) : xs) = do
+compileScs (MIR.DData (MIR.Constructor outer_id ts) : xs) = do
     undefined
 --    let biggestVariant = maximum ((\(Constructor _ t) -> sum $ typeByteSize . type2LlvmType <$> t) <$> ts)
 --    emit $ LIR.Type outer_id [I8, Array biggestVariant I8]

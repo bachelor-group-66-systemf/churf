@@ -1,8 +1,7 @@
 module Monomorphizer.MonomorphizerIr (module Monomorphizer.MonomorphizerIr, module RE, module GA) where
 
-import           Grammar.Abs               (Data (..), Ident (..), Init (..))
-import qualified Grammar.Abs               as GA (Data (..), Ident (..),
-                                                  Init (..))
+import           Grammar.Abs               (Ident (..), Init (..), UIdent)
+import qualified Grammar.Abs               as GA (Ident (..), Init (..))
 import qualified TypeChecker.TypeCheckerIr as RE (Indexed)
 import           TypeChecker.TypeCheckerIr (Indexed)
 
@@ -11,7 +10,7 @@ type Id = (Ident, Type)
 newtype Program = Program [Def]
     deriving (Show, Ord, Eq)
 
-data Def = DBind Bind | DData Data
+data Def = DBind Bind | DData Constructor
     deriving (Show, Ord, Eq)
 
 data Bind = Bind Id [Id] ExpT
@@ -31,7 +30,7 @@ data Injection = Injection (Init, Type) ExpT
 
 type ExpT = (Exp, Type)
 
-data Constructor = Constructor Ident [Type]
+data Constructor = Constructor UIdent [(UIdent, Type)]
     deriving (Show, Ord, Eq)
 
 data Lit
