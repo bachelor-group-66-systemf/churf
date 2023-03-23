@@ -93,7 +93,7 @@ instance Print Program where
     prt i (Program sc) = prPrec i 0 $ prt 0 sc
 
 instance Print Bind where
-    prt i (Bind (name, t) _ rhs) =
+    prt i (Bind (name, t) args rhs) =
         prPrec i 0 $
             concatD
                 [ prt 0 name
@@ -101,6 +101,7 @@ instance Print Bind where
                 , prt 0 t
                 , doc $ showString "\n"
                 , prt 0 name
+                , prtIdPs 0 args
                 , doc $ showString "="
                 , prt 0 rhs
                 ]

@@ -106,18 +106,20 @@ checkPrg (Program bs) = do
 
 checkBind :: Bind -> Infer T.Bind
 checkBind (Bind name args e) = do
-    let lambda = makeLambda e (reverse $ coerce args)
-    e@(_, t') <- inferExp lambda
-    s <- gets sigs
-    case M.lookup (coerce name) s of
-        Just (Just t) -> do
-            sub <- unify t t'
-            let newT = apply sub t
-            insertSig (coerce name) (Just newT)
-            return $ T.Bind (coerce name, newT) [] e
-        _ -> do
-            insertSig (coerce name) (Just t')
-            return (T.Bind (coerce name, t') [] e) -- (apply s e)
+    -- let lambda = makeLambda e (reverse $ coerce args)
+    args <- zip args <$> mapM (const fresh) args
+    withBindings (map coerce args) $ do
+        e@(_, t') <- inferExp e
+        s <- gets sigs
+        case M.lookup (coerce name) s of
+            Just (Just t) -> do
+                sub <- unify t t'
+                let newT = apply sub t
+                insertSig (coerce name) (Just newT)
+                return $ T.Bind (coerce name, newT) (map coerce args) e
+            _ -> do
+                insertSig (coerce name) (Just t')
+                return (T.Bind (coerce name, t') (map coerce args) e) -- (apply s e)
   where
     makeLambda :: Exp -> [Ident] -> Exp
     makeLambda = foldl (flip (EAbs . coerce))

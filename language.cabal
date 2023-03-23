@@ -33,6 +33,8 @@ executable language
       Auxiliary
       TypeChecker.TypeChecker
       TypeChecker.TypeCheckerIr
+      Monomorphizer.Monomorphizer
+      Monomorphizer.MonomorphizerIr
       Renamer.Renamer
       Codegen.Codegen
       Codegen.LlvmIr
