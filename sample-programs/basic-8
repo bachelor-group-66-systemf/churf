@@ -1,6 +1,6 @@
 data Maybe (a) where {
     Nothing : Maybe (a)
-    Just : forall a. a -> Maybe (a)
+    Just : a -> Maybe (a)
 };
 
 fromJust : Maybe (a) -> a ;

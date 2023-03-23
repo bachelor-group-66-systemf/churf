@@ -134,6 +134,7 @@ isMoreSpecificOrEq a b = a == b
 
 isPoly :: Type -> Bool
 isPoly (TAll _ _) = True
+isPoly (TVar _) = True
 isPoly _ = False
 
 inferExp :: Exp -> Infer T.ExpT
@@ -193,21 +194,20 @@ algoW = \case
     -- \| ----------------------
     -- \|     Γ ⊢ x : τ, ∅
 
-    EId i -> do
+    EVar i -> do
         var <- asks vars
-        case M.lookup i var of
-            Just t -> inst t >>= \(x) -> return (nullSubst, (T.EId (i, x), x))
+        case M.lookup (coerce i) var of
+            Just t -> inst t >>= \x -> return (nullSubst, (T.EId (coerce i, x), x))
             Nothing -> do
                 sig <- gets sigs
-                case M.lookup i sig of
-                    Just t -> return (nullSubst, (T.EId (i, t), t))
-                    Nothing -> do
-                        constr <- gets constructors
-                        case M.lookup i constr of
-                            Just t -> return (nullSubst, (T.EId (i, t), t))
-                            Nothing ->
-                                throwError $
-                                    "Unbound variable: " ++ show i
+                case M.lookup (coerce i) sig of
+                    Just t -> return (nullSubst, (T.EId (coerce i, t), t))
+                    Nothing -> throwError $ "Unbound variable: " ++ show i
+    ECons i -> do
+        constr <- gets constructors
+        case M.lookup (coerce i) constr of
+            Just t -> return (nullSubst, (T.EId (coerce i, t), t))
+            Nothing -> throwError $ "Constructor: '" ++ printTree i ++ "' is not defined"
 
     -- \| τ = newvar   Γ, x : τ ⊢ e : τ', S
     -- \| ---------------------------------
@@ -219,7 +219,7 @@ algoW = \case
             (s1, (e', t')) <- algoW e
             let varType = apply s1 fr
             let newArr = T.TFun varType t'
-            return (s1, apply s1 $ (T.EAbs (coerce name, varType) (e', newArr), newArr))
+            return (s1, apply s1 (T.EAbs (coerce name, varType) (e', newArr), newArr))
 
     -- \| Γ ⊢ e₀ : τ₀, S₀    S₀Γ ⊢ e₁ : τ₁, S₁
     -- \| s₂ = mgu(s₁τ₀, Int)    s₃ = mgu(s₂τ₁, Int)
@@ -237,7 +237,7 @@ algoW = \case
             let comp = s4 `compose` s3 `compose` s2 `compose` s1
             return
                 ( comp
-                , apply comp $ (T.EAdd (e0', t0) (e1', t1), int)
+                , apply comp (T.EAdd (e0', t0) (e1', t1), int)
                 )
 
     -- \| Γ ⊢ e₀ : τ₀, S₀    S₀Γ ⊢ e₁ : τ₁, S1
@@ -384,7 +384,7 @@ class FreeVars t where
 instance FreeVars T.Type where
     free :: T.Type -> Set Ident
     free (T.TVar (T.MkTVar a)) = S.singleton a
-    free (T.TAll (T.MkTVar bound) t) = (S.singleton bound) `S.intersection` free t
+    free (T.TAll (T.MkTVar bound) t) = S.singleton bound `S.intersection` free t
     free (T.TLit _) = mempty
     free (T.TFun a b) = free a `S.union` free b
     -- \| Not guaranteed to be correct
@@ -398,7 +398,9 @@ instance FreeVars T.Type where
             T.TVar (T.MkTVar a) -> case M.lookup a sub of
                 Nothing -> T.TVar (T.MkTVar $ coerce a)
                 Just t -> t
-            T.TAll bound t -> undefined
+            T.TAll (T.MkTVar i) t -> case M.lookup i sub of
+                Nothing -> T.TAll (T.MkTVar i) (apply sub t)
+                Just _ -> apply sub t
             T.TFun a b -> T.TFun (apply sub a) (apply sub b)
             T.TIndexed (T.Indexed name a) -> T.TIndexed (T.Indexed name (map (apply sub) a))
 
@@ -416,10 +418,10 @@ instance FreeVars T.ExpT where
         (T.EId (i, innerT), outerT) -> (T.EId (i, apply s innerT), apply s outerT)
         (T.ELit lit, t) -> (T.ELit lit, apply s t)
         (T.ELet (T.Bind (ident, t1) args e1) e2, t2) -> (T.ELet (T.Bind (ident, apply s t1) args (apply s e1)) (apply s e2), apply s t2)
-        (T.EApp e1 e2, t) -> (T.EApp (apply s e1) (apply s e2), (apply s t))
-        (T.EAdd e1 e2, t) -> (T.EAdd (apply s e1) (apply s e2), (apply s t))
-        (T.EAbs (ident, t2) e, t1) -> (T.EAbs (ident, apply s t2) (apply s e), (apply s t1))
-        (T.ECase e injs, t) -> (T.ECase (apply s e) (apply s injs), (apply s t))
+        (T.EApp e1 e2, t) -> (T.EApp (apply s e1) (apply s e2), apply s t)
+        (T.EAdd e1 e2, t) -> (T.EAdd (apply s e1) (apply s e2), apply s t)
+        (T.EAbs (ident, t2) e, t1) -> (T.EAbs (ident, apply s t2) (apply s e), apply s t1)
+        (T.ECase e injs, t) -> (T.ECase (apply s e) (apply s injs), apply s t)
 
 instance FreeVars T.Inj where
     free :: T.Inj -> Set Ident

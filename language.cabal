@@ -47,6 +47,8 @@ executable language
       , either
       , extra
       , array
+      , hspec
+      , QuickCheck
 
     default-language: GHC2021
 

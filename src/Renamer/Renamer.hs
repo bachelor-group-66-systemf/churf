@@ -16,12 +16,12 @@ import Control.Monad.State (
     gets,
     modify,
  )
+import Data.Coerce (coerce)
 import Data.Function (on)
 import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Maybe (fromMaybe)
 import Data.Tuple.Extra (dupe)
-import Data.Coerce (coerce)
 import Grammar.Abs
 
 -- | Rename all variables and local binds
@@ -91,11 +91,12 @@ newtype Rn a = Rn {runRn :: StateT Cxt (ExceptT String Identity) a}
     deriving (Functor, Applicative, Monad, MonadState Cxt)
 
 -- | Maps old to new name
-type Names = Map Ident Ident
+type Names = Map LIdent LIdent
 
 renameExp :: Names -> Exp -> Rn (Names, Exp)
 renameExp old_names = \case
-    EId n -> pure (coerce old_names, EId . fromMaybe n $ Map.lookup n (coerce old_names))
+    EVar n -> pure (coerce old_names, EVar . fromMaybe n $ Map.lookup n old_names)
+    ECons n -> pure (old_names, ECons n)
     ELit lit -> pure (old_names, ELit lit)
     EApp e1 e2 -> do
         (env1, e1') <- renameExp old_names e1
@@ -170,20 +171,20 @@ substitute tvar1 tvar2 typ = case typ of
     substitute' = substitute tvar1 tvar2
 
 -- | Create a new name and add it to name environment.
-newName :: Names -> Ident -> Rn (Names, Ident)
+newName :: Names -> LIdent -> Rn (Names, LIdent)
 newName env old_name = do
     new_name <- makeName old_name
     pure (Map.insert old_name new_name env, new_name)
 
 -- | Create multiple names and add them to the name environment
-newNames :: Names -> [Ident] -> Rn (Names, [Ident])
+newNames :: Names -> [LIdent] -> Rn (Names, [LIdent])
 newNames = mapAccumM newName
 
 -- | Annotate name with number and increment the number @prefix ⇒ prefix_number@.
-makeName :: Ident -> Rn Ident
-makeName (Ident prefix) = do
+makeName :: LIdent -> Rn LIdent
+makeName (LIdent prefix) = do
     i <- gets var_counter
-    let name = Ident $ prefix ++ "_" ++ show i
+    let name = LIdent $ prefix ++ "_" ++ show i
     modify $ \cxt -> cxt{var_counter = succ cxt.var_counter}
     pure name
 
