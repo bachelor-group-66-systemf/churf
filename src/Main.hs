@@ -2,32 +2,36 @@
 
 module Main where
 
---import           Codegen.Codegen           (generateCode)
-import           GHC.IO.Handle.Text      (hPutStrLn)
-import           Grammar.ErrM            (Err)
-import           Grammar.Par             (myLexer, pProgram)
-import           Grammar.Print           (printTree)
+-- import           Codegen.Codegen           (generateCode)
+import GHC.IO.Handle.Text (hPutStrLn)
+import Grammar.ErrM (Err)
+import Grammar.Par (myLexer, pProgram)
+import Grammar.Print (printTree)
 
 -- import           Interpreter        (interpret)
-import           Control.Monad           (when)
-import           Data.List.Extra         (isSuffixOf)
---import           LambdaLifter.LambdaLifter (lambdaLift)
-import           Renamer.Renamer         (rename)
-import           System.Directory        (createDirectory, doesPathExist,
-                                          getDirectoryContents,
-                                          removeDirectoryRecursive,
-                                          setCurrentDirectory)
-import           System.Environment      (getArgs)
-import           System.Exit             (exitFailure, exitSuccess)
-import           System.IO               (stderr)
-import           System.Process.Extra    (spawnCommand, waitForProcess)
-import           TypeChecker.TypeChecker (typecheck)
+import Control.Monad (when)
+import Data.List.Extra (isSuffixOf)
+
+-- import           LambdaLifter.LambdaLifter (lambdaLift)
+import Renamer.Renamer (rename)
+import System.Directory (
+    createDirectory,
+    doesPathExist,
+    getDirectoryContents,
+    removeDirectoryRecursive,
+    setCurrentDirectory,
+ )
+import System.Environment (getArgs)
+import System.Exit (exitFailure, exitSuccess)
+import System.IO (stderr)
+import System.Process.Extra (spawnCommand, waitForProcess)
+import TypeChecker.TypeChecker (typecheck)
 
 main :: IO ()
 main =
     getArgs >>= \case
         [] -> print "Required file path missing"
-        ("-d": s : _) -> main' True s
+        ("-d" : s : _) -> main' True s
         (s : _) -> main' False s
 
 main' :: Bool -> String -> IO ()
@@ -39,7 +43,7 @@ main' debug s = do
     printToErr $ printTree parsed
 
     printToErr "\n-- Renamer --"
-    let renamed = rename parsed
+    renamed <- fromRenamerErr . rename $ parsed
     printToErr $ printTree renamed
 
     printToErr "\n-- TypeChecker --"
@@ -49,17 +53,16 @@ main' debug s = do
     -- printToErr "\n-- Lambda Lifter --"
     -- let lifted = lambdaLift typechecked
     -- printToErr $ printTree lifted
---
+    --
     -- printToErr "\n -- Printing compiler output to stdout --"
     -- compiled <- fromCompilerErr $ generateCode lifted
-    --putStrLn compiled
+    -- putStrLn compiled
 
     -- check <- doesPathExist "output"
     -- when check (removeDirectoryRecursive "output")
     -- createDirectory "output"
     -- writeFile "output/llvm.ll" compiled
     -- if debug then debugDotViz else putStrLn compiled
-
 
     -- interpred <- fromInterpreterErr $ interpret lifted
     -- putStrLn "\n-- interpret"
@@ -76,8 +79,8 @@ debugDotViz = do
     mapM_ spawnWait commands
     setCurrentDirectory ".."
     return ()
-    where
-        spawnWait s = spawnCommand s >>= waitForProcess
+  where
+    spawnWait s = spawnCommand s >>= waitForProcess
 printToErr :: String -> IO ()
 printToErr = hPutStrLn stderr
 
@@ -106,6 +109,16 @@ fromTypeCheckerErr =
     either
         ( \err -> do
             putStrLn "\nTYPECHECKER ERROR"
+            putStrLn err
+            exitFailure
+        )
+        pure
+
+fromRenamerErr :: Err a -> IO a
+fromRenamerErr =
+    either
+        ( \err -> do
+            putStrLn "\nRENAMER ERROR"
             putStrLn err
             exitFailure
         )

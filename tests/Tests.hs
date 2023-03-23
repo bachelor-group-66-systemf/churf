@@ -18,7 +18,6 @@ import TypeChecker.TypeCheckerIr (
     Env (..),
     Error,
     Infer,
-    Poly (..),
  )
 import TypeChecker.TypeCheckerIr qualified as T
 

@@ -517,3 +517,15 @@ litType (LChar _) = char
 
 int = T.TLit "Int"
 char = T.TLit "Char"
+
+partitionType ::
+    Int -> -- Number of parameters to apply
+    Type ->
+    ([Type], Type)
+partitionType = go []
+  where
+    go acc 0 t = (acc, t)
+    go acc i t = case t of
+        TAll tvar t' -> second (TAll tvar) $ go acc i t'
+        TFun t1 t2 -> go (acc ++ [t1]) (i - 1) t2
+        _ -> error "Number of parameters and type doesn't match"
