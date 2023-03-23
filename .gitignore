@@ -4,5 +4,5 @@ dist-newstyle
 *.bak
 src/Grammar
 language
-llvm.ll
-output
+test_program_result
+output/

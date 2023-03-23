@@ -1,0 +1,8 @@
+double : Int -> Int ;
+double n = n + n;
+
+id : forall a. a -> a ;
+id x = x ;
+
+main : Int ;
+main = id double 5;

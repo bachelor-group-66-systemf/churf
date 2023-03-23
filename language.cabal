@@ -12,10 +12,8 @@ build-type:         Simple
 
 extra-doc-files:    CHANGELOG.md
 
-
 extra-source-files:
   Grammar.cf
-
 
 common warnings
     ghc-options: -W
@@ -32,16 +30,14 @@ executable language
       Grammar.Print
       Grammar.Skel
       Grammar.ErrM
-      LambdaLifter.LambdaLifter
       Auxiliary
-      Renamer.Renamer
       TypeChecker.TypeChecker
       TypeChecker.TypeCheckerIr
-      Monomorphizer.Monomorphizer
-      Monomorphizer.MonomorphizerIr
---      Interpreter
-      Codegen.Codegen
-      Codegen.LlvmIr
+      Renamer.Renamer
+      -- LambdaLifter.LambdaLifter
+      -- Codegen.Codegen
+      -- Codegen.LlvmIr
+
     hs-source-dirs:   src
 
     build-depends:    
@@ -49,7 +45,39 @@ executable language
       , mtl
       , containers
       , either
-      , array
       , extra
-      , directory
+      , array
+      , hspec
+      , QuickCheck
+
+    default-language: GHC2021
+
+Test-suite language-testsuite
+    type: exitcode-stdio-1.0
+    main-is: Tests.hs
+
+    other-modules:
+      Grammar.Abs
+      Grammar.Lex
+      Grammar.Par
+      Grammar.Print
+      Grammar.Skel
+      Grammar.ErrM
+      Auxiliary
+      TypeChecker.TypeChecker
+      TypeChecker.TypeCheckerIr
+      Renamer.Renamer
+
+    hs-source-dirs: src, tests
+
+    build-depends: 
+        base >=4.16
+      , mtl
+      , containers
+      , either
+      , extra
+      , array
+      , hspec
+      , QuickCheck
+
     default-language: GHC2021

@@ -1,51 +1,94 @@
 
+-------------------------------------------------------------------------------
+-- * PROGRAM
+-------------------------------------------------------------------------------
+
 Program. Program ::= [Def] ;
 
+-------------------------------------------------------------------------------
+-- * TOP-LEVEL
+-------------------------------------------------------------------------------
+
 DBind. Def ::= Bind ;
+DSig.  Def ::= Sig ;
 DData. Def ::= Data ;
-separator Def ";" ;
 
-Bind. Bind ::= Ident ":" Type ";"
-               Ident [Ident] "=" Exp ;
+Sig. Sig ::= LIdent ":" Type ;
 
-Data. Data ::= "data" Constr "where" "{" [Constructor] "}" ;
+Bind. Bind ::= LIdent [LIdent] "=" Exp ;
 
-Constructor. Constructor ::= Ident ":" Type ;
-separator nonempty Constructor "" ;
+-------------------------------------------------------------------------------
+-- * TYPES
+-------------------------------------------------------------------------------
 
-TMono.   Type1 ::= Ident ;
-TPol.    Type1 ::= "'" Ident ;
-TConstr. Type1 ::= Constr ;
-TArr.    Type  ::= Type1 "->" Type ;
+         TLit.     Type2 ::= UIdent ;
+         TVar.     Type2 ::= TVar ;
+         TAll.     Type1 ::= "forall" TVar "." Type ;
+         TIndexed. Type1 ::= Indexed ;
+internal TEVar.    Type1 ::= TEVar ;
+         TFun.     Type  ::= Type1 "->" Type ;
 
-Constr.  Constr ::= Ident "(" [Type] ")" ;
+         MkTVar.  TVar  ::= LIdent ;
+internal MkTEVar. TEVar ::= LIdent ;
 
--- TODO: Move literal to its own thing since it's reused in Init as well.
+-------------------------------------------------------------------------------
+-- * DATA TYPES
+-------------------------------------------------------------------------------
+
+Constructor. Constructor ::= UIdent ":" Type ;
+
+Indexed. Indexed ::= UIdent "(" [Type] ")" ;
+
+Data. Data ::= "data" Indexed "where" "{" [Constructor] "}" ;
+
+-------------------------------------------------------------------------------
+-- * EXPRESSIONS
+-------------------------------------------------------------------------------
+
 EAnn.   Exp5 ::= "(" Exp ":" Type ")" ;
-EId.    Exp4 ::= Ident ;
-ELit.   Exp4 ::= Literal ;
+EVar.   Exp4 ::= LIdent ;
+ECons.  Exp4 ::= UIdent ;
+ELit.   Exp4 ::= Lit ;
 EApp.   Exp3 ::= Exp3 Exp4 ;
 EAdd.   Exp1 ::= Exp1 "+" Exp2 ;
-ESub.   Exp1 ::= Exp1 "-" Exp2 ;
-ELet.   Exp  ::= "let" Ident "=" Exp "in" Exp ; 
-EAbs.   Exp  ::= "\\" Ident "." Exp ;
+ELet.   Exp  ::= "let" LIdent "=" Exp "in" Exp ; 
+EAbs.   Exp  ::= "\\" LIdent "." Exp ;
 ECase.  Exp  ::= "case" Exp "of" "{" [Inj] "}";
 
-LInt. Literal ::= Integer ;
+-------------------------------------------------------------------------------
+-- * LITERALS
+-------------------------------------------------------------------------------
+
+LInt. Lit  ::= Integer ;
+LChar. Lit ::= Char ;
+
+-------------------------------------------------------------------------------
+-- * CASE
+-------------------------------------------------------------------------------
 
 Inj. Inj ::= Init "=>" Exp ;
-separator nonempty Inj ";" ;
 
-InitLit. Init    ::= Literal ;
-InitConstr. Init ::= Ident [Ident] ;
-InitCatch. Init  ::= "_" ;
+InitLit. Init         ::= Lit ;
+InitConstructor. Init ::= UIdent [LIdent] ;
+InitCatch. Init       ::= "_" ;
 
+-------------------------------------------------------------------------------
+-- * AUX
+-------------------------------------------------------------------------------
+
+separator Def ";" ;
+separator nonempty Constructor "" ;
 separator Type " " ;
-coercions Type 2 ;
-
+separator nonempty Inj ";" ;
 separator Ident " ";
+separator LIdent " ";
+separator TVar " " ;
 
 coercions Exp 5 ;
+coercions Type 2 ;
+
+token UIdent (upper (letter | digit | '_')*) ;
+token LIdent (lower (letter | digit | '_')*) ;
 
 comment "--" ;
 comment "{-" "-}" ;
