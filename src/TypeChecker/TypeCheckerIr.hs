@@ -52,7 +52,7 @@ data Exp
     | ELet Bind ExpT
     | EApp ExpT ExpT
     | EAdd ExpT ExpT
-    | EAbs Id ExpT
+    | EAbs Ident ExpT
     | ECase ExpT [Inj]
     deriving (C.Eq, C.Ord, C.Read, C.Show)
 
@@ -156,7 +156,7 @@ instance Print Exp where
             prPrec i 0 $
                 concatD
                     [ doc $ showString "λ"
-                    , prtId 0 n
+                    , prt 0 n
                     , doc $ showString "."
                     , prt 0 e
                     ]

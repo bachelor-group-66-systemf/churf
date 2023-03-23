@@ -7,7 +7,7 @@ module Renamer.Renamer (rename) where
 
 import Auxiliary (mapAccumM)
 import Control.Applicative (Applicative (liftA2))
-import Control.Monad.Except (ExceptT, runExceptT)
+import Control.Monad.Except (ExceptT, MonadError, runExceptT, throwError)
 import Control.Monad.Identity (Identity, runIdentity)
 import Control.Monad.State (
     MonadState,
@@ -41,19 +41,21 @@ renameDefs defs = runIdentity $ runExceptT $ evalStateT (runRn $ mapM renameDef 
             rhs' <- snd <$> renameExp new_names rhs
             pure . DBind $ Bind name (coerce vars') rhs'
         DData (Data (Indexed cname types) constrs) -> do
-            tvars' <- mapM nextNameTVar tvars
-            let tvars_lt = zip tvars tvars'
+            tvars_ <- tvars
+            tvars' <- mapM nextNameTVar tvars_
+            let tvars_lt = zip tvars_ tvars'
                 typ' = map (substituteTVar tvars_lt) types
                 constrs' = map (renameConstr tvars_lt) constrs
             pure . DData $ Data (Indexed cname typ') constrs'
           where
-            tvars = concatMap (collectTVars []) types
+            tvars = concat <$> mapM (collectTVars []) types
+            collectTVars :: [TVar] -> Type -> Rn [TVar]
             collectTVars tvars = \case
                 TAll tvar t -> collectTVars (tvar : tvars) t
-                TIndexed _ -> tvars
+                TIndexed _ -> return tvars
                 -- Should be monad error
-                TVar v -> [v]
-                _ -> error ("Bad data type definition: " ++ show types)
+                TVar v -> return [v]
+                _ -> throwError ("Bad data type definition: " ++ show types)
 
     renameConstr :: [(TVar, TVar)] -> Constructor -> Constructor
     renameConstr new_types (Constructor name typ) =
@@ -88,7 +90,7 @@ data Cxt = Cxt
 
 -- | Rename monad. State holds the number of renamed names.
 newtype Rn a = Rn {runRn :: StateT Cxt (ExceptT String Identity) a}
-    deriving (Functor, Applicative, Monad, MonadState Cxt)
+    deriving (Functor, Applicative, Monad, MonadState Cxt, MonadError String)
 
 -- | Maps old to new name
 type Names = Map LIdent LIdent

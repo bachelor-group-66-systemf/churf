@@ -77,7 +77,9 @@ checkPrg :: Program -> Infer T.Program
 checkPrg (Program bs) = do
     preRun bs
     -- Type check the program twice to produce all top-level types in the first pass through
-    _ <- checkDef bs
+    bs' <- checkDef bs
+    trace "\nFIRST ITERATION" return ()
+    trace (printTree bs' ++ "\nSECOND ITERATION\n") return ()
     bs'' <- checkDef bs
     return $ T.Program bs''
   where
@@ -107,8 +109,6 @@ checkBind (Bind name args e) = do
     let lambda = makeLambda e (reverse $ coerce args)
     e@(_, t') <- inferExp lambda
     s <- gets sigs
-    -- let fs = map (second Just) $ getFunctionTypes s e
-    -- mapM_ (uncurry insertSig) fs
     case M.lookup (coerce name) s of
         Just (Just t) -> do
             sub <- unify t t'
@@ -121,18 +121,6 @@ checkBind (Bind name args e) = do
   where
     makeLambda :: Exp -> [Ident] -> Exp
     makeLambda = foldl (flip (EAbs . coerce))
-
-    -- getFunctionTypes :: Map Ident (Maybe T.Type) -> T.ExpT -> [(Ident, T.Type)]
-    -- getFunctionTypes s = \case
-    --     (T.EId b, t) -> case M.lookup b s of
-    --         Just Nothing -> return (b, t)
-    --         _ -> []
-    --     (T.ELit _, _) -> []
-    --     (T.ELet (T.Bind _ _ e1) e2, _) -> getFunctionTypes s e1 ++ getFunctionTypes s e2
-    --     (T.EApp e1 e2, _) -> getFunctionTypes s e1 ++ getFunctionTypes s e2
-    --     (T.EAdd e1 e2, _) -> getFunctionTypes s e1 ++ getFunctionTypes s e2
-    --     (T.EAbs _ e, _) -> getFunctionTypes s e
-    --     (T.ECase e injs, _) -> getFunctionTypes s e ++ concatMap (getFunctionTypes s . \(T.Inj _ e) -> e) injs
 
 isMoreSpecificOrEq :: T.Type -> T.Type -> Bool
 isMoreSpecificOrEq _ (T.TAll _ _) = True
@@ -231,7 +219,7 @@ algoW = \case
             (s1, (e', t')) <- algoW e
             let varType = apply s1 fr
             let newArr = T.TFun varType t'
-            return (s1, apply s1 (T.EAbs (coerce name, varType) (e', t'), newArr))
+            return (s1, apply s1 (T.EAbs (coerce name) (e', t'), newArr))
 
     -- \| Γ ⊢ e₀ : τ₀, S₀    S₀Γ ⊢ e₁ : τ₁, S₁
     -- \| s₂ = mgu(s₁τ₀, Int)    s₃ = mgu(s₂τ₁, Int)
@@ -424,7 +412,7 @@ instance FreeVars T.ExpT where
         (T.ELet (T.Bind (ident, t1) args e1) e2, t2) -> (T.ELet (T.Bind (ident, apply s t1) args (apply s e1)) (apply s e2), apply s t2)
         (T.EApp e1 e2, t) -> (T.EApp (apply s e1) (apply s e2), apply s t)
         (T.EAdd e1 e2, t) -> (T.EAdd (apply s e1) (apply s e2), apply s t)
-        (T.EAbs (ident, t2) e, t1) -> (T.EAbs (ident, apply s t2) (apply s e), apply s t1)
+        (T.EAbs ident e, t1) -> (T.EAbs ident (apply s e), apply s t1)
         (T.ECase e injs, t) -> (T.ECase (apply s e) (apply s injs), apply s t)
 
 instance FreeVars T.Inj where
