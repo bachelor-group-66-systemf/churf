@@ -15,7 +15,6 @@ import Data.List (foldl')
 import Data.List.Extra (unsnoc)
 import Data.Map (Map)
 import Data.Map qualified as M
-import Data.Maybe (fromMaybe)
 import Data.Set (Set)
 import Data.Set qualified as S
 import Debug.Trace (trace)
@@ -26,7 +25,6 @@ import TypeChecker.TypeCheckerIr (
     Env (..),
     Error,
     Infer,
-    Poly (..),
     Subst,
  )
 import TypeChecker.TypeCheckerIr qualified as T
@@ -78,15 +76,21 @@ retType a = a
 checkPrg :: Program -> Infer T.Program
 checkPrg (Program bs) = do
     preRun bs
-    bs' <- checkDef bs
-    return $ T.Program bs'
+    -- Type check the program twice to produce all top-level types in the first pass through
+    _ <- checkDef bs
+    bs'' <- checkDef bs
+    return $ T.Program bs''
   where
     preRun :: [Def] -> Infer ()
     preRun [] = return ()
     preRun (x : xs) = case x of
         -- TODO: Check for no overlapping signature definitions
-        DSig (Sig n t) -> insertSig (coerce n) (toNew t) >> preRun xs
-        DBind (Bind{}) -> preRun xs
+        DSig (Sig n t) -> insertSig (coerce n) (Just $ toNew t) >> preRun xs
+        DBind (Bind n _ _) -> do
+            s <- gets sigs
+            case M.lookup (coerce n) s of
+                Nothing -> insertSig (coerce n) Nothing >> preRun xs
+                Just _ -> preRun xs
         DData d@(Data _ _) -> checkData d >> preRun xs
 
     checkDef :: [Def] -> Infer [T.Def]
@@ -102,25 +106,33 @@ checkBind :: Bind -> Infer T.Bind
 checkBind (Bind name args e) = do
     let lambda = makeLambda e (reverse $ coerce args)
     e@(_, t') <- inferExp lambda
-    -- TODO: Check for match against existing signatures
-    return $ T.Bind (coerce name, t') [] e -- (apply s e)
+    s <- gets sigs
+    -- let fs = map (second Just) $ getFunctionTypes s e
+    -- mapM_ (uncurry insertSig) fs
+    case M.lookup (coerce name) s of
+        Just (Just t) -> do
+            sub <- unify t t'
+            let newT = apply sub t
+            insertSig (coerce name) (Just newT)
+            return $ T.Bind (coerce name, newT) [] e
+        _ -> do
+            insertSig (coerce name) (Just t')
+            return (T.Bind (coerce name, t') [] e) -- (apply s e)
   where
     makeLambda :: Exp -> [Ident] -> Exp
     makeLambda = foldl (flip (EAbs . coerce))
 
-{- | Check if two types are considered equal
-  For the purpose of the algorithm two polymorphic types are always considered
-  equal
--}
-typeEq :: Type -> Type -> Bool
-typeEq (TFun l r) (TFun l' r') = typeEq l l' && typeEq r r'
-typeEq (TLit a) (TLit b) = a == b
-typeEq (TIndexed (Indexed name a)) (TIndexed (Indexed name' b)) =
-    length a == length b
-        && name == name'
-        && and (zipWith typeEq a b)
-typeEq (TAll n1 t1) (TAll n2 t2) = t1 `typeEq` t2
-typeEq _ _ = False
+    -- getFunctionTypes :: Map Ident (Maybe T.Type) -> T.ExpT -> [(Ident, T.Type)]
+    -- getFunctionTypes s = \case
+    --     (T.EId b, t) -> case M.lookup b s of
+    --         Just Nothing -> return (b, t)
+    --         _ -> []
+    --     (T.ELit _, _) -> []
+    --     (T.ELet (T.Bind _ _ e1) e2, _) -> getFunctionTypes s e1 ++ getFunctionTypes s e2
+    --     (T.EApp e1 e2, _) -> getFunctionTypes s e1 ++ getFunctionTypes s e2
+    --     (T.EAdd e1 e2, _) -> getFunctionTypes s e1 ++ getFunctionTypes s e2
+    --     (T.EAbs _ e, _) -> getFunctionTypes s e
+    --     (T.ECase e injs, _) -> getFunctionTypes s e ++ concatMap (getFunctionTypes s . \(T.Inj _ e) -> e) injs
 
 isMoreSpecificOrEq :: T.Type -> T.Type -> Bool
 isMoreSpecificOrEq _ (T.TAll _ _) = True
@@ -193,20 +205,20 @@ algoW = \case
     -- \| x : σ ∈ Γ   τ = inst(σ)
     -- \| ----------------------
     -- \|     Γ ⊢ x : τ, ∅
-
     EVar i -> do
         var <- asks vars
         case M.lookup (coerce i) var of
-            Just t -> inst t >>= \x -> return (nullSubst, (T.EId (coerce i, x), x))
+            Just t -> inst t >>= \x -> return (nullSubst, (T.EId $ coerce i, x))
             Nothing -> do
                 sig <- gets sigs
                 case M.lookup (coerce i) sig of
-                    Just t -> return (nullSubst, (T.EId (coerce i, t), t))
-                    Nothing -> throwError $ "Unbound variable: " ++ show i
+                    Just (Just t) -> return (nullSubst, (T.EId $ coerce i, t))
+                    Just Nothing -> (\x -> (nullSubst, (T.EId $ coerce i, x))) <$> fresh
+                    Nothing -> throwError $ "Unbound variable: " ++ printTree i
     ECons i -> do
         constr <- gets constructors
         case M.lookup (coerce i) constr of
-            Just t -> return (nullSubst, (T.EId (coerce i, t), t))
+            Just t -> return (nullSubst, (T.EId $ coerce i, t))
             Nothing -> throwError $ "Constructor: '" ++ printTree i ++ "' is not defined"
 
     -- \| τ = newvar   Γ, x : τ ⊢ e : τ', S
@@ -219,7 +231,7 @@ algoW = \case
             (s1, (e', t')) <- algoW e
             let varType = apply s1 fr
             let newArr = T.TFun varType t'
-            return (s1, apply s1 (T.EAbs (coerce name, varType) (e', newArr), newArr))
+            return (s1, apply s1 (T.EAbs (coerce name, varType) (e', t'), newArr))
 
     -- \| Γ ⊢ e₀ : τ₀, S₀    S₀Γ ⊢ e₁ : τ₁, S₁
     -- \| s₂ = mgu(s₁τ₀, Int)    s₃ = mgu(s₂τ₁, Int)
@@ -250,7 +262,6 @@ algoW = \case
         (s0, (e0', t0)) <- algoW e0
         applySt s0 $ do
             (s1, (e1', t1)) <- algoW e1
-            -- applySt s1 $ do
             s2 <- unify (apply s1 t0) (T.TFun t1 fr)
             let t = apply s2 fr
             let comp = s2 `compose` s1 `compose` s0
@@ -309,17 +320,10 @@ unify t0 t1 = do
                             , "(" ++ printTree t' ++ ")"
                             ]
         (a, b) -> do
-            ctx <- ask
-            env <- get
             throwError . unwords $
-                [ "T.Type:"
-                , printTree a
-                , "can't be unified with:"
-                , printTree b
-                , "\nCtx:"
-                , show ctx
-                , "\nEnv:"
-                , show env
+                [ "'" ++ printTree a ++ "'"
+                , "can't be unified with"
+                , "'" ++ printTree b ++ "'"
                 ]
 
 {- | Check if a type is contained in another type.
@@ -415,7 +419,7 @@ instance FreeVars T.ExpT where
     free = error "free not implemented for T.Exp"
     apply :: Subst -> T.ExpT -> T.ExpT
     apply s = \case
-        (T.EId (i, innerT), outerT) -> (T.EId (i, apply s innerT), apply s outerT)
+        (T.EId i, outerT) -> (T.EId i, apply s outerT)
         (T.ELit lit, t) -> (T.ELit lit, apply s t)
         (T.ELet (T.Bind (ident, t1) args e1) e2, t2) -> (T.ELet (T.Bind (ident, apply s t1) args (apply s e1)) (apply s e2), apply s t2)
         (T.EApp e1 e2, t) -> (T.EApp (apply s e1) (apply s e2), apply s t)
@@ -459,7 +463,7 @@ withBindings xs =
     local (\st -> st{vars = foldl' (flip (uncurry M.insert)) (vars st) xs})
 
 -- | Insert a function signature into the environment
-insertSig :: Ident -> T.Type -> Infer ()
+insertSig :: Ident -> Maybe T.Type -> Infer ()
 insertSig i t = modify (\st -> st{sigs = M.insert i t (sigs st)})
 
 -- | Insert a constructor with its data type

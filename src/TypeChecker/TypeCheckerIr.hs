@@ -17,16 +17,12 @@ import Grammar.Print
 import Prelude
 import Prelude qualified as C (Eq, Ord, Read, Show)
 
--- | A data type representing type variables
-data Poly = Forall [Ident] Type
-    deriving (Show)
-
 newtype Ctx = Ctx {vars :: Map Ident Type}
     deriving (Show)
 
 data Env = Env
     { count :: Int
-    , sigs :: Map Ident Type
+    , sigs :: Map Ident (Maybe Type)
     , constructors :: Map Ident Type
     }
     deriving (Show)
@@ -39,7 +35,7 @@ type Infer = StateT Env (ReaderT Ctx (ExceptT Error Identity))
 newtype Program = Program [Def]
     deriving (C.Eq, C.Ord, C.Show, C.Read)
 
-data TVar = MkTVar Ident
+newtype TVar = MkTVar Ident
     deriving (Show, Eq, Ord, Read)
 
 data Type
@@ -51,7 +47,7 @@ data Type
     deriving (Show, Eq, Ord, Read)
 
 data Exp
-    = EId Id
+    = EId Ident
     | ELit Lit
     | ELet Bind ExpT
     | EApp ExpT ExpT
@@ -78,7 +74,7 @@ data Bind = Bind Id [Id] ExpT
 
 instance Print [Def] where
     prt _ [] = concatD []
-    prt _ (x : xs) = concatD [prt 0 x, doc (showString "\n"), prt 0 xs]
+    prt _ (x : xs) = concatD [prt 0 x, doc (showString "\n\n"), prt 0 xs]
 
 instance Print Def where
     prt i (DBind bind) = prt i bind
@@ -88,7 +84,7 @@ instance Print Program where
     prt i (Program sc) = prPrec i 0 $ prt 0 sc
 
 instance Print Bind where
-    prt i (Bind (t, name) args rhs) =
+    prt i (Bind (name, t) _ rhs) =
         prPrec i 0 $
             concatD
                 [ prt 0 name
@@ -112,9 +108,11 @@ prtId :: Int -> Id -> Doc
 prtId i (name, t) =
     prPrec i 0 $
         concatD
-            [ prt 0 name
+            [ doc $ showString "("
+            , prt 0 name
             , doc $ showString ":"
             , prt 0 t
+            , doc $ showString ")"
             ]
 
 prtIdP :: Int -> Id -> Doc
@@ -130,8 +128,8 @@ prtIdP i (name, t) =
 
 instance Print Exp where
     prt i = \case
-        EId n -> prPrec i 3 $ concatD [prtId 0 n, doc $ showString "\n"]
-        ELit lit -> prPrec i 3 $ concatD [prt 0 lit, doc $ showString "\n"]
+        EId n -> prPrec i 3 $ concatD [prt 0 n]
+        ELit lit -> prPrec i 3 $ concatD [prt 0 lit]
         ELet bs e ->
             prPrec i 3 $
                 concatD
@@ -139,7 +137,6 @@ instance Print Exp where
                     , prt 0 bs
                     , doc $ showString "in"
                     , prt 0 e
-                    , doc $ showString "\n"
                     ]
         EApp e1 e2 ->
             prPrec i 2 $
@@ -154,16 +151,14 @@ instance Print Exp where
                     , prt 1 e1
                     , doc $ showString "+"
                     , prt 2 e2
-                    , doc $ showString "\n"
                     ]
         EAbs n e ->
             prPrec i 0 $
                 concatD
-                    [ doc $ showString "@"
+                    [ doc $ showString "λ"
                     , prtId 0 n
                     , doc $ showString "."
                     , prt 0 e
-                    , doc $ showString "\n"
                     ]
         ECase exp injs ->
             prPrec
@@ -177,12 +172,11 @@ instance Print Exp where
                     , prt 0 injs
                     , doc (showString "}")
                     , doc (showString ":")
-                    , doc $ showString "\n"
                     ]
                 )
 
 instance Print ExpT where
-    prt i (e, t) = concatD [prt i e, doc (showString ":"), prt i t]
+    prt i (e, t) = concatD [doc $ showString "(", prt i e, doc (showString ":"), prt i t, doc $ showString ")"]
 
 instance Print Inj where
     prt i = \case
