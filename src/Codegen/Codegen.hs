@@ -181,7 +181,7 @@ compileScs []                             = do
 
             enumerateOneM_ (\i (GA.Ident arg_n, arg_t) -> do
                 let arg_t' = type2LlvmType arg_t
-                emit $ Comment (show arg_t' <>" "<> arg_n <> " " <> show i )
+                emit $ Comment (toIr arg_t' <>" "<> arg_n <> " " <> show i )
                 elemPtr <- getNewVar
                 emit $ SetVariable elemPtr (
                     GetElementPtr (CustomType id) (Ref (CustomType id))
@@ -233,7 +233,7 @@ mainContent var =
         -- "    %3 = bitcast %Craig* %2 to i72*\n" <>
         -- "    %4 = load i72, ptr %3\n" <>
         -- "    call i32 (ptr, ...) @printf(ptr noundef @.str, i72 noundef %4)\n"
-          "call i32 (ptr, ...) @printf(ptr noundef @.str, i64 noundef " <> show var <> ")\n"
+          "call i32 (ptr, ...) @printf(ptr noundef @.str, i64 noundef " <> toIr var <> ")\n"
     , -- , SetVariable (GA.Ident "p") (Icmp LLEq I64 (VInteger 2) (VInteger 2))
       -- , BrCond (VIdent (GA.Ident "p")) (GA.Ident "b_1") (GA.Ident "b_2")
       -- , Label (GA.Ident "b_1")
@@ -323,7 +323,7 @@ emitECased t e cases = do
                             LInt l  -> emit $ Icmp LLEq I64 (VIdent testVar Ptr) (VInteger l)
                             LChar c -> emit $ Icmp LLEq I8 (VIdent testVar Ptr) (VChar c)
                     CatchAll   -> emit . Comment $ "Catch all"
-                emit . Comment $ "return this " <> show val
+                emit . Comment $ "return this " <> toIr val
                 emit . Comment . show $ c
                 emit . Comment . show $ i
             ) cs

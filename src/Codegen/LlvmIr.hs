@@ -7,19 +7,20 @@ module Codegen.LlvmIr (
     LLVMValue (..),
     LLVMComp (..),
     Visibility (..),
-    CallingConvention (..)
+    CallingConvention (..),
+    ToIr(..)
 ) where
 
 import           Data.List   (intercalate)
 import           Grammar.Abs (Ident (..))
 
 data CallingConvention = TailCC | FastCC | CCC | ColdCC
-instance Show CallingConvention where
-    show :: CallingConvention -> String
-    show TailCC = "tailcc"
-    show FastCC = "fastcc"
-    show CCC    = "ccc"
-    show ColdCC = "coldcc"
+instance ToIr CallingConvention where
+    toIr :: CallingConvention -> String
+    toIr TailCC = "tailcc"
+    toIr FastCC = "fastcc"
+    toIr CCC    = "ccc"
+    toIr ColdCC = "coldcc"
 
 -- | A datatype which represents some basic LLVM types
 data LLVMType
@@ -33,17 +34,20 @@ data LLVMType
     | Array Integer LLVMType
     | CustomType Ident
 
-instance Show LLVMType where
-    show :: LLVMType -> String
-    show = \case
+class ToIr a where
+    toIr :: a -> String
+
+instance ToIr LLVMType where
+    toIr :: LLVMType -> String
+    toIr = \case
         I1 -> "i1"
         I8 -> "i8"
         I32 -> "i32"
         I64 -> "i64"
         Ptr -> "ptr"
-        Ref ty -> show ty <> "*"
-        Function t xs -> show t <> " (" <> intercalate ", " (map show xs) <> ")*"
-        Array n ty -> concat ["[", show n, " x ", show ty, "]"]
+        Ref ty -> toIr ty <> "*"
+        Function t xs -> toIr t <> " (" <> intercalate ", " (map toIr xs) <> ")*"
+        Array n ty -> concat ["[", show n, " x ", toIr ty, "]"]
         CustomType (Ident ty) -> "%" <> ty
 
 data LLVMComp
@@ -57,9 +61,9 @@ data LLVMComp
     | LLSge
     | LLSlt
     | LLSle
-instance Show LLVMComp where
-    show :: LLVMComp -> String
-    show = \case
+instance ToIr LLVMComp where
+    toIr :: LLVMComp -> String
+    toIr = \case
         LLEq  -> "eq"
         LLNe  -> "ne"
         LLUgt -> "ugt"
@@ -72,10 +76,10 @@ instance Show LLVMComp where
         LLSle -> "sle"
 
 data Visibility = Local | Global
-instance Show Visibility where
-    show :: Visibility -> String
-    show Local  = "%"
-    show Global = "@"
+instance ToIr Visibility where
+    toIr :: Visibility -> String
+    toIr Local  = "%"
+    toIr Global = "@"
 
 -- | Represents a LLVM "value", as in an integer, a register variable,
 -- or a string contstant
@@ -86,13 +90,13 @@ data LLVMValue
     | VConstant String
     | VFunction Ident Visibility LLVMType
 
-instance Show LLVMValue where
-    show :: LLVMValue -> String
-    show v = case v of
+instance ToIr LLVMValue where
+    toIr :: LLVMValue -> String
+    toIr v = case v of
         VInteger i                -> show i
         VChar i                   -> show i
         VIdent (Ident n) _        -> "%" <> n
-        VFunction (Ident n) vis _ -> show vis <> n
+        VFunction (Ident n) vis _ -> toIr vis <> n
         VConstant s               -> "c" <> show s
 
 type Params = [(Ident, LLVMType)]
@@ -128,7 +132,6 @@ data LLVMIr
     | Comment String
     | UnsafeRaw String -- This should generally be avoided, and proper
     -- instructions should be used in its place
-    deriving (Show)
 
 -- | Converts a list of LLVMIr instructions to a string
 llvmIrToString :: [LLVMIr] -> String
@@ -152,31 +155,31 @@ llvmIrToString = go 0
             (GetElementPtr t1 t2 p t3 v1 t4 v2) -> do
                 -- getelementptr inbounds %Foo, %Foo* %x, i32 0, i32 0
                 concat
-                    [ "getelementptr ", show t1, ", " , show t2
-                    , " ", show p, ", ", show t3, " ", show v1
-                    , ", ", show t4, " ", show v2, "\n"
+                    [ "getelementptr ", toIr t1, ", " , toIr t2
+                    , " ", toIr p, ", ", toIr t3, " ", toIr v1
+                    , ", ", toIr t4, " ", toIr v2, "\n"
                     ]
             (ExtractValue t1 v i) -> do
                 concat
-                    [ "extractvalue ", show t1, " "
-                    , show v, ", ", show i, "\n"
+                    [ "extractvalue ", toIr t1, " "
+                    , toIr v, ", ", show i, "\n"
                     ]
             (GetElementPtrInbounds t1 t2 p t3 v1 t4 v2) -> do
                 -- getelementptr inbounds %Foo, %Foo* %x, i32 0, i32 0
                 concat
-                    [ "getelementptr inbounds ", show t1, ", " , show t2
-                    , " ", show p, ", ", show t3, " ", show v1,
-                    ", ", show t4, " ", show v2, "\n" ]
+                    [ "getelementptr inbounds ", toIr t1, ", " , toIr t2
+                    , " ", toIr p, ", ", toIr t3, " ", toIr v1,
+                    ", ", toIr t4, " ", toIr v2, "\n" ]
             (Type (Ident n) types) ->
                 concat
                     [ "%", n, " = type { "
-                    , intercalate ", " (map show types)
+                    , intercalate ", " (map toIr types)
                     , " }\n"
                     ]
             (Define c t (Ident i) params) ->
                 concat
-                    [ "define ", show c, " ", show t, " @", i
-                    , "(", intercalate ", " (map (\(Ident y, x) -> unwords [show x, "%" <> y]) params)
+                    [ "define ", toIr c, " ", toIr t, " @", i
+                    , "(", intercalate ", " (map (\(Ident y, x) -> unwords [toIr x, "%" <> y]) params)
                     , ") {\n"
                     ]
             DefineEnd -> "}\n"
@@ -184,67 +187,67 @@ llvmIrToString = go 0
             (SetVariable (Ident i) ir) -> concat ["%", i, " = ", insToString 0 ir]
             (Add t v1 v2) ->
                 concat
-                    [ "add ", show t, " ", show v1
-                    , ", ", show v2, "\n"
+                    [ "add ", toIr t, " ", toIr v1
+                    , ", ", toIr v2, "\n"
                     ]
             (Sub t v1 v2) ->
                 concat
-                    [ "sub ", show t, " ", show v1, ", "
-                    , show v2, "\n"
+                    [ "sub ", toIr t, " ", toIr v1, ", "
+                    , toIr v2, "\n"
                     ]
             (Div t v1 v2) ->
                 concat
-                    [ "sdiv ", show t, " ", show v1, ", "
-                    , show v2, "\n"
+                    [ "sdiv ", toIr t, " ", toIr v1, ", "
+                    , toIr v2, "\n"
                     ]
             (Mul t v1 v2) ->
                 concat
-                    [ "mul ", show t, " ", show v1
-                    , ", ", show v2, "\n"
+                    [ "mul ", toIr t, " ", toIr v1
+                    , ", ", toIr v2, "\n"
                     ]
             (Srem t v1 v2) ->
                 concat
-                    [ "srem ", show t, " ", show v1, ", "
-                    , show v2, "\n"
+                    [ "srem ", toIr t, " ", toIr v1, ", "
+                    , toIr v2, "\n"
                     ]
             (Call c t vis (Ident i) arg) ->
                 concat
-                    [ "call ", show c, " ",  show t, " ", show vis, i, "("
-                    , intercalate ", " $ Prelude.map (\(x, y) -> show x <> " " <> show y) arg
+                    [ "call ", toIr c, " ",  toIr t, " ", toIr vis, i, "("
+                    , intercalate ", " $ Prelude.map (\(x, y) -> toIr x <> " " <> toIr y) arg
                     , ")\n"
                     ]
-            (Alloca t) -> unwords ["alloca", show t, "\n"]
+            (Alloca t) -> unwords ["alloca", toIr t, "\n"]
             (Store t1 val t2 (Ident id2)) ->
                 concat
-                    [ "store ", show t1, " ", show val
-                    , ", ", show t2 , " %", id2, "\n"
+                    [ "store ", toIr t1, " ", toIr val
+                    , ", ", toIr t2 , " %", id2, "\n"
                     ]
             (Load t1 t2 (Ident addr)) ->
                 concat
-                    [ "load ", show t1, ", "
-                    , show t2, " %", addr, "\n"
+                    [ "load ", toIr t1, ", "
+                    , toIr t2, " %", addr, "\n"
                     ]
             (Bitcast t1 v t2) ->
                 concat
-                    [ "bitcast ", show t1, " "
-                    , show v, " to ", show t2, "\n"
+                    [ "bitcast ", toIr t1, " "
+                    , toIr v, " to ", toIr t2, "\n"
                     ]
             (Icmp comp t v1 v2) ->
                 concat
-                    [ "icmp ", show comp, " ", show t
-                    , " ", show v1, ", ", show v2, "\n"
+                    [ "icmp ", toIr comp, " ", toIr t
+                    , " ", toIr v1, ", ", toIr v2, "\n"
                     ]
             (Ret t v) ->
                 concat
-                    [ "ret ", show t, " "
-                    , show v, "\n"
+                    [ "ret ", toIr t, " "
+                    , toIr v, "\n"
                     ]
             (UnsafeRaw s) -> s
             (Label (Ident s)) -> "\n" <> lblPfx <> s <> ":\n"
             (Br (Ident s)) -> "br label %" <> lblPfx <> s <> "\n"
             (BrCond val (Ident s1) (Ident s2)) ->
                 concat
-                    [ "br i1 ", show val, ", ", "label %"
+                    [ "br i1 ", toIr val, ", ", "label %"
                     , lblPfx, s1, ", ", "label %", lblPfx, s2, "\n"
                     ]
             (Comment s) -> "; " <> s <> "\n"
