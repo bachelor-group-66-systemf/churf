@@ -1,7 +1,12 @@
-module Monomorphizer.MonomorphizerIr where
+module Monomorphizer.MonomorphizerIr (module Monomorphizer.MonomorphizerIr, module RE1, module RE2) where
 
-import Grammar.Abs (Data, Ident, Init)
-import TypeChecker.TypeCheckerIr (ExpT, Id, Indexed)
+import qualified Grammar.Abs               as RE1 (Data (..), Ident (..),
+                                                   Init (..))
+import qualified TypeChecker.TypeCheckerIr as RE2 (ExpT, Id, Indexed)
+
+import           Grammar.Abs               (Data (..), Ident (..), Init (..))
+import           TypeChecker.TypeCheckerIr (ExpT, Id, Indexed)
+
 
 newtype Program = Program [Def]
     deriving (Show, Ord, Eq)
