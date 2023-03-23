@@ -18,7 +18,7 @@ data Bind = Bind Id [Id] ExpT
     deriving (Show, Ord, Eq)
 
 data Exp
-    = EId Id
+    = EId Ident
     | ELit Lit
     | ELet Id ExpT ExpT
     | EApp Type ExpT ExpT
