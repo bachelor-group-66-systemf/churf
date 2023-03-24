@@ -11,6 +11,8 @@
 #include "event.hpp"
 #include "profiler.hpp"
 
+#define MAC_OS
+
 namespace GC
 {
     /**
@@ -153,8 +155,8 @@ namespace GC
     }
 
     /**
-     * This function retrieves the current path of the
-     * executable to use for log files.
+     * This function retrieves the path to the folder
+     * of the executable to use for log files.
      * 
      * @returns The path to the logs folder.
      * 
@@ -163,6 +165,7 @@ namespace GC
     */
     std::string Profiler::get_log_folder()
     {
+#ifndef MAC_OS
         char buffer[1024];
         // chars read from path
         ssize_t len = readlink("/proc/self/exe", buffer, sizeof(buffer)-1);
@@ -181,7 +184,9 @@ namespace GC
         // remove filename
         size_t last_slash = path.find_last_of('/');
         std::string folder = path.substr(0, last_slash);
-
+#else
+        auto folder = std::string("/Users/valtermiari/Desktop/DV/Bachelors/code/language/src/GC/tests");
         return folder + "/logs";
+#endif
     }
 }
