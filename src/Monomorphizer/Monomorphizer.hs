@@ -47,7 +47,7 @@ monoType (T.TAll _ t) = monoType t
 monoType (T.TVar (T.MkTVar i)) = M.TLit "Int"
 monoType (T.TLit (T.Ident i)) = M.TLit (Ident i)
 monoType (T.TFun t1 t2) = M.TFun (monoType t1) (monoType t2)
-monoType (T.TData _ _) = error "Not sure what this is"
+monoType (T.TData (T.Ident n) t) = M.TLit (Ident (n ++ concatMap show t))
 
 monoexpt :: T.ExpT -> M.ExpT
 monoexpt (e, t) = (monoExpr e, monoType t)
