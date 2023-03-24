@@ -68,7 +68,11 @@ checkData d = do
                                     ]
                 )
                 constrs
-        _ -> throwError $ "incorrectly declared data type '" ++ printTree d ++ "'"
+        _ ->
+            throwError $
+                "incorrectly declared data type '"
+                    <> printTree d
+                    <> "'"
 
 retType :: Type -> Type
 retType (TFun _ t2) = retType t2
@@ -79,7 +83,7 @@ checkPrg (Program bs) = do
     preRun bs
     -- Type check the program twice to produce all top-level types in the first pass through
     bs' <- checkDef bs
-    trace ("FIRST ITERATION: " ++ printTree bs') pure ()
+    trace ("FIRST ITERATION: " <> printTree bs') pure ()
     bs'' <- checkDef bs
     return $ T.Program bs''
   where
@@ -92,8 +96,8 @@ checkPrg (Program bs) = do
                     when
                     ( throwError $
                         "Duplicate signatures for function '"
-                            ++ printTree n
-                            ++ "'"
+                            <> printTree n
+                            <> "'"
                     )
             insertSig (coerce n) (Just $ toNew t) >> preRun xs
         DBind (Bind n _ _) -> do
@@ -138,11 +142,11 @@ checkBind (Bind name args e) = do
                 --           Just Nothing -> return (b, t)
                 --           _ -> []
                 --       (T.ELit _, _) -> []
-                --       (T.ELet (T.Bind _ _ e1) e2, _) -> getFunctionTypes s e1 ++ getFunctionTypes s e2
-                --       (T.EApp e1 e2, _) -> getFunctionTypes s e1 ++ getFunctionTypes s e2
-                --       (T.EAdd e1 e2, _) -> getFunctionTypes s e1 ++ getFunctionTypes s e2
+                --       (T.ELet (T.Bind _ _ e1) e2, _) -> getFunctionTypes s e1 <> getFunctionTypes s e2
+                --       (T.EApp e1 e2, _) -> getFunctionTypes s e1 <> getFunctionTypes s e2
+                --       (T.EAdd e1 e2, _) -> getFunctionTypes s e1 <> getFunctionTypes s e2
                 --       (T.EAbs _ e, _) -> getFunctionTypes s e
-                --       (T.ECase e injs, _) -> getFunctionTypes s e ++ concatMap (getFunctionTypes s . \(T.Inj _ e) -> e) injs
+                --       (T.ECase e injs, _) -> getFunctionTypes s e <> concatMap (getFunctionTypes s . \(T.Inj _ e) -> e) injs
 
 isMoreSpecificOrEq :: T.Type -> T.Type -> Bool
 isMoreSpecificOrEq _ (T.TAll _ _) = True
@@ -221,13 +225,18 @@ algoW = \case
                 sig <- gets sigs
                 case M.lookup (coerce i) sig of
                     Just (Just t) -> return (nullSubst, (T.EId $ coerce i, t))
-                    Just Nothing -> (\x -> (nullSubst, (T.EId $ coerce i, x))) <$> fresh
-                    Nothing -> throwError $ "Unbound variable: " ++ printTree i
+                    Just Nothing ->
+                        (\x -> (nullSubst, (T.EId $ coerce i, x))) <$> fresh
+                    Nothing -> throwError $ "Unbound variable: " <> printTree i
     ECons i -> do
         constr <- gets constructors
         case M.lookup (coerce i) constr of
             Just t -> return (nullSubst, (T.EId $ coerce i, t))
-            Nothing -> throwError $ "Constructor: '" ++ printTree i ++ "' is not defined"
+            Nothing ->
+                throwError $
+                    "Constructor: '"
+                        <> printTree i
+                        <> "' is not defined"
 
     -- \| τ = newvar   Γ, x : τ ⊢ e : τ', S
     -- \| ---------------------------------
@@ -307,7 +316,7 @@ makeLambda = foldl (flip (EAbs . coerce))
 
 -- | Unify two types producing a new substitution
 unify :: T.Type -> T.Type -> Infer Subst
-unify t0 t1 | trace ("T0: " ++ show t0 ++ "\nT1: " ++ show t1) False = undefined
+unify t0 t1 | trace ("T0: " <> show t0 <> "\nT1: " <> show t1) False = undefined
 unify t0 t1 = do
     case (t0, t1) of
         (T.TFun a b, T.TFun c d) -> do
@@ -319,7 +328,16 @@ unify t0 t1 = do
         (T.TAll _ t, b) -> unify t b
         (a, T.TAll _ t) -> unify a t
         (T.TLit a, T.TLit b) ->
-            if a == b then return M.empty else throwError . unwords $ ["Can not unify", "'" ++ printTree (T.TLit a) ++ "'", "with", "'" ++ printTree (T.TLit b) ++ "'"]
+            if a == b
+                then return M.empty
+                else
+                    throwError
+                        . unwords
+                        $ [ "Can not unify"
+                          , "'" <> printTree (T.TLit a) <> "'"
+                          , "with"
+                          , "'" <> printTree (T.TLit b) <> "'"
+                          ]
         (T.TData name t, T.TData name' t') ->
             if name == name' && length t == length t'
                 then do
@@ -330,16 +348,16 @@ unify t0 t1 = do
                         unwords
                             [ "T.Type constructor:"
                             , printTree name
-                            , "(" ++ printTree t ++ ")"
+                            , "(" <> printTree t <> ")"
                             , "does not match with:"
                             , printTree name'
-                            , "(" ++ printTree t' ++ ")"
+                            , "(" <> printTree t' <> ")"
                             ]
         (a, b) -> do
             throwError . unwords $
-                [ "'" ++ printTree a ++ "'"
+                [ "'" <> printTree a <> "'"
                 , "can't be unified with"
-                , "'" ++ printTree b ++ "'"
+                , "'" <> printTree b <> "'"
                 ]
 
 {- | Check if a type is contained in another type.
@@ -437,7 +455,12 @@ instance FreeVars T.ExpT where
     apply s = \case
         (T.EId i, outerT) -> (T.EId i, apply s outerT)
         (T.ELit lit, t) -> (T.ELit lit, apply s t)
-        (T.ELet (T.Bind (ident, t1) args e1) e2, t2) -> (T.ELet (T.Bind (ident, apply s t1) args (apply s e1)) (apply s e2), apply s t2)
+        (T.ELet (T.Bind (ident, t1) args e1) e2, t2) ->
+            ( T.ELet
+                (T.Bind (ident, apply s t1) args (apply s e1))
+                (apply s e2)
+            , apply s t2
+            )
         (T.EApp e1 e2, t) -> (T.EApp (apply s e1) (apply s e2), apply s t)
         (T.EAdd e1 e2, t) -> (T.EAdd (apply s e1) (apply s e2), apply s t)
         (T.EAbs ident e, t1) -> (T.EAbs ident (apply s e), apply s t1)
@@ -524,7 +547,7 @@ inferInit = \case
         gets (M.lookup (coerce fn) . constructors) >>= \case
             Nothing ->
                 throwError $
-                    "Constructor: " ++ printTree fn ++ " does not exist"
+                    "Constructor: " <> printTree fn <> " does not exist"
             Just a -> do
                 case unsnoc $ flattenType a of
                     Nothing -> throwError "Partial pattern match not allowed"
@@ -536,7 +559,7 @@ inferInit = \case
     InitCatch -> (,mempty) <$> fresh
 
 flattenType :: T.Type -> [T.Type]
-flattenType (T.TFun a b) = flattenType a ++ flattenType b
+flattenType (T.TFun a b) = flattenType a <> flattenType b
 flattenType a = [a]
 
 litType :: Lit -> T.Type
@@ -555,8 +578,9 @@ partitionType = go []
     go acc 0 t = (acc, t)
     go acc i t = case t of
         TAll tvar t' -> second (TAll tvar) $ go acc i t'
-        TFun t1 t2 -> go (acc ++ [t1]) (i - 1) t2
+        TFun t1 t2 -> go (acc <> [t1]) (i - 1) t2
         _ -> error "Number of parameters and type doesn't match"
 
 exprErr :: Infer a -> Exp -> Infer a
-exprErr ma exp = catchError ma (\x -> throwError $ x ++ " on expression: " ++ printTree exp)
+exprErr ma exp =
+    catchError ma (\x -> throwError $ x <> " on expression: " <> printTree exp)
