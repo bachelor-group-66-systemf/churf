@@ -169,14 +169,14 @@ namespace GC
 	 * 
 	 * @returns 	The pointer to the chunk at position n in list.
 	*/
-	Chunk *Heap::get_at(std::vector<Chunk *> &list, size_t n)
-	{
-		auto iter = list.begin();
-		if (!n)
-			return *iter;
-		std::advance(iter, n);
-		return *iter;
-	}
+	// Chunk *Heap::get_at(std::vector<Chunk *> &list, size_t n)
+	// {
+	// 	auto iter = list.begin();
+	// 	if (!n)
+	// 		return *iter;
+	// 	std::advance(iter, n);
+	// 	return *iter;
+	// }
 
 	/**
 	 * Returns a bool whether the profiler is enabled

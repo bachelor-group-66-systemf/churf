@@ -1,4 +1,9 @@
+#include <chrono>
+#include <iostream>
+
 #include "heap.hpp"
+
+using std::cout, std::endl;
 
 struct Node {
     int id;
@@ -6,6 +11,7 @@ struct Node {
 };
 
 Node *create_chain(int depth) {
+    cout << "entering create_chain";
     std::vector<Node*> nodes;
     if (depth > 0) {
         Node *last_node = static_cast<Node *>(GC::Heap::alloc(sizeof(Node)));
@@ -18,6 +24,7 @@ Node *create_chain(int depth) {
             node->child = nodes[i];
             nodes.push_back(node);
         }
+        cout << "\nexiting create_chain" << endl;
         return nodes[depth];
     }
     else
@@ -29,21 +36,26 @@ void create_array(size_t size) {
 }
 
 void detach_pointer(long **ptr) {
+    cout << "entering detach_pointer";
     long *dummy_ptr = nullptr;
     *ptr = dummy_ptr;
+    cout << "\nexiting detach_pointer" << endl;
 }
 
 Node *test_chain(int depth, bool detach) {
+    cout << "entering test_chain";
     auto stack_start = reinterpret_cast<uintptr_t *>(__builtin_frame_address(0));
 
     Node *node_chain = create_chain(depth);
     if (detach)
         node_chain->child = nullptr;
-    return node_chain;
 
+    cout << "\nexiting test_chain" << endl;
+    return node_chain;
 }
 
 void test_some_types() {
+    cout << "entering test_some_types" << endl;
     auto stack_start = reinterpret_cast<uintptr_t *>(__builtin_frame_address(0));
     std::cout << "Stack start from test_some_types:\t" << stack_start << std::endl;
 
@@ -56,9 +68,11 @@ void test_some_types() {
     int *i = static_cast<int *>(GC::Heap::alloc(sizeof(int)));
     char *c = static_cast<char *>(GC::Heap::alloc(sizeof(int))); 
     short *s = static_cast<short *>(GC::Heap::alloc(sizeof(short)));
+    cout << "exiting test_some_types" << endl;
 }
 
 int main() {
+    cout << "entering main" << endl;
     using namespace std::literals;
 
     auto start = std::chrono::high_resolution_clock::now();
@@ -70,9 +84,9 @@ int main() {
     auto stack_start = reinterpret_cast<uintptr_t *>(__builtin_frame_address(0));
 
     Node *root1 = static_cast<Node *>(gc.alloc(sizeof(Node)));
-    //Node *root2 = static_cast<Node *>(gc.alloc(sizeof(Node)));
-    root1 = test_chain(60000, false);
-    //root2 = test_chain(50000, true);
+    Node *root2 = static_cast<Node *>(gc.alloc(sizeof(Node)));
+    root1 = test_chain(58000, false);
+    root2 = test_chain(58000, false);
 
 
     gc.collect(GC::COLLECT_ALL);     
@@ -80,7 +94,7 @@ int main() {
     //std::cout << "Value of end: " << end.time_since_epoch().count() << std::endl;
 
     gc.print_summary();
-    //gc.dispose();
+    gc.dispose();
 
     std::cout
         << "Execution time: "

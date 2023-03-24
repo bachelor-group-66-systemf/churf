@@ -21,7 +21,7 @@ heap:
 h_test:
 	rm -f tests/h_test.out
 #	$(CC) $(WFLAGS) $(STDFLAGS) $(LIB_INCL) tests/h_test.cpp lib/heap.cpp lib/profiler.cpp lib/event.cpp -o tests/h_test.out
-	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -o tests/h_test.out tests/h_test.cpp lib/gcoll.a
+	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -O3 -g -o tests/h_test.out tests/h_test.cpp lib/gcoll.a
 
 h_test_vg: h_test
 	valgrind $(VGFLAGS) tests/h_test.out
@@ -55,9 +55,9 @@ static_lib:
 # remove old files
 	rm -f lib/event.o lib/profiler.o lib/heap.o lib/gcoll.a tests/extern_lib.out
 # compile object files
-	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -c -o lib/event.o lib/event.cpp -fPIC
-	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -c -o lib/profiler.o lib/profiler.cpp -fPIC
-	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -c -o lib/heap.o lib/heap.cpp -fPIC
+	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -O3 -g -c -o lib/event.o lib/event.cpp -fPIC
+	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -O3 -g -c -o lib/profiler.o lib/profiler.cpp -fPIC
+	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -O3 -g -c -o lib/heap.o lib/heap.cpp -fPIC
 # create static library
 	ar r lib/gcoll.a lib/event.o lib/profiler.o lib/heap.o
 

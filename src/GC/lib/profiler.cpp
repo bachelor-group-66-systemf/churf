@@ -11,7 +11,7 @@
 #include "event.hpp"
 #include "profiler.hpp"
 
-#define MAC_OS
+// #define MAC_OS
 
 namespace GC
 {
@@ -186,7 +186,7 @@ namespace GC
         std::string folder = path.substr(0, last_slash);
 #else
         auto folder = std::string("/Users/valtermiari/Desktop/DV/Bachelors/code/language/src/GC/tests");
-        return folder + "/logs";
 #endif
+        return folder + "/logs";
     }
 }

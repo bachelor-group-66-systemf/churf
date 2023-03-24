@@ -55,7 +55,7 @@ namespace GC
 		std::vector<Chunk *> m_freed_chunks;
 
 		static bool profiler_enabled();
-		static Chunk *get_at(std::vector<Chunk *> &list, size_t n);
+		// static Chunk *get_at(std::vector<Chunk *> &list, size_t n);
 		void collect();
 		void sweep(Heap &heap);
 		Chunk *try_recycle_chunks(size_t size);
