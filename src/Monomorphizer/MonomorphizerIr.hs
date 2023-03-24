@@ -1,16 +1,18 @@
 module Monomorphizer.MonomorphizerIr (module Monomorphizer.MonomorphizerIr, module RE, module GA) where
 
-import           Grammar.Abs               (Ident (..), Init (..), UIdent)
-import qualified Grammar.Abs               as GA (Ident (..), Init (..))
-import qualified TypeChecker.TypeCheckerIr as RE (Indexed)
-import           TypeChecker.TypeCheckerIr (Indexed)
+import Grammar.Abs (Ident (..), Init (..), UIdent)
+import Grammar.Abs qualified as GA (Ident (..), Init (..))
+import TypeChecker.TypeCheckerIr qualified as RE
 
 type Id = (Ident, Type)
 
 newtype Program = Program [Def]
     deriving (Show, Ord, Eq)
 
-data Def = DBind Bind | DData Constructor
+data Def = DBind Bind | DData Data
+    deriving (Show, Ord, Eq)
+
+data Data = Data Type Constructor
     deriving (Show, Ord, Eq)
 
 data Bind = Bind Id [Id] ExpT
@@ -43,4 +45,4 @@ data Type = TLit Ident | TFun Type Type
 
 flattenType :: Type -> [Type]
 flattenType (TFun t1 t2) = t1 : flattenType t2
-flattenType x            = [x]
+flattenType x = [x]

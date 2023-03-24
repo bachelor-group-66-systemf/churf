@@ -8,18 +8,18 @@ data Bool () where {
     False : Bool ()
    };
 
--- hello_world = Cons 'h' (Cons 'e' (Cons 'l' (Cons 'l' (Cons 'o' (Cons ' ' (Cons 'w' (Cons 'o' (Cons 'r' (Cons 'l' (Cons 'd' Nil)))))))))) ;
+hello_world = Cons 'h' (Cons 'e' (Cons 'l' (Cons 'l' (Cons 'o' (Cons ' ' (Cons 'w' (Cons 'o' (Cons 'r' (Cons 'l' (Cons 'd' Nil)))))))))) ;
 
--- length : List (a) -> Int ;
--- length xs = case xs of {
---     Nil => 0 ;
---     Cons x xs => length xs
--- };
+length : List (a) -> Int ;
+length xs = case xs of {
+    Nil => 0 ;
+    Cons x xs => length xs
+};
 
--- head : List (a) -> a ;
--- head xs = case xs of {
---     Cons x xs => x
--- };
+head : List (a) -> a ;
+head xs = case xs of {
+    Cons x xs => x
+};
 
 firstIsOne : List (Int) -> Bool () ;
 firstIsOne : List (Int) -> Bool () ;
@@ -34,9 +34,11 @@ firstIsOne xs = case xs of {
     _ => False
     };
 
--- firstIsOne :: [Int] -> Bool 
--- firstIsOne xs = case xs of
---     (1 : xs) -> True
---     _ -> False
+firstIsOne :: [Int] -> Bool 
+firstIsOne xs = case xs of
+    (1 : xs) -> True
+    _ -> False
 
 main = firstIsOne (Cons 'a' Nil)
+
+data a -> b where 

@@ -48,13 +48,13 @@ typecheck = run . checkPrg
 checkData :: Data -> Infer ()
 checkData d = do
     case d of
-        (Data typ@(Indexed name ts) constrs) -> do
+        (Data typ@(TData name ts) constrs) -> do
             unless
                 (all isPoly ts)
                 (throwError $ unwords ["Data type incorrectly declared"])
             traverse_
                 ( \(Constructor name' t') ->
-                    if TIndexed typ == retType t'
+                    if typ == retType t'
                         then insertConstr (coerce name') (toNew t')
                         else
                             throwError $
@@ -68,6 +68,7 @@ checkData d = do
                                     ]
                 )
                 constrs
+        _ -> throwError $ "incorrectly declared data type '" ++ printTree d ++ "'"
 
 retType :: Type -> Type
 retType (TFun _ t2) = retType t2
@@ -86,7 +87,14 @@ checkPrg (Program bs) = do
     preRun [] = return ()
     preRun (x : xs) = case x of
         DSig (Sig n t) -> do
-            gets (M.member (coerce n) . sigs) >>= flip when (throwError $ "Duplicate signatures for function '" ++ printTree n ++ "'")
+            gets (M.member (coerce n) . sigs)
+                >>= flip
+                    when
+                    ( throwError $
+                        "Duplicate signatures for function '"
+                            ++ printTree n
+                            ++ "'"
+                    )
             insertSig (coerce n) (Just $ toNew t) >> preRun xs
         DBind (Bind n _ _) -> do
             s <- gets sigs
@@ -140,7 +148,7 @@ isMoreSpecificOrEq :: T.Type -> T.Type -> Bool
 isMoreSpecificOrEq _ (T.TAll _ _) = True
 isMoreSpecificOrEq (T.TFun a b) (T.TFun c d) =
     isMoreSpecificOrEq a c && isMoreSpecificOrEq b d
-isMoreSpecificOrEq (T.TIndexed (T.Indexed n1 ts1)) (T.TIndexed (T.Indexed n2 ts2)) =
+isMoreSpecificOrEq (T.TData n1 ts1) (T.TData n2 ts2) =
     n1 == n2
         && length ts1 == length ts2
         && and (zipWith isMoreSpecificOrEq ts1 ts2)
@@ -169,11 +177,11 @@ instance NewType Type T.Type where
         TVar v -> T.TVar $ toNew v
         TFun t1 t2 -> T.TFun (toNew t1) (toNew t2)
         TAll b t -> T.TAll (toNew b) (toNew t)
-        TIndexed i -> T.TIndexed (toNew i)
+        TData i ts -> T.TData (coerce i) (map toNew ts)
         TEVar _ -> error "Should not exist after typechecker"
 
-instance NewType Indexed T.Indexed where
-    toNew (Indexed name vars) = T.Indexed (coerce name) (map toNew vars)
+-- instance NewType Indexed T.TData where
+--     toNew (Indexed name vars) = T.TData (coerce name) (map toNew vars)
 
 instance NewType TVar T.TVar where
     toNew (MkTVar i) = T.MkTVar $ coerce i
@@ -181,8 +189,8 @@ instance NewType TVar T.TVar where
 algoW :: Exp -> Infer (Subst, T.ExpT)
 algoW = \case
     -- \| TODO: More testing need to be done. Unsure of the correctness of this
-    EAnn e t -> do
-        (s1, (e', t')) <- algoW e
+    err@(EAnn e t) -> do
+        (s1, (e', t')) <- exprErr (algoW e) err
         unless
             (toNew t `isMoreSpecificOrEq` t')
             ( throwError $
@@ -194,16 +202,14 @@ algoW = \case
                     ]
             )
         applySt s1 $ do
-            s2 <- unify (toNew t) t'
+            s2 <- exprErr (unify (toNew t) t') err
             let comp = s2 `compose` s1
             return (comp, apply comp (e', toNew t))
 
     -- \| ------------------
     -- \|   Γ ⊢ i : Int, ∅
 
-    ELit lit ->
-        let lt = litType lit
-         in return (nullSubst, (T.ELit lit, lt))
+    ELit lit -> return (nullSubst, (T.ELit lit, litType lit))
     -- \| x : σ ∈ Γ   τ = inst(σ)
     -- \| ----------------------
     -- \|     Γ ⊢ x : τ, ∅
@@ -227,13 +233,16 @@ algoW = \case
     -- \| ---------------------------------
     -- \|     Γ ⊢ w λx. e : Sτ → τ', S
 
-    EAbs name e -> do
+    err@(EAbs name e) -> do
         fr <- fresh
-        withBinding (coerce name) fr $ do
-            (s1, (e', t')) <- algoW e
-            let varType = apply s1 fr
-            let newArr = T.TFun varType t'
-            return (s1, apply s1 (T.EAbs (coerce name) (e', t'), newArr))
+        exprErr
+            ( withBinding (coerce name) fr $ do
+                (s1, (e', t')) <- exprErr (algoW e) err
+                let varType = apply s1 fr
+                let newArr = T.TFun varType t'
+                return (s1, apply s1 (T.EAbs (coerce name) (e', t'), newArr))
+            )
+            err
 
     -- \| Γ ⊢ e₀ : τ₀, S₀    S₀Γ ⊢ e₁ : τ₁, S₁
     -- \| s₂ = mgu(s₁τ₀, Int)    s₃ = mgu(s₂τ₁, Int)
@@ -241,13 +250,13 @@ algoW = \case
     -- \|        Γ ⊢ e₀ + e₁ : Int, S₃S₂S₁S₀
     -- This might be wrong
 
-    EAdd e0 e1 -> do
+    err@(EAdd e0 e1) -> do
         (s1, (e0', t0)) <- algoW e0
         applySt s1 $ do
             (s2, (e1', t1)) <- algoW e1
             -- applySt s2 $ do
-            s3 <- unify (apply s2 t0) int
-            s4 <- unify (apply s3 t1) int
+            s3 <- exprErr (unify (apply s2 t0) int) err
+            s4 <- exprErr (unify (apply s3 t1) int) err
             let comp = s4 `compose` s3 `compose` s2 `compose` s1
             return
                 ( comp
@@ -259,12 +268,12 @@ algoW = \case
     -- \| --------------------------------------
     -- \|       Γ ⊢ e₀ e₁ : S₂τ', S₂S₁S₀
 
-    EApp e0 e1 -> do
+    err@(EApp e0 e1) -> do
         fr <- fresh
-        (s0, (e0', t0)) <- algoW e0
+        (s0, (e0', t0)) <- exprErr (algoW e0) err
         applySt s0 $ do
-            (s1, (e1', t1)) <- algoW e1
-            s2 <- unify (apply s1 t0) (T.TFun t1 fr)
+            (s1, (e1', t1)) <- exprErr (algoW e1) err
+            s2 <- exprErr (unify (apply s1 t0) (T.TFun t1 fr)) err
             let t = apply s2 fr
             let comp = s2 `compose` s1 `compose` s0
             return (comp, apply comp (T.EApp (e0', t0) (e1', t1), t))
@@ -275,9 +284,9 @@ algoW = \case
 
     -- The bar over S₀ and Γ means "generalize"
 
-    ELet b@(Bind name args e) e1 -> do
-        (s1, (_, t0)) <- algoW (makeLambda e (coerce args))
-        bind' <- checkBind b
+    err@(ELet b@(Bind name args e) e1) -> do
+        (s1, (_, t0)) <- exprErr (algoW (makeLambda e (coerce args))) err
+        bind' <- exprErr (checkBind b) err
         env <- asks vars
         let t' = generalize (apply s1 env) t0
         withBinding (coerce name) t' $ do
@@ -311,7 +320,7 @@ unify t0 t1 = do
         (a, T.TAll _ t) -> unify a t
         (T.TLit a, T.TLit b) ->
             if a == b then return M.empty else throwError . unwords $ ["Can not unify", "'" ++ printTree (T.TLit a) ++ "'", "with", "'" ++ printTree (T.TLit b) ++ "'"]
-        (T.TIndexed (T.Indexed name t), T.TIndexed (T.Indexed name' t')) ->
+        (T.TData name t, T.TData name' t') ->
             if name == name' && length t == length t'
                 then do
                     xs <- zipWithM unify t t'
@@ -399,7 +408,7 @@ instance FreeVars T.Type where
     free (T.TLit _) = mempty
     free (T.TFun a b) = free a `S.union` free b
     -- \| Not guaranteed to be correct
-    free (T.TIndexed (T.Indexed _ a)) =
+    free (T.TData _ a) =
         foldl' (\acc x -> free x `S.union` acc) S.empty a
 
     apply :: Subst -> T.Type -> T.Type
@@ -413,7 +422,7 @@ instance FreeVars T.Type where
                 Nothing -> T.TAll (T.MkTVar i) (apply sub t)
                 Just _ -> apply sub t
             T.TFun a b -> T.TFun (apply sub a) (apply sub b)
-            T.TIndexed (T.Indexed name a) -> T.TIndexed (T.Indexed name (map (apply sub) a))
+            T.TData name a -> T.TData name (map (apply sub) a)
 
 instance FreeVars (Map Ident T.Type) where
     free :: Map Ident T.Type -> Set Ident
@@ -548,3 +557,6 @@ partitionType = go []
         TAll tvar t' -> second (TAll tvar) $ go acc i t'
         TFun t1 t2 -> go (acc ++ [t1]) (i - 1) t2
         _ -> error "Number of parameters and type doesn't match"
+
+exprErr :: Infer a -> Exp -> Infer a
+exprErr ma exp = catchError ma (\x -> throwError $ x ++ " on expression: " ++ printTree exp)

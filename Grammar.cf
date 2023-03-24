@@ -24,7 +24,7 @@ Bind. Bind ::= LIdent [LIdent] "=" Exp ;
          TLit.     Type2 ::= UIdent ;
          TVar.     Type2 ::= TVar ;
          TAll.     Type1 ::= "forall" TVar "." Type ;
-         TIndexed. Type1 ::= Indexed ;
+         TData.    Type1 ::= UIdent "(" [Type] ")" ;
 internal TEVar.    Type1 ::= TEVar ;
          TFun.     Type  ::= Type1 "->" Type ;
 
@@ -37,9 +37,7 @@ internal MkTEVar. TEVar ::= LIdent ;
 
 Constructor. Constructor ::= UIdent ":" Type ;
 
-Indexed. Indexed ::= UIdent "(" [Type] ")" ;
-
-Data. Data ::= "data" Indexed "where" "{" [Constructor] "}" ;
+Data. Data ::= "data" Type "where" "{" [Constructor] "}" ;
 
 -------------------------------------------------------------------------------
 -- * EXPRESSIONS

@@ -37,22 +37,23 @@ renameDefs defs = runIdentity $ runExceptT $ evalStateT (runRn $ mapM renameDef 
     renameDef = \case
         DSig (Sig name typ) -> DSig . Sig name <$> renameTVars typ
         DBind bind -> DBind . snd <$> renameBind initNames bind
-        DData (Data (Indexed cname types) constrs) -> do
+        DData (Data (TData cname types) constrs) -> do
             tvars_ <- tvars
             tvars' <- mapM nextNameTVar tvars_
             let tvars_lt = zip tvars_ tvars'
                 typ' = map (substituteTVar tvars_lt) types
                 constrs' = map (renameConstr tvars_lt) constrs
-            pure . DData $ Data (Indexed cname typ') constrs'
+            pure . DData $ Data (TData cname typ') constrs'
           where
             tvars = concat <$> mapM (collectTVars []) types
             collectTVars :: [TVar] -> Type -> Rn [TVar]
             collectTVars tvars = \case
                 TAll tvar t -> collectTVars (tvar : tvars) t
-                TIndexed _ -> return tvars
+                TData _ _ -> return tvars
                 -- Should be monad error
                 TVar v -> return [v]
                 _ -> throwError ("Bad data type definition: " ++ show types)
+        DData (Data types _) -> throwError ("Bad data type definition: " ++ show types)
 
     renameConstr :: [(TVar, TVar)] -> Constructor -> Constructor
     renameConstr new_types (Constructor name typ) =
@@ -78,7 +79,7 @@ substituteTVar new_names typ = case typ of
             TAll tvar' $ substitute' t
         | otherwise ->
             TAll tvar $ substitute' t
-    TIndexed (Indexed name typs) -> TIndexed . Indexed name $ map substitute' typs
+    TData name typs -> TData name $ map substitute' typs
     _ -> error ("Impossible " ++ show typ)
   where
     substitute' = substituteTVar new_names
@@ -169,7 +170,7 @@ substitute tvar1 tvar2 typ = case typ of
         | otherwise -> typ
     TFun t1 t2 -> on TFun substitute' t1 t2
     TAll tvar t -> TAll tvar $ substitute' t
-    TIndexed (Indexed name typs) -> TIndexed . Indexed name $ map substitute' typs
+    TData name typs -> TData name $ map substitute' typs
     _ -> error "Impossible"
   where
     substitute' = substitute tvar1 tvar2

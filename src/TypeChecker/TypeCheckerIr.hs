@@ -52,7 +52,7 @@ data Type
     | TVar TVar
     | TFun Type Type
     | TAll TVar Type
-    | TIndexed Indexed
+    | TData Ident [Type]
     deriving (Show, Eq, Ord, Read)
 
 data Exp
@@ -66,9 +66,6 @@ data Exp
     deriving (C.Eq, C.Ord, C.Read, C.Show)
 
 type ExpT = (Exp, Type)
-
-data Indexed = Indexed Ident [Type]
-    deriving (Show, Read, Ord, Eq)
 
 data Inj = Inj (Init, Type) ExpT
     deriving (C.Eq, C.Ord, C.Read, C.Show)
@@ -205,8 +202,5 @@ instance Print Type where
         TLit uident -> prPrec i 2 (concatD [prt 0 uident])
         TVar tvar -> prPrec i 2 (concatD [prt 0 tvar])
         TAll tvar type_ -> prPrec i 1 (concatD [doc (showString "forall"), prt 0 tvar, doc (showString "."), prt 0 type_])
-        TIndexed indexed -> prPrec i 1 (concatD [prt 0 indexed])
+        TData ident types -> prPrec i 1 (concatD [prt 0 ident, prt 0 types])
         TFun type_1 type_2 -> prPrec i 0 (concatD [prt 1 type_1, doc (showString "->"), prt 0 type_2])
-
-instance Print Indexed where
-    prt i (Indexed u ts) = concatD [prt i u, prt i ts]
