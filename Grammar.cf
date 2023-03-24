@@ -66,26 +66,28 @@ LChar. Lit ::= Char ;
 
 Branch. Branch ::= Pattern "=>" Exp ;
 
-PVar.   Pattern ::= LIdent ;
-PLit.   Pattern ::= Lit ;
-PInj.   Pattern ::= UIdent [Pattern] ;
-PCatch. Pattern ::= "_" ;
+PVar.   Pattern1 ::= LIdent ;
+PLit.   Pattern1 ::= Lit ;
+PCatch. Pattern1 ::= "_" ;
+PEnum. Pattern1 ::= UIdent ;
+PInj.   Pattern ::= UIdent [Pattern1] ;
 
 -------------------------------------------------------------------------------
 -- * AUX
 -------------------------------------------------------------------------------
 
-separator Def ";" ;
+terminator Def ";" ;
 separator nonempty Constructor "" ;
 separator Type " " ;
-separator Pattern " " ;
-separator Branch "," ;
+separator nonempty Pattern1 " " ;
+terminator Branch ";" ;
 separator Ident " ";
 separator LIdent " ";
 separator TVar " " ;
 
 coercions Exp 4 ;
 coercions Type 2 ;
+coercions Pattern 1 ;
 
 token UIdent (upper (letter | digit | '_')*) ;
 token LIdent (lower (letter | digit | '_')*) ;

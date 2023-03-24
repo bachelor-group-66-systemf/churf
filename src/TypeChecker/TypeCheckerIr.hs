@@ -64,7 +64,7 @@ type ExpT = (Exp, Type)
 data Branch = Branch (Pattern, Type) ExpT
     deriving (C.Eq, C.Ord, C.Read, C.Show)
 
-data Pattern = PVar Id | PLit (Lit, Type) | PInj Ident [Pattern] | PCatch
+data Pattern = PVar Id | PLit (Lit, Type) | PInj Ident [Pattern] | PCatch | PEnum Ident
     deriving (C.Eq, C.Ord, C.Show, C.Read)
 
 data Def = DBind Bind | DData Data

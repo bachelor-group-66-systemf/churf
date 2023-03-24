@@ -1,0 +1,14 @@
+data List (a) where {
+  Nil  : List (a)
+  Cons : a -> List (a) -> List (a)
+};
+
+test xs = case xs of {
+    Cons Nil _ => 0 ;
+};
+
+
+
+List a /= List (List a)
+
+a /= List a

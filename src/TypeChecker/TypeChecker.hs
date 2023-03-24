@@ -562,6 +562,7 @@ withPattern p ma = case p of
     T.PInj _ ps -> foldl' (flip withPattern) ma ps
     T.PLit _ -> ma
     T.PCatch -> ma
+    T.PEnum _ -> ma
 
 inferPattern :: Pattern -> Infer (T.Pattern, T.Type)
 inferPattern = \case
@@ -574,6 +575,10 @@ inferPattern = \case
         zipWithM_ unify vs (map snd patterns)
         return (T.PInj (coerce constr) (map fst patterns), ret)
     PCatch -> (T.PCatch,) <$> fresh
+    PEnum p -> do
+        t <- gets (M.lookup (coerce p) . constructors)
+        t <- maybeToRightM ("Constructor: " <> printTree p <> " does not exist") t
+        return (T.PEnum $ coerce p, t)
     PVar x -> do
         fr <- fresh
         let pvar = T.PVar (coerce x, fr)
