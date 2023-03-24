@@ -69,6 +69,7 @@ Test-suite language-testsuite
       TypeChecker.TypeChecker
       TypeChecker.TypeCheckerIr
       Renamer.Renamer
+      Compiler
 
     hs-source-dirs: src, tests
 
@@ -81,5 +82,6 @@ Test-suite language-testsuite
       , array
       , hspec
       , QuickCheck
+      , process
 
     default-language: GHC2021
