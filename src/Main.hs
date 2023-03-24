@@ -21,9 +21,11 @@ import           System.Directory            (createDirectory, doesPathExist,
                                               removeDirectoryRecursive,
                                               setCurrentDirectory)
 import           System.Environment          (getArgs)
-import           System.Exit                 (exitFailure, exitSuccess)
+import           System.Exit                 (ExitCode, exitFailure,
+                                              exitSuccess)
 import           System.IO                   (stderr)
-import           System.Process.Extra        (spawnCommand, waitForProcess)
+import           System.Process.Extra        (readCreateProcess, shell,
+                                              spawnCommand, waitForProcess)
 import           TypeChecker.TypeChecker     (typecheck)
 
 main :: IO ()
@@ -65,6 +67,7 @@ main' debug s = do
         debugDotViz
 
     compile generatedCode
+    spawnWait "./hello_world"
     -- interpred <- fromInterpreterErr $ interpret lifted
     -- putStrLn "\n-- interpret"
     -- print interpred
@@ -80,8 +83,9 @@ debugDotViz = do
     mapM_ spawnWait commands
     setCurrentDirectory ".."
     return ()
-  where
-    spawnWait s = spawnCommand s >>= waitForProcess
+
+spawnWait :: String -> IO ExitCode
+spawnWait s = spawnCommand s >>= waitForProcess
 printToErr :: String -> IO ()
 printToErr = hPutStrLn stderr
 
