@@ -317,7 +317,7 @@ compileExp (MIR.ECase e cs,t)   = emitECased t e (map (t,) cs)
 -- go (EMod e1 e2)  = emitMod e1 e2
 
 --- aux functions ---
-emitECased :: MIR.Type -> ExpT -> [(MIR.Type, Injection)] -> CompilerState ()
+emitECased :: MIR.Type -> ExpT -> [(MIR.Type, Branch)] -> CompilerState ()
 emitECased t e cases = do
     let cs = snd <$> cases
     let ty = type2LlvmType t
@@ -332,8 +332,8 @@ emitECased t e cases = do
     res <- getNewVar
     emit $ SetVariable res (Load ty Ptr stackPtr)
   where
-    emitCases :: LLVMType -> LLVMType -> GA.Ident -> GA.Ident -> LLVMValue -> Injection -> CompilerState ()
-    emitCases rt ty label stackPtr vs (Injection (MIR.InitConstructor consId cs, t) exp) = do
+    emitCases :: LLVMType -> LLVMType -> GA.Ident -> GA.Ident -> LLVMValue -> Branch -> CompilerState ()
+    emitCases rt ty label stackPtr vs (Branch (MIR.PInj consId cs, t) exp) = do
         cons <- gets constructors
         let r = fromJust $ Map.lookup (coerce consId, t) cons
 
@@ -380,10 +380,10 @@ emitECased t e cases = do
         -- emit $ Store ty val Ptr stackPtr
         emit $ Br label
         emit $ Label lbl_failPos
-    emitCases rt ty label stackPtr vs (Injection (MIR.InitLit i, _) exp) = do
+    emitCases rt ty label stackPtr vs (Branch (MIR.PLit i, _) exp) = do
         let i' = case i of
-                GA.LInt i  -> VInteger i
-                GA.LChar i -> VChar i
+                (MIR.LInt i, _)  -> VInteger i
+                (MIR.LChar i, _) -> VChar i
         ns <- getNewVar
         lbl_failPos <- (\x -> GA.Ident $ "failed_" <> show x) <$> getNewLabel
         lbl_succPos <- (\x -> GA.Ident $ "success_" <> show x) <$> getNewLabel
@@ -404,7 +404,7 @@ emitECased t e cases = do
 --         val <- exprToValue (fst exp)
 --         emit $ Store ty val Ptr stackPtr
 --         emit $ Br label
-    emitCases _ ty label stackPtr _ (Injection (MIR.InitCatch, _) exp) = do
+    emitCases _ ty label stackPtr _ (Branch (MIR.PCatch, _) exp) = do
         val <- exprToValue exp
         emit $ Store ty val Ptr stackPtr
         emit $ Br label

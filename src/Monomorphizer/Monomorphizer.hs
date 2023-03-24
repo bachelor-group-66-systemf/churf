@@ -25,7 +25,7 @@ monoBind (T.Bind name args (e, t)) = M.Bind (monoId name) (map monoId args) (mon
 
 monoExpr :: T.Exp -> M.Exp
 monoExpr = \case
-    T.EId (Ident i) -> M.EId (Ident i)
+    T.EId (T.Ident i) -> M.EId (Ident i)
     T.ELit lit -> M.ELit $ monoLit lit
     T.ELet bind expt -> M.ELet (monoBind bind) (monoexpt expt)
     T.EApp expt1 expt2 -> M.EApp (monoexpt expt1) (monoexpt expt2)
@@ -44,7 +44,7 @@ monoAbsType (GA.TIndexed _) = error "NOT INDEXED TYPES"
 monoType :: T.Type -> M.Type
 monoType (T.TAll _ t)          = monoType t
 monoType (T.TVar (T.MkTVar i)) = error "NOT POLYMORPHIC TYPES"
-monoType (T.TLit i)            = M.TLit i
+monoType (T.TLit (T.Ident i))  = M.TLit (Ident i)
 monoType (T.TFun t1 t2)        = M.TFun (monoType t1) (monoType t2)
 monoType (T.TData _ _)         = error "Not sure what this is"
 
@@ -52,17 +52,20 @@ monoexpt :: T.ExpT -> M.ExpT
 monoexpt (e, t) = (monoExpr e, monoType t)
 
 monoId :: T.Id -> M.Id
-monoId (n, t) = (n, monoType t)
+monoId (n, t) = (coerce n, monoType t)
 
 monoLit :: T.Lit -> M.Lit
 monoLit (T.LInt i)  = M.LInt i
 monoLit (T.LChar c) = M.LChar c
 
-monoInjs :: [T.Inj] -> [M.Injection]
+monoInjs :: [T.Branch] -> [M.Branch]
 monoInjs = map monoInj
 
-monoInj :: T.Inj -> M.Injection
-monoInj (T.Inj (init, t) expt) = M.Injection (monoInit init, monoType t) (monoexpt expt)
+monoInj :: T.Branch -> M.Branch
+monoInj (T.Branch (init, t) expt) = M.Branch (monoInit init, monoType t) (monoexpt expt)
 
-monoInit :: T.Init -> M.Init
-monoInit = id
+monoInit :: T.Pattern -> M.Pattern
+monoInit (T.PVar (id, t))  = M.PVar (coerce id, monoType t)
+monoInit (T.PLit (lit, t)) = M.PLit (monoLit lit, monoType t)
+monoInit (T.PInj id ps)    = M.PInj (coerce id) (monoInit <$> ps)
+monoInit T.PCatch          = M.PCatch

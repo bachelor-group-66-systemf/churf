@@ -24,10 +24,13 @@ data Exp
     | ELet Bind ExpT
     | EApp ExpT ExpT
     | EAdd ExpT ExpT
-    | ECase ExpT [Injection]
+    | ECase ExpT [Branch]
     deriving (Show, Ord, Eq)
 
-data Injection = Injection (Init, Type) ExpT
+data Pattern = PVar Id | PLit (Lit, Type) | PInj Ident [Pattern] | PCatch
+    deriving (Eq, Ord, Show)
+
+data Branch = Branch (Pattern, Type) ExpT
     deriving (Eq, Ord, Show)
 
 type ExpT = (Exp, Type)
