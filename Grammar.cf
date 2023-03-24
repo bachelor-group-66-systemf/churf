@@ -45,30 +45,31 @@ Data. Data ::= "data" Type "where" "{" [Constructor] "}" ;
 
 EAnn.   Exp5 ::= "(" Exp ":" Type ")" ;
 EVar.   Exp4 ::= LIdent ;
-ECons.  Exp4 ::= UIdent ;
+EInj.   Exp4 ::= UIdent ;
 ELit.   Exp4 ::= Lit ;
 EApp.   Exp3 ::= Exp3 Exp4 ;
 EAdd.   Exp1 ::= Exp1 "+" Exp2 ;
 ELet.   Exp  ::= "let" Bind "in" Exp ; 
 EAbs.   Exp  ::= "\\" LIdent "." Exp ;
-ECase.  Exp  ::= "case" Exp "of" "{" [Inj] "}";
+ECase.  Exp  ::= "case" Exp "of" "{" [Branch] "}";
 
 -------------------------------------------------------------------------------
 -- * LITERALS
 -------------------------------------------------------------------------------
 
-LInt. Lit  ::= Integer ;
+LInt.  Lit ::= Integer ;
 LChar. Lit ::= Char ;
 
 -------------------------------------------------------------------------------
 -- * CASE
 -------------------------------------------------------------------------------
 
-Inj. Inj ::= Init "=>" Exp ;
+Branch. Branch ::= Pattern "=>" Exp ;
 
-InitLit. Init         ::= Lit ;
-InitConstructor. Init ::= UIdent [LIdent] ;
-InitCatch. Init       ::= "_" ;
+PVar.   Pattern ::= LIdent ;
+PLit.   Pattern ::= Lit ;
+PInj.   Pattern ::= UIdent [Pattern] ;
+PCatch. Pattern ::= "_" ;
 
 -------------------------------------------------------------------------------
 -- * AUX
@@ -77,7 +78,8 @@ InitCatch. Init       ::= "_" ;
 separator Def ";" ;
 separator nonempty Constructor "" ;
 separator Type " " ;
-separator nonempty Inj ";" ;
+separator Pattern " " ;
+separator Branch "," ;
 separator Ident " ";
 separator LIdent " ";
 separator TVar " " ;

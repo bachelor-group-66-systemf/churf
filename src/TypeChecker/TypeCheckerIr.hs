@@ -2,7 +2,6 @@
 
 module TypeChecker.TypeCheckerIr (
     module TypeChecker.TypeCheckerIr,
-    module GA,
 ) where
 
 import Control.Monad.Except
@@ -10,18 +9,7 @@ import Control.Monad.Reader
 import Control.Monad.State
 import Data.Functor.Identity (Identity)
 import Data.Map (Map)
-import Grammar.Abs (
-    Data (..),
-    Ident (..),
-    Init (..),
-    Lit (..),
- )
-import Grammar.Abs qualified as GA (
-    Data (..),
-    Ident (..),
-    Init (..),
-    Lit (..),
- )
+import Data.String qualified
 import Grammar.Print
 import Prelude
 import Prelude qualified as C (Eq, Ord, Read, Show)
@@ -44,6 +32,12 @@ type Infer = StateT Env (ReaderT Ctx (ExceptT Error Identity))
 newtype Program = Program [Def]
     deriving (C.Eq, C.Ord, C.Show, C.Read)
 
+data Data = Data Ident [Constructor]
+    deriving (Show, Eq, Ord, Read)
+
+data Constructor = Constructor Ident Type
+    deriving (Show, Eq, Ord, Read)
+
 newtype TVar = MkTVar Ident
     deriving (Show, Eq, Ord, Read)
 
@@ -62,25 +56,50 @@ data Exp
     | EApp ExpT ExpT
     | EAdd ExpT ExpT
     | EAbs Ident ExpT
-    | ECase ExpT [Inj]
+    | ECase ExpT [Branch]
     deriving (C.Eq, C.Ord, C.Read, C.Show)
 
 type ExpT = (Exp, Type)
 
-data Inj = Inj (Init, Type) ExpT
+data Branch = Branch (Pattern, Type) ExpT
     deriving (C.Eq, C.Ord, C.Read, C.Show)
+
+data Pattern = PVar Id | PLit (Lit, Type) | PInj Ident [Pattern] | PCatch
+    deriving (C.Eq, C.Ord, C.Show, C.Read)
 
 data Def = DBind Bind | DData Data
     deriving (C.Eq, C.Ord, C.Read, C.Show)
 
 type Id = (Ident, Type)
 
+newtype Ident = Ident String
+    deriving (C.Eq, C.Ord, C.Show, C.Read, Data.String.IsString)
+
+data Lit = LInt Integer | LChar Char
+    deriving (Show, Eq, Ord, Read)
+
 data Bind = Bind Id [Id] ExpT
     deriving (C.Eq, C.Ord, C.Show, C.Read)
+
+instance Print Ident where
+    prt _ (Ident str) = prt 0 str
 
 instance Print [Def] where
     prt _ [] = concatD []
     prt _ (x : xs) = concatD [prt 0 x, doc (showString "\n\n"), prt 0 xs]
+
+instance Print Data where
+    prt i = \case
+        Data type_ constructors -> prPrec i 0 (concatD [doc (showString "data"), prt 0 type_, doc (showString "where"), doc (showString "{"), prt 0 constructors, doc (showString "}")])
+
+instance Print Constructor where
+    prt i = \case
+        Constructor uident type_ -> prPrec i 0 (concatD [prt 0 uident, doc (showString ":"), prt 0 type_])
+
+instance Print [Constructor] where
+    prt _ [] = concatD []
+    prt _ [x] = concatD [prt 0 x]
+    prt _ (x : xs) = concatD [prt 0 x, prt 0 xs]
 
 instance Print Def where
     prt i (DBind bind) = prt i bind
@@ -185,11 +204,18 @@ instance Print Exp where
 instance Print ExpT where
     prt i (e, t) = concatD [doc $ showString "(", prt i e, doc (showString ":"), prt i t, doc $ showString ")"]
 
-instance Print Inj where
+instance Print Branch where
     prt i = \case
-        Inj (init, t) exp -> prPrec i 0 (concatD [prt 0 init, doc (showString ":"), prt 0 t, doc (showString "=>"), prt 0 exp])
+        Branch (init, t) exp -> prPrec i 0 (concatD [prt 0 init, doc (showString ":"), prt 0 t, doc (showString "=>"), prt 0 exp])
 
-instance Print [Inj] where
+instance Print Pattern where
+    prt i = \case
+        PVar lident -> prPrec i 0 (concatD [prtId 0 lident])
+        PLit (lit, typ) -> prPrec i 0 (concatD [doc $ showString "(", prt 0 lit, doc $ showString ",", prt 0 typ, doc $ showString ")"])
+        PInj uident patterns -> prPrec i 0 (concatD [prt 0 uident, prt 0 patterns])
+        PCatch -> prPrec i 0 (concatD [doc (showString "_")])
+
+instance Print [Branch] where
     prt _ [] = concatD []
     prt _ [x] = concatD [prt 0 x]
     prt _ (x : xs) = concatD [prt 0 x, doc (showString ";"), prt 0 xs]
@@ -204,3 +230,8 @@ instance Print Type where
         TAll tvar type_ -> prPrec i 1 (concatD [doc (showString "forall"), prt 0 tvar, doc (showString "."), prt 0 type_])
         TData ident types -> prPrec i 1 (concatD [prt 0 ident, prt 0 types])
         TFun type_1 type_2 -> prPrec i 0 (concatD [prt 1 type_1, doc (showString "->"), prt 0 type_2])
+
+instance Print Lit where
+    prt i = \case
+        LInt n -> prPrec i 0 (concatD [prt 0 n])
+        LChar c -> prPrec i 0 (concatD [prt 0 c])
