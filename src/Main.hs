@@ -2,28 +2,32 @@
 
 module Main where
 
-import           Codegen.Codegen             (generateCode)
-import           GHC.IO.Handle.Text          (hPutStrLn)
-import           Grammar.ErrM                (Err)
-import           Grammar.Par                 (myLexer, pProgram)
-import           Grammar.Print               (printTree)
+import Codegen.Codegen (generateCode)
+import Data.Bool (bool)
+import GHC.IO.Handle.Text (hPutStrLn)
+import Grammar.ErrM (Err)
+import Grammar.Par (myLexer, pProgram)
+import Grammar.Print (printTree)
 
-import           Monomorphizer.Monomorphizer (monomorphize)
+import Monomorphizer.Monomorphizer (monomorphize)
 
-import           Control.Monad               (when)
-import           Data.List.Extra             (isSuffixOf)
+import Control.Monad (when)
+import Data.List.Extra (isSuffixOf)
 
-import           Compiler                    (optimize)
-import           Renamer.Renamer             (rename)
-import           System.Directory            (createDirectory, doesPathExist,
-                                              getDirectoryContents,
-                                              removeDirectoryRecursive,
-                                              setCurrentDirectory)
-import           System.Environment          (getArgs)
-import           System.Exit                 (exitFailure, exitSuccess)
-import           System.IO                   (stderr)
-import           System.Process.Extra        (spawnCommand, waitForProcess)
-import           TypeChecker.TypeChecker     (typecheck)
+import Compiler (optimize)
+import Renamer.Renamer (rename)
+import System.Directory (
+    createDirectory,
+    doesPathExist,
+    getDirectoryContents,
+    removeDirectoryRecursive,
+    setCurrentDirectory,
+ )
+import System.Environment (getArgs)
+import System.Exit (exitFailure, exitSuccess)
+import System.IO (stderr)
+import System.Process.Extra (spawnCommand, waitForProcess)
+import TypeChecker.TypeChecker (typecheck)
 
 main :: IO ()
 main =
@@ -38,15 +42,15 @@ main' debug s = do
 
     printToErr "-- Parse Tree -- "
     parsed <- fromSyntaxErr . pProgram $ myLexer file
-    printToErr $ printTree parsed
+    bool (printToErr $ printTree parsed) (printToErr $ printTree parsed) debug
 
     printToErr "\n-- Renamer --"
     renamed <- fromRenamerErr . rename $ parsed
-    printToErr $ printTree renamed
+    bool (printToErr $ printTree renamed) (printToErr $ show renamed) debug
 
     printToErr "\n-- TypeChecker --"
     typechecked <- fromTypeCheckerErr $ typecheck renamed
-    printToErr $ printTree typechecked
+    bool (printToErr $ printTree typechecked) (printToErr $ show typechecked) debug
 
     -- printToErr "\n-- Lambda Lifter --"
     -- let lifted = lambdaLift typechecked
@@ -54,7 +58,7 @@ main' debug s = do
     --
     printToErr "\n -- Compiler --"
     generatedCode <- fromCompilerErr $ generateCode (monomorphize typechecked)
-    --putStrLn generatedCode
+    -- putStrLn generatedCode
 
     check <- doesPathExist "output"
     when check (removeDirectoryRecursive "output")

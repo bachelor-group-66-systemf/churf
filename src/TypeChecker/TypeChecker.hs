@@ -129,7 +129,7 @@ checkBind err@(Bind name args e) = do
                 sub <- bindErr (unify t lambdaT) err
                 let newT = apply sub t
                 insertSig (coerce name) (Just newT)
-                return $ T.Bind (coerce name, newT) (map coerce args) e
+                return $ T.Bind (apply sub (coerce name, newT)) (map coerce args) e
             _ -> do
                 insertSig (coerce name) (Just lambdaT)
                 return (T.Bind (coerce name, lambdaT) (map coerce args) e) -- (apply s e)
@@ -480,6 +480,9 @@ instance SubstType T.Pattern where
 
 instance SubstType a => SubstType [a] where
     apply s = map (apply s)
+
+instance SubstType T.Id where
+    apply s (name, t) = (name, apply s t)
 
 -- | Apply substitutions to the environment.
 applySt :: Subst -> Infer a -> Infer a
