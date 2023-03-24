@@ -1,7 +1,7 @@
 module Monomorphizer.MonomorphizerIr (module Monomorphizer.MonomorphizerIr, module RE, module GA) where
 
-import           Grammar.Abs               (Ident (..), Init (..), UIdent)
-import qualified Grammar.Abs               as GA (Ident (..), Init (..))
+import           Grammar.Abs               (Ident (..), UIdent)
+import qualified Grammar.Abs               as GA (Ident (..))
 import qualified TypeChecker.TypeCheckerIr as RE
 
 type Id = (Ident, Type)

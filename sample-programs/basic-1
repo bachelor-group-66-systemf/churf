@@ -1,8 +1,5 @@
-posMul: _Int - > _Int - > _Int;
-posMul a b = a + b; {
-    -
-    case b of {
-        0 => 0;
-        _ => a + posMul a(b - 1)
-    }; -
-}
+add : Int -> Int -> Int ;
+add x y = x + y;
+
+main : Int ;
+main = add 4 6 ;

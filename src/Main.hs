@@ -2,30 +2,27 @@
 
 module Main where
 
--- import           Codegen.Codegen             (generateCode)
-import GHC.IO.Handle.Text (hPutStrLn)
-import Grammar.ErrM (Err)
-import Grammar.Par (myLexer, pProgram)
-import Grammar.Print (printTree)
+import           Codegen.Codegen             (generateCode)
+import           GHC.IO.Handle.Text          (hPutStrLn)
+import           Grammar.ErrM                (Err)
+import           Grammar.Par                 (myLexer, pProgram)
+import           Grammar.Print               (printTree)
 
--- import Monomorphizer.Monomorphizer (monomorphize)
+import           Monomorphizer.Monomorphizer (monomorphize)
 
-import Control.Monad (when)
-import Data.List.Extra (isSuffixOf)
+import           Control.Monad               (when)
+import           Data.List.Extra             (isSuffixOf)
 
-import Renamer.Renamer (rename)
-import System.Directory (
-    createDirectory,
-    doesPathExist,
-    getDirectoryContents,
-    removeDirectoryRecursive,
-    setCurrentDirectory,
- )
-import System.Environment (getArgs)
-import System.Exit (exitFailure, exitSuccess)
-import System.IO (stderr)
-import System.Process.Extra (spawnCommand, waitForProcess)
-import TypeChecker.TypeChecker (typecheck)
+import           Renamer.Renamer             (rename)
+import           System.Directory            (createDirectory, doesPathExist,
+                                              getDirectoryContents,
+                                              removeDirectoryRecursive,
+                                              setCurrentDirectory)
+import           System.Environment          (getArgs)
+import           System.Exit                 (exitFailure, exitSuccess)
+import           System.IO                   (stderr)
+import           System.Process.Extra        (spawnCommand, waitForProcess)
+import           TypeChecker.TypeChecker     (typecheck)
 
 main :: IO ()
 main =
@@ -50,18 +47,18 @@ main' debug s = do
     typechecked <- fromTypeCheckerErr $ typecheck renamed
     printToErr $ printTree typechecked
 
-    -- printToErr "\n-- Lambda Lifter --"
+    printToErr "\n-- Lambda Lifter --"
     -- let lifted = lambdaLift typechecked
     -- printToErr $ printTree lifted
     --
-    -- printToErr "\n -- Printing compiler output to stdout --"
-    -- compiled <- fromCompilerErr $ generateCode (monomorphize typechecked)
-    -- putStrLn compiled
+    printToErr "\n -- Printing compiler output to stdout --"
+    compiled <- fromCompilerErr $ generateCode (monomorphize typechecked)
+    putStrLn compiled
 
-    -- check <- doesPathExist "output"
-    -- when check (removeDirectoryRecursive "output")
-    -- createDirectory "output"
-    -- writeFile "output/llvm.ll" compiled
+    check <- doesPathExist "output"
+    when check (removeDirectoryRecursive "output")
+    createDirectory "output"
+    writeFile "output/llvm.ll" compiled
     -- if debug then debugDotViz else putStrLn compiled
 
     -- interpred <- fromInterpreterErr $ interpret lifted

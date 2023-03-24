@@ -39,7 +39,7 @@ monoAbsType (GA.TVar _v)    = error "NOT POLYMORHPIC TYPES"
 monoAbsType (GA.TAll _v _t) = error "NOT ALL TYPES"
 monoAbsType (GA.TEVar _v)   = error "I DONT KNOW WHAT THIS IS"
 monoAbsType (GA.TFun t1 t2) = M.TFun (monoAbsType t1) (monoAbsType t2)
-monoAbsType (GA.TIndexed _) = error "NOT INDEXED TYPES"
+monoAbsType (GA.TData _ _)  = error "NOT INDEXED TYPES"
 
 monoType :: T.Type -> M.Type
 monoType (T.TAll _ t)          = monoType t
