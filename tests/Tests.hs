@@ -61,7 +61,7 @@ infer_eid = describe "algoW used on EVar" $ do
         property $ \x -> do
             let env = Env 0 mempty mempty
             let t = T.TVar $ T.MkTVar "a"
-            let ctx = Ctx (M.singleton (Ident (x :: String)) t)
+            let ctx = Ctx (M.singleton (T.Ident (x :: String)) t)
             getTypeC env ctx (EVar (LIdent x)) `shouldBe` Right (T.TVar $ T.MkTVar "a")
 
 infer_eabs = describe "algoW used on EAbs" $ do

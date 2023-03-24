@@ -43,11 +43,11 @@ Data. Data ::= "data" Type "where" "{" [Constructor] "}" ;
 -- * EXPRESSIONS
 -------------------------------------------------------------------------------
 
-EAnn.   Exp5 ::= "(" Exp ":" Type ")" ;
-EVar.   Exp4 ::= LIdent ;
-EInj.   Exp4 ::= UIdent ;
-ELit.   Exp4 ::= Lit ;
-EApp.   Exp3 ::= Exp3 Exp4 ;
+EAnn.   Exp4 ::= "(" Exp ":" Type ")" ;
+EVar.   Exp3 ::= LIdent ;
+EInj.   Exp3 ::= UIdent ;
+ELit.   Exp3 ::= Lit ;
+EApp.   Exp2 ::= Exp2 Exp3 ;
 EAdd.   Exp1 ::= Exp1 "+" Exp2 ;
 ELet.   Exp  ::= "let" Bind "in" Exp ; 
 EAbs.   Exp  ::= "\\" LIdent "." Exp ;
@@ -84,7 +84,7 @@ separator Ident " ";
 separator LIdent " ";
 separator TVar " " ;
 
-coercions Exp 5 ;
+coercions Exp 4 ;
 coercions Type 2 ;
 
 token UIdent (upper (letter | digit | '_')*) ;

@@ -528,7 +528,7 @@ insertConstr i t =
 
 checkCase :: T.Type -> [Branch] -> Infer (Subst, [T.Branch], T.Type)
 checkCase expT injs = do
-    (injTs, injs, returns) <- unzip3 <$> mapM checkBranch injs
+    (injTs, injs, returns) <- unzip3 <$> mapM inferBranch injs
     (sub1, _) <-
         foldM
             ( \(sub, acc) x ->
@@ -549,22 +549,35 @@ checkCase expT injs = do
    | snd = type of expr
 -}
 inferBranch :: Branch -> Infer (T.Type, T.Branch, T.Type)
-inferBranch (Branch it expr) = do
-    (initT, vars) <- inferPattern it
-    (e, exprT) <- withBindings vars (inferExp expr)
-    return (initT, T.Branch (it, initT) (e, exprT), exprT)
+inferBranch (Branch pat expr) = do
+    newPat@(pat, branchT) <- inferPattern pat
+    newExp@(_, exprT) <- withPattern pat (inferExp expr)
+    return (branchT, T.Branch newPat newExp, exprT)
+
+-- return (initT, T.Branch (it, initT) (e, exprT), exprT)
+
+withPattern :: T.Pattern -> Infer a -> Infer a
+withPattern p ma = case p of
+    T.PVar (x, t) -> withBinding x t ma
+    T.PInj _ ps -> foldl' (flip withPattern) ma ps
+    T.PLit _ -> ma
+    T.PCatch -> ma
 
 inferPattern :: Pattern -> Infer (T.Pattern, T.Type)
 inferPattern = \case
-    PLit lit -> return (T.PLit $ toNew lit, litType lit)
+    PLit lit -> let lt = litType lit in return (T.PLit (toNew lit, lt), lt)
     PInj constr patterns -> do
         t <- gets (M.lookup (coerce constr) . constructors)
         t <- maybeToRightM ("Constructor: " <> printTree constr <> " does not exist") t
-        (vs, ret) <- maybeToRightM (throwError "Partial pattern match not allowed") (unsnoc $ flattenType t)
+        (vs, ret) <- maybeToRightM "Partial pattern match not allowed" (unsnoc $ flattenType t)
         patterns <- mapM inferPattern patterns
-        undefined
+        zipWithM_ unify vs (map snd patterns)
+        return (T.PInj (coerce constr) (map fst patterns), ret)
     PCatch -> (T.PCatch,) <$> fresh
-    PVar x -> undefined
+    PVar x -> do
+        fr <- fresh
+        let pvar = T.PVar (coerce x, fr)
+        return (pvar, fr)
 
 flattenType :: T.Type -> [T.Type]
 flattenType (T.TFun a b) = flattenType a <> flattenType b

@@ -12,7 +12,7 @@ hello_world = Cons 'h' (Cons 'e' (Cons 'l' (Cons 'l' (Cons 'o' (Cons ' ' (Cons '
 
 length : List (a) -> Int ;
 length xs = case xs of {
-    Nil => 0 ;
+    Nil => 0,
     Cons x xs => length xs
 };
 
@@ -22,23 +22,20 @@ head xs = case xs of {
 };
 
 firstIsOne : List (Int) -> Bool () ;
-firstIsOne : List (Int) -> Bool () ;
 firstIsOne xs = case xs of {
     Cons x xs => case x of {
-            1 => True ;
+            0 => True ,
             _ => case xs of {
-                    Cons x xs => False ;
+                    Cons x xs => False ,
                     _ => False
                 }
-            };
+            },
     _ => False
     };
 
-firstIsOne :: [Int] -> Bool 
-firstIsOne xs = case xs of
-    (1 : xs) -> True
-    _ -> False
+main = firstIsOne (Cons 1 Nil);
 
-main = firstIsOne (Cons 'a' Nil)
-
-data a -> b where 
+deepPat xs = case xs of {
+    Cons 1 _ => True ,
+    _        => False
+                        }

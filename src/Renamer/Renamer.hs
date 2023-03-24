@@ -2,11 +2,15 @@
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternSynonyms #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+
+{-# HLINT ignore "Use mapAndUnzipM" #-}
 
 module Renamer.Renamer (rename) where
 
 import Auxiliary (mapAccumM)
 import Control.Applicative (Applicative (liftA2))
+import Control.Monad (foldM)
 import Control.Monad.Except (ExceptT, MonadError, runExceptT, throwError)
 import Control.Monad.Identity (Identity, runIdentity)
 import Control.Monad.State (
@@ -102,7 +106,7 @@ type Names = Map LIdent LIdent
 renameExp :: Names -> Exp -> Rn (Names, Exp)
 renameExp old_names = \case
     EVar n -> pure (coerce old_names, EVar . fromMaybe n $ Map.lookup n old_names)
-    ECons n -> pure (old_names, ECons n)
+    EInj n -> pure (old_names, EInj n)
     ELit lit -> pure (old_names, ELit lit)
     EApp e1 e2 -> do
         (env1, e1') <- renameExp old_names e1
@@ -128,26 +132,31 @@ renameExp old_names = \case
         pure (new_names, EAnn e' t')
     ECase e injs -> do
         (new_names, e') <- renameExp old_names e
-        (new_names', injs') <- renameInjs new_names injs
+        (new_names', injs') <- renameBranches new_names injs
         pure (new_names', ECase e' injs')
 
-renameInjs :: Names -> [Inj] -> Rn (Names, [Inj])
-renameInjs ns xs = do
-    (new_names, xs') <- unzip <$> mapM (renameInj ns) xs
+renameBranches :: Names -> [Branch] -> Rn (Names, [Branch])
+renameBranches ns xs = do
+    (new_names, xs') <- unzip <$> mapM (renameBranch ns) xs
     if null new_names then return (mempty, xs') else return (head new_names, xs')
 
-renameInj :: Names -> Inj -> Rn (Names, Inj)
-renameInj ns (Inj init e) = do
-    (new_names, init') <- renameInit ns init
+renameBranch :: Names -> Branch -> Rn (Names, Branch)
+renameBranch ns (Branch init e) = do
+    (new_names, init') <- renamePattern ns init
     (new_names', e') <- renameExp new_names e
-    return (new_names', Inj init' e')
+    return (new_names', Branch init' e')
 
-renameInit :: Names -> Init -> Rn (Names, Init)
-renameInit ns i = case i of
-    InitConstructor cs vars -> do
-        (ns_new, vars') <- newNames ns (coerce vars)
-        return (ns_new, InitConstructor cs (coerce vars'))
+renamePattern :: Names -> Pattern -> Rn (Names, Pattern)
+renamePattern ns i = case i of
+    PInj cs ps -> do
+        (ns_new, ps) <- renamePatterns ns ps
+        return (ns_new, PInj cs ps)
     rest -> return (ns, rest)
+
+renamePatterns :: Names -> [Pattern] -> Rn (Names, [Pattern])
+renamePatterns ns xs = do
+    (new_names, xs') <- unzip <$> mapM (renamePattern ns) xs
+    if null new_names then return (mempty, xs') else return (head new_names, xs')
 
 renameTVars :: Type -> Rn Type
 renameTVars typ = case typ of

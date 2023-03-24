@@ -7,7 +7,8 @@ import GHC.IO.Handle.Text (hPutStrLn)
 import Grammar.ErrM (Err)
 import Grammar.Par (myLexer, pProgram)
 import Grammar.Print (printTree)
-import Monomorphizer.Monomorphizer (monomorphize)
+
+-- import Monomorphizer.Monomorphizer (monomorphize)
 
 import Control.Monad (when)
 import Data.List.Extra (isSuffixOf)
