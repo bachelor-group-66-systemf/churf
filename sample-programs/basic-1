@@ -1,5 +1,8 @@
 add : Int ;
-add = 5;
+add = 4;
 
 main : Int ;
-main = add ;
+main = case add of {
+    5 => 0;
+    _ => 1;
+};

@@ -117,36 +117,22 @@ checkPrg (Program bs) = do
         (DSig _) -> checkDef xs
 
 checkBind :: Bind -> Infer T.Bind
-checkBind (Bind name args e) = do
+checkBind err@(Bind name args e) = do
     let lambda = makeLambda e (reverse (coerce args))
     (_, lambdaT) <- inferExp lambda
     args <- zip args <$> mapM (const fresh) args
     withBindings (map coerce args) $ do
         e@(_, _) <- inferExp e
         s <- gets sigs
-        -- let fs = map (second Just) (getFunctionTypes s e)
-        -- mapM_ (uncurry insertSig) fs
         case M.lookup (coerce name) s of
             Just (Just t) -> do
-                sub <- unify t lambdaT
+                sub <- bindErr (unify t lambdaT) err
                 let newT = apply sub t
                 insertSig (coerce name) (Just newT)
                 return $ T.Bind (coerce name, newT) (map coerce args) e
             _ -> do
                 insertSig (coerce name) (Just lambdaT)
                 return (T.Bind (coerce name, lambdaT) (map coerce args) e) -- (apply s e)
-                -- where
-                --   getFunctionTypes :: Map T.Ident (Maybe T.Type) -> T.ExpT -> [(T.Ident, T.Type)]
-                --   getFunctionTypes s = \case
-                --       (T.EId b, t) -> case M.lookup b s of
-                --           Just Nothing -> return (b, t)
-                --           _ -> []
-                --       (T.ELit _, _) -> []
-                --       (T.ELet (T.Bind _ _ e1) e2, _) -> getFunctionTypes s e1 <> getFunctionTypes s e2
-                --       (T.EApp e1 e2, _) -> getFunctionTypes s e1 <> getFunctionTypes s e2
-                --       (T.EAdd e1 e2, _) -> getFunctionTypes s e1 <> getFunctionTypes s e2
-                --       (T.EAbs _ e, _) -> getFunctionTypes s e
-                --       (T.ECase e injs, _) -> getFunctionTypes s e <> concatMap (getFunctionTypes s . \(T.Inj _ e) -> e) injs
 
 isMoreSpecificOrEq :: T.Type -> T.Type -> Bool
 isMoreSpecificOrEq _ (T.TAll _ _) = True
@@ -292,9 +278,9 @@ algoW = \case
 
     err@(EApp e0 e1) -> do
         fr <- fresh
-        (s0, (e0', t0)) <- exprErr (algoW e0) err
+        (s0, (e0', t0)) <- algoW e0
         applySt s0 $ do
-            (s1, (e1', t1)) <- exprErr (algoW e1) err
+            (s1, (e1', t1)) <- algoW e1
             s2 <- exprErr (unify (apply s1 t0) (T.TFun t1 fr)) err
             let t = apply s2 fr
             let comp = s2 `compose` s1 `compose` s0
@@ -307,7 +293,7 @@ algoW = \case
     -- The bar over S₀ and Γ means "generalize"
 
     err@(ELet b@(Bind name args e) e1) -> do
-        (s1, (_, t0)) <- exprErr (algoW (makeLambda e (coerce args))) err
+        (s1, (_, t0)) <- algoW (makeLambda e (coerce args))
         bind' <- exprErr (checkBind b) err
         env <- asks vars
         let t' = generalize (apply s1 env) t0
@@ -322,7 +308,7 @@ algoW = \case
         (subst, injs, ret_t) <- checkCase t injs
         let comp = subst `compose` sub
         let t' = apply comp ret_t
-        return (comp, (T.ECase (e', t) injs, t'))
+        return (comp, apply comp (T.ECase (e', t) injs, t'))
 
 makeLambda :: Exp -> [T.Ident] -> Exp
 makeLambda = foldl (flip (EAbs . coerce))
@@ -424,12 +410,13 @@ compose m1 m2 = M.map (apply m1) m2 `M.union` m1
 --       and one for applying substitutions
 
 -- | A class representing free variables functions
+class SubstType t where
+    -- | Apply a substitution to t
+    apply :: Subst -> t -> t
+
 class FreeVars t where
     -- | Get all free variables from t
     free :: t -> Set T.Ident
-
-    -- | Apply a substitution to t
-    apply :: Subst -> t -> t
 
 instance FreeVars T.Type where
     free :: T.Type -> Set T.Ident
@@ -441,6 +428,7 @@ instance FreeVars T.Type where
     free (T.TData _ a) =
         foldl' (\acc x -> free x `S.union` acc) S.empty a
 
+instance SubstType T.Type where
     apply :: Subst -> T.Type -> T.Type
     apply sub t = do
         case t of
@@ -453,16 +441,15 @@ instance FreeVars T.Type where
                 Just _ -> apply sub t
             T.TFun a b -> T.TFun (apply sub a) (apply sub b)
             T.TData name a -> T.TData name (map (apply sub) a)
-
 instance FreeVars (Map T.Ident T.Type) where
     free :: Map T.Ident T.Type -> Set T.Ident
     free m = foldl' S.union S.empty (map free $ M.elems m)
+
+instance SubstType (Map T.Ident T.Type) where
     apply :: Subst -> Map T.Ident T.Type -> Map T.Ident T.Type
     apply s = M.map (apply s)
 
-instance FreeVars T.ExpT where
-    free :: T.ExpT -> Set T.Ident
-    free = error "free not implemented for T.Exp"
+instance SubstType T.ExpT where
     apply :: Subst -> T.ExpT -> T.ExpT
     apply s = \case
         (T.EId i, outerT) -> (T.EId i, apply s outerT)
@@ -476,17 +463,22 @@ instance FreeVars T.ExpT where
         (T.EApp e1 e2, t) -> (T.EApp (apply s e1) (apply s e2), apply s t)
         (T.EAdd e1 e2, t) -> (T.EAdd (apply s e1) (apply s e2), apply s t)
         (T.EAbs ident e, t1) -> (T.EAbs ident (apply s e), apply s t1)
-        (T.ECase e injs, t) -> (T.ECase (apply s e) (apply s injs), apply s t)
+        (T.ECase e brnch, t) -> (T.ECase (apply s e) (apply s brnch), apply s t)
 
-instance FreeVars T.Branch where
-    free :: T.Branch -> Set T.Ident
-    free = undefined
+instance SubstType T.Branch where
     apply :: Subst -> T.Branch -> T.Branch
-    apply s (T.Branch (i, t) e) = T.Branch (i, apply s t) (apply s e)
+    apply s (T.Branch (i, t) e) = T.Branch (apply s i, apply s t) (apply s e)
 
-instance FreeVars [T.Branch] where
-    free :: [T.Branch] -> Set T.Ident
-    free = foldl' (\acc x -> free x `S.union` acc) mempty
+instance SubstType T.Pattern where
+    apply :: Subst -> T.Pattern -> T.Pattern
+    apply s = \case
+        T.PVar (iden, t) -> T.PVar (iden, apply s t)
+        T.PLit (lit, t) -> T.PLit (lit, apply s t)
+        T.PInj i ps -> T.PInj i $ apply s ps
+        T.PCatch -> T.PCatch
+        T.PEnum i -> T.PEnum i
+
+instance SubstType a => SubstType [a] where
     apply s = map (apply s)
 
 -- | Apply substitutions to the environment.
@@ -552,8 +544,6 @@ inferBranch (Branch pat expr) = do
     newExp@(_, exprT) <- withPattern pat (inferExp expr)
     return (branchT, T.Branch newPat newExp, exprT)
 
--- return (initT, T.Branch (it, initT) (e, exprT), exprT)
-
 withPattern :: T.Pattern -> Infer a -> Infer a
 withPattern p ma = case p of
     T.PVar (x, t) -> withBinding x t ma
@@ -607,4 +597,8 @@ partitionType = go []
 
 exprErr :: Infer a -> Exp -> Infer a
 exprErr ma exp =
+    catchError ma (\x -> throwError $ x <> " on expression: " <> printTree exp)
+
+bindErr :: Infer a -> Bind -> Infer a
+bindErr ma exp =
     catchError ma (\x -> throwError $ x <> " on expression: " <> printTree exp)

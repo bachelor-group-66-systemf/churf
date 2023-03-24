@@ -214,6 +214,7 @@ instance Print Pattern where
         PLit (lit, typ) -> prPrec i 0 (concatD [doc $ showString "(", prt 0 lit, doc $ showString ",", prt 0 typ, doc $ showString ")"])
         PInj uident patterns -> prPrec i 0 (concatD [prt 0 uident, prt 0 patterns])
         PCatch -> prPrec i 0 (concatD [doc (showString "_")])
+        PEnum p -> prt i p
 
 instance Print [Branch] where
     prt _ [] = concatD []
