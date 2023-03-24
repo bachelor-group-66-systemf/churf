@@ -22,7 +22,7 @@ import           Monomorphizer.MonomorphizerIr as MIR
 data CodeGenerator = CodeGenerator
     { instructions  :: [LLVMIr]
     , functions     :: Map MIR.Id FunctionInfo
-    , constructors  :: Map Ident ConstructorInfo
+    , constructors  :: Map MIR.Id ConstructorInfo
     , variableCount :: Integer
     , labelCount    :: Integer
     }
@@ -74,18 +74,18 @@ getFunctions bs = Map.fromList $ go bs
     go (MIR.DBind (MIR.Bind id args _) : xs) =
         (id, FunctionInfo{numArgs = length args, arguments = args})
             : go xs
-    go (MIR.DData (MIR.Constructor n cons) : xs) = undefined
-        {-do map
-                ( \(Constructor id xs) ->
-                    ( (id, MIR.TLit n)
+    go (MIR.DData (MIR.Constructor n cons) : xs) =
+        do map
+                ( \(id, xs) ->
+                    ( (coerce id, MIR.TLit (coerce n))
                     , FunctionInfo
-                        { numArgs = length xs
-                        , arguments = createArgs xs
+                        { numArgs = length (flattenType xs)
+                        , arguments = createArgs (flattenType xs)
                         }
                     )
                 )
                 cons
-            <> go xs-}
+            <> go xs
 
 createArgs :: [MIR.Type] -> [Id]
 createArgs xs = fst $ foldl (\(acc, l) t -> (acc ++ [(GA.Ident ("arg_" <> show l), t)], l + 1)) ([], 0) xs
@@ -93,19 +93,19 @@ createArgs xs = fst $ foldl (\(acc, l) t -> (acc ++ [(GA.Ident ("arg_" <> show l
 {- | Produces a map of functions infos from a list of binds,
  which contains useful data for code generation.
 -}
-getConstructors :: [MIR.Def] -> Map Ident ConstructorInfo
+getConstructors :: [MIR.Def] -> Map MIR.Id ConstructorInfo
 getConstructors bs = Map.fromList $ go bs
   where
     go []                                        = []
-    go (MIR.DData (MIR.Constructor n cons) : xs) = undefined
-        {-do
+    go (MIR.DData (MIR.Constructor (GA.UIdent n) cons) : xs) =
+        do
             fst
                 ( foldl
-                    ( \(acc, i) (GA.Constructor (GA.Ident id) xs) ->
-                        ( ( (GA.Ident (n <> "_" <> id), MIR.TLit (GA.Ident n))
+                    ( \(acc, i) (GA.UIdent id, xs) ->
+                        ( ( (GA.Ident (n <> "_" <> id), MIR.TLit (coerce n))
                           , ConstructorInfo
-                                { numArgsCI = length xs
-                                , argumentsCI = createArgs xs
+                                { numArgsCI = length (flattenType xs)
+                                , argumentsCI = createArgs (flattenType xs)
                                 , numCI = i
                                 }
                           )
@@ -116,7 +116,7 @@ getConstructors bs = Map.fromList $ go bs
                     ([], 0)
                     cons
                 )
-            <> go xs-}
+            <> go xs
     go (_ : xs)                                  = go xs
 
 initCodeGenerator :: [MIR.Def] -> CodeGenerator
@@ -182,10 +182,9 @@ generateCode (MIR.Program scs) = do
 
 compileScs :: [MIR.Def] -> CompilerState ()
 compileScs [] = do
-    undefined
     -- as a last step create all the constructors
     -- //TODO maybe merge this with the data type match?
-    {-c <- gets (Map.toList . constructors)
+    c <- gets (Map.toList . constructors)
     mapM_
         ( \((id, t), ci) -> do
             let t' = type2LlvmType t
@@ -247,7 +246,7 @@ compileScs [] = do
 
             modify $ \s -> s{variableCount = 0}
         )
-        c-}
+        c
 compileScs (MIR.DBind (MIR.Bind (name, _t) args exp) : xs) = do
     emit $ UnsafeRaw "\n"
     emit . Comment $ show name <> ": " <> show exp
@@ -260,19 +259,16 @@ compileScs (MIR.DBind (MIR.Bind (name, _t) args exp) : xs) = do
     emit DefineEnd
     modify $ \s -> s{variableCount = 0}
     compileScs xs
-compileScs (MIR.DData (MIR.Constructor outer_id ts) : xs) = do
-    undefined
---    let biggestVariant = maximum ((\(Constructor _ t) -> sum $ typeByteSize . type2LlvmType <$> t) <$> ts)
---    emit $ LIR.Type outer_id [I8, Array biggestVariant I8]
---    mapM_
---        ( \(GA.Constructor (GA.UIdent inner_id) fi) -> do
---            emit $ LIR.Type (GA.Ident $ outer_id <> "_" <> inner_id) (I8 : map type2LlvmType fi)
---        )
---        ts
---    compileScs xs
-
--- where
---   _t_return = snd $ partitionType (length args) t
+compileScs (MIR.DData (MIR.Constructor (GA.UIdent outer_id) ts) : xs) = do
+    let types = BI.second flattenType <$> ts
+    let biggestVariant = maximum $ sum . map (typeByteSize . type2LlvmType) <$> (snd <$> types)
+    emit $ LIR.Type (coerce outer_id) [I8, Array biggestVariant I8]
+    mapM_
+        ( \(GA.UIdent inner_id, fi) -> do
+            emit $ LIR.Type (GA.Ident $ outer_id <> "_" <> inner_id) (I8 : map type2LlvmType fi)
+        )
+        types
+    compileScs xs
 
 mainContent :: LLVMValue -> [LLVMIr]
 mainContent var =
@@ -336,9 +332,9 @@ emitECased t e cases = do
     emit $ SetVariable res (Load ty Ptr stackPtr)
   where
     emitCases :: LLVMType -> LLVMType -> GA.Ident -> GA.Ident -> LLVMValue -> Injection -> CompilerState ()
-    emitCases rt ty label stackPtr vs (Injection (MIR.InitConstructor consId cs, _t) exp) = do
+    emitCases rt ty label stackPtr vs (Injection (MIR.InitConstructor consId cs, t) exp) = do
         cons <- gets constructors
-        let r = fromJust $ Map.lookup (coerce consId) cons
+        let r = fromJust $ Map.lookup (coerce consId, t) cons
 
         lbl_failPos <- (\x -> GA.Ident $ "failed_" <> show x) <$> getNewLabel
         lbl_succPos <- (\x -> GA.Ident $ "success_" <> show x) <$> getNewLabel
@@ -439,7 +435,7 @@ emitApp t e1 e2 = appEmitter e1 e2 []
                 consts <- gets constructors
                 let visibility =
                         fromMaybe Local $
-                            Global <$ Map.lookup name consts
+                            Global <$ Map.lookup (name, t) consts
                                 <|> Global <$ Map.lookup (name,t) funcs
                     -- this piece of code could probably be improved, i.e remove the double `const Global`
                     args' = map (first valueGetType . dupe) args
@@ -503,19 +499,16 @@ exprToValue = \case
         pure $ VIdent (GA.Ident $ show v) (getType e)
 
 type2LlvmType :: MIR.Type -> LLVMType
-type2LlvmType = undefined {-(MIR.Type (GA.Ident t)) = case t of
-    "_Int" -> I64
-    t      -> CustomType (GA.Ident t)-}
-
--- TInt -> I64
--- TFun t xs -> do
---     let (t', xs') = function2LLVMType xs [type2LlvmType t]
---     Function t' xs'
--- TPol t -> CustomType t
--- where
---  function2LLVMType :: Type -> [LLVMType] -> (LLVMType, [LLVMType])
---  function2LLVMType (TFun t xs) s = function2LLVMType xs (type2LlvmType t : s)
---  function2LLVMType x s           = (type2LlvmType x, s)
+type2LlvmType (MIR.TLit id@(Ident name)) = case name of
+    "Int" -> I64
+    _     -> CustomType id
+type2LlvmType (MIR.TFun t xs)           = do
+    let (t', xs') = function2LLVMType xs [type2LlvmType t]
+    Function t' xs'
+  where
+    function2LLVMType :: Type -> [LLVMType] -> (LLVMType, [LLVMType])
+    function2LLVMType (TFun t xs) s = function2LLVMType xs (type2LlvmType t : s)
+    function2LLVMType x s           = (type2LlvmType x, s)
 
 getType :: ExpT -> LLVMType
 getType (_, t)     = type2LlvmType t
