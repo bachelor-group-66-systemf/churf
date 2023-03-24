@@ -85,8 +85,9 @@ checkPrg (Program bs) = do
     preRun :: [Def] -> Infer ()
     preRun [] = return ()
     preRun (x : xs) = case x of
-        -- TODO: Check for no overlapping signature definitions
-        DSig (Sig n t) -> insertSig (coerce n) (Just $ toNew t) >> preRun xs
+        DSig (Sig n t) -> do
+            gets (M.member (coerce n) . sigs) >>= flip when (throwError $ "Duplicate signatures for function '" ++ printTree n ++ "'")
+            insertSig (coerce n) (Just $ toNew t) >> preRun xs
         DBind (Bind n _ _) -> do
             s <- gets sigs
             case M.lookup (coerce n) s of

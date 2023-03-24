@@ -22,6 +22,7 @@ data Bool () where {
 -- };
 
 firstIsOne : List (Int) -> Bool () ;
+firstIsOne : List (Int) -> Bool () ;
 firstIsOne xs = case xs of {
     Cons x xs => case x of {
             1 => True ;
