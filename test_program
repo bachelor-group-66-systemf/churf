@@ -35,7 +35,12 @@ data List (a) where {
 
 -- main = firstIsOne (Cons 1 Nil);
 
-test xs = case xs of {
-    1 => 0;
-    lol => 1;
-                     };
+-- test xs = case xs of {
+--     1 => 0;
+--     lol => 1;
+                     -- };
+
+deepList xs = case xs of {
+    Cons Nil _ => 1 ;
+    _ => 0 ;
+};

@@ -7,6 +7,7 @@ module TypeChecker.TypeCheckerIr (
 import Control.Monad.Except
 import Control.Monad.Reader
 import Control.Monad.State
+import Data.Char (isDigit)
 import Data.Functor.Identity (Identity)
 import Data.Map (Map)
 import Data.String qualified
@@ -227,7 +228,10 @@ instance Print TVar where
 instance Print Type where
     prt i = \case
         TLit uident -> prPrec i 2 (concatD [prt 0 uident])
-        TVar tvar -> prPrec i 2 (concatD [prt 0 tvar])
+        TVar tvar@(MkTVar (Ident iden)) ->
+            if all isDigit iden
+                then prPrec i 2 (concatD [prt 0 $ TVar (MkTVar (Ident ("a" <> iden)))])
+                else prPrec i 2 (concatD [prt 0 tvar])
         TAll tvar type_ -> prPrec i 1 (concatD [doc (showString "forall"), prt 0 tvar, doc (showString "."), prt 0 type_])
         TData ident types -> prPrec i 1 (concatD [prt 0 ident, prt 0 types])
         TFun type_1 type_2 -> prPrec i 0 (concatD [prt 1 type_1, doc (showString "->"), prt 0 type_2])

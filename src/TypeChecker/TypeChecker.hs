@@ -83,7 +83,7 @@ checkPrg :: Program -> Infer T.Program
 checkPrg (Program bs) = do
     preRun bs
     -- Type check the program twice to produce all top-level types in the first pass through
-    bs' <- checkDef bs
+    _ <- checkDef bs
     bs'' <- checkDef bs
     return $ T.Program bs''
   where
@@ -132,7 +132,7 @@ checkBind err@(Bind name args e) = do
                 return $ T.Bind (apply sub (coerce name, newT)) (map coerce args) e
             _ -> do
                 insertSig (coerce name) (Just lambdaT)
-                return (T.Bind (coerce name, lambdaT) (map coerce args) e) -- (apply s e)
+                return (T.Bind (coerce name, lambdaT) (map coerce args) e)
 
 isMoreSpecificOrEq :: T.Type -> T.Type -> Bool
 isMoreSpecificOrEq _ (T.TAll _ _) = True
@@ -321,6 +321,9 @@ unify t0 t1 = do
             s1 <- unify a c
             s2 <- unify (apply s1 b) (apply s1 d)
             return $ s1 `compose` s2
+        -- TODO: BEWARY. THIS IS PROBABLY WRONG!!!
+        (T.TVar (T.MkTVar a), t@(T.TData _ _)) -> return $ M.singleton a t
+        (t@(T.TData _ _), T.TVar (T.MkTVar b)) -> return $ M.singleton b t
         (T.TVar (T.MkTVar a), t) -> occurs a t
         (t, T.TVar (T.MkTVar b)) -> occurs b t
         (T.TAll _ t, b) -> unify t b
