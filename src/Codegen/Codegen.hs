@@ -102,7 +102,7 @@ getConstructors bs = Map.fromList $ go bs
             let (GA.Ident n) = extractTypeName t
             fst
                 ( foldl
-                    ( \(acc, i) (Constructor (GA.UIdent id) xs) ->
+                    ( \(acc, i) (Constructor (GA.Ident id) xs) ->
                         ( ( (GA.Ident (n <> "_" <> id), MIR.TLit (coerce n))
                           , ConstructorInfo
                                 { numArgsCI = length xs
@@ -215,6 +215,7 @@ compileScs [] = do
 
             -- emit $ UnsafeRaw "\n"
 
+            -- warning this segfaults!!
             enumerateOneM_
                 ( \i (GA.Ident arg_n, arg_t) -> do
                     let arg_t' = type2LlvmType arg_t
@@ -262,10 +263,10 @@ compileScs (MIR.DBind (MIR.Bind (name, _t) args exp) : xs) = do
     compileScs xs
 compileScs (MIR.DData (MIR.Data typ ts) : xs) = do
     let (Ident outer_id) = extractTypeName typ
-    let biggestVariant = maximum $ sum <$> (\(Constructor _ t) -> typeByteSize . type2LlvmType . snd <$> t) <$> ts
-    emit $ LIR.Type (coerce outer_id) [I8, Array biggestVariant I8]
+    let biggestVariant = 1--maximum (sum . (\(Constructor _ t) -> typeByteSize . type2LlvmType . snd <$> t) <$> ts)
+    emit $ LIR.Type (Ident outer_id) [I8, Array biggestVariant I8]
     mapM_
-        ( \(Constructor (GA.UIdent inner_id) fi) -> do
+        ( \(Constructor (GA.Ident inner_id) fi) -> do
             emit $ LIR.Type (GA.Ident $ outer_id <> "_" <> inner_id) (I8 : map type2LlvmType (snd <$> fi))
         )
         ts
@@ -274,6 +275,18 @@ compileScs (MIR.DData (MIR.Data typ ts) : xs) = do
 mainContent :: LLVMValue -> [LLVMIr]
 mainContent var =
     [ UnsafeRaw $
+        -- "%2 = alloca %Craig\n" <>
+        -- "    store %Craig %1, ptr %2\n" <>
+        -- "    %3 = bitcast %Craig* %2 to i72*\n" <>
+        -- "    %4 = load i72, ptr %3\n" <>
+        -- "    call i32 (ptr, ...) @printf(ptr noundef @.str, i72 noundef %4)\n"
+
+        -- "%2 = alloca %Craig\n" <>
+        -- "    store %Craig %1, ptr %2\n" <>
+        -- "    %3 = bitcast %Craig* %2 to i72*\n" <>
+        -- "    %4 = load i72, ptr %3\n" <>
+        -- "    call i32 (ptr, ...) @printf(ptr noundef @.str, i72 noundef %4)\n"
+
         -- "%2 = alloca %Craig\n" <>
         -- "    store %Craig %1, ptr %2\n" <>
         -- "    %3 = bitcast %Craig* %2 to i72*\n" <>
@@ -394,16 +407,16 @@ emitECased t e cases = do
         emit $ Store ty val Ptr stackPtr
         emit $ Br label
         emit $ Label lbl_failPos
---     emitCases rt ty label stackPtr vs (Injection (MIR.CIdent id) exp) = do
---         -- //TODO this is pretty disgusting and would heavily benefit from a rewrite
---         valPtr <- getNewVar
---         emit $ SetVariable valPtr (Alloca rt)
---         emit $ Store rt vs Ptr valPtr
---         emit $ SetVariable id (Load rt Ptr valPtr)
---         increaseVarCount
---         val <- exprToValue (fst exp)
---         emit $ Store ty val Ptr stackPtr
---         emit $ Br label
+    emitCases rt ty label stackPtr vs (Branch (MIR.PVar (id,_), _) exp) = do
+        -- //TODO this is pretty disgusting and would heavily benefit from a rewrite
+        valPtr <- getNewVar
+        emit $ SetVariable valPtr (Alloca rt)
+        emit $ Store rt vs Ptr valPtr
+        emit $ SetVariable id (Load rt Ptr valPtr)
+        increaseVarCount
+        val <- exprToValue  exp
+        emit $ Store ty val Ptr stackPtr
+        emit $ Br label
     emitCases _ ty label stackPtr _ (Branch (MIR.PCatch, _) exp) = do
         val <- exprToValue exp
         emit $ Store ty val Ptr stackPtr

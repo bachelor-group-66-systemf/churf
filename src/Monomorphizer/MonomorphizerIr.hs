@@ -35,7 +35,7 @@ data Branch = Branch (Pattern, Type) ExpT
 
 type ExpT = (Exp, Type)
 
-data Constructor = Constructor UIdent [(UIdent, Type)]
+data Constructor = Constructor Ident [(Ident, Type)]
     deriving (Show, Ord, Eq)
 
 data Lit

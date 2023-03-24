@@ -1,8 +1,9 @@
-add : Int ;
-add = 4;
-
-main : Int ;
-main = case add of {
-    5 => 0;
-    _ => 1;
+data True() where {
+    True: True()
 };
+main: Int;
+main =
+    case True of {
+        True => 1;
+        _ => 0;
+    };
