@@ -59,7 +59,7 @@ main' debug s = do
     when check (removeDirectoryRecursive "output")
     createDirectory "output"
     writeFile "output/llvm.ll" compiled
-    -- if debug then debugDotViz else putStrLn compiled
+    if debug then debugDotViz else putStrLn compiled
 
     -- interpred <- fromInterpreterErr $ interpret lifted
     -- putStrLn "\n-- interpret"

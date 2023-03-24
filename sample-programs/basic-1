@@ -1,5 +1,5 @@
-add : Int -> Int -> Int ;
-add x y = x + y;
+add : Int ;
+add = 5;
 
 main : Int ;
-main = add 4 6 ;
+main = add ;
