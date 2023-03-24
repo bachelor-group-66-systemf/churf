@@ -1,4 +1,4 @@
-module Compiler where
+module Compiler (compile) where
 
 import           Grammar.ErrM         (Err)
 import           System.Exit          (exitFailure, exitSuccess)
@@ -13,15 +13,10 @@ import           System.Process.Extra (CreateProcess (..),
 --spawnWait s = spawnCommand s >>= \s >>= waitForProcess
 
 optimize :: String -> IO String
-optimize prg = do
-    result <- readCreateProcess (shell "opt --O3") prg
-    putStrLn result
+optimize = readCreateProcess (shell "opt --O3 -S")
 
+compileClang :: String -> IO String
+compileClang = readCreateProcess (shell "clang -x ir -o hello_world -")
 
-    -- (Just hin, Just hout, _, _) <- createProcess (proc "opt" ["--O3"]){ std_in = CreatePipe, std_out = CreatePipe }
-    -- hSetBuffering hin NoBuffering
-    -- hPutStrLn hin prg
-    -- hFlush hin
-    --bytes <- hGetContents hout
-    --putStrLn bytes
-    pure ""
+compile :: String -> IO String
+compile s = optimize s >>= compileClang

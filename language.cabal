@@ -51,6 +51,7 @@ executable language
       , hspec
       , QuickCheck
       , directory
+      , process
 
     default-language: GHC2021
 
@@ -83,5 +84,6 @@ Test-suite language-testsuite
       , hspec
       , QuickCheck
       , process
+      , bytestring
 
     default-language: GHC2021

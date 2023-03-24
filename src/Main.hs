@@ -2,32 +2,29 @@
 
 module Main where
 
-import Codegen.Codegen (generateCode)
-import Data.Bool (bool)
-import GHC.IO.Handle.Text (hPutStrLn)
-import Grammar.ErrM (Err)
-import Grammar.Par (myLexer, pProgram)
-import Grammar.Print (printTree)
+import           Codegen.Codegen             (generateCode)
+import           Data.Bool                   (bool)
+import           GHC.IO.Handle.Text          (hPutStrLn)
+import           Grammar.ErrM                (Err)
+import           Grammar.Par                 (myLexer, pProgram)
+import           Grammar.Print               (printTree)
 
-import Monomorphizer.Monomorphizer (monomorphize)
+import           Monomorphizer.Monomorphizer (monomorphize)
 
-import Control.Monad (when)
-import Data.List.Extra (isSuffixOf)
+import           Control.Monad               (when)
+import           Data.List.Extra             (isSuffixOf)
 
-import Compiler (optimize)
-import Renamer.Renamer (rename)
-import System.Directory (
-    createDirectory,
-    doesPathExist,
-    getDirectoryContents,
-    removeDirectoryRecursive,
-    setCurrentDirectory,
- )
-import System.Environment (getArgs)
-import System.Exit (exitFailure, exitSuccess)
-import System.IO (stderr)
-import System.Process.Extra (spawnCommand, waitForProcess)
-import TypeChecker.TypeChecker (typecheck)
+import           Compiler                    (compile)
+import           Renamer.Renamer             (rename)
+import           System.Directory            (createDirectory, doesPathExist,
+                                              getDirectoryContents,
+                                              removeDirectoryRecursive,
+                                              setCurrentDirectory)
+import           System.Environment          (getArgs)
+import           System.Exit                 (exitFailure, exitSuccess)
+import           System.IO                   (stderr)
+import           System.Process.Extra        (spawnCommand, waitForProcess)
+import           TypeChecker.TypeChecker     (typecheck)
 
 main :: IO ()
 main =
@@ -67,8 +64,7 @@ main' debug s = do
         writeFile "output/llvm.ll" generatedCode
         debugDotViz
 
-    optimize generatedCode
-
+    compile generatedCode
     -- interpred <- fromInterpreterErr $ interpret lifted
     -- putStrLn "\n-- interpret"
     -- print interpred
