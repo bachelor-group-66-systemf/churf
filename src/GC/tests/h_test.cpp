@@ -16,12 +16,7 @@ Node *create_chain(int depth) {
             Node *node = static_cast<Node *>(GC::Heap::alloc(sizeof(Node)));
             node->id = depth-i;
             node->child = nodes[i];
-            //node->child = nodes.at(i-1);
-            std::cout << "Child of node: " << node << " is: " << node->child << std::endl;
             nodes.push_back(node);
-        }
-        for (size_t i = 0; i < nodes.size(); i++) {
-            std::cout << "Element at " << i << ":\t" << nodes.at(i) << std::endl;
         }
         return nodes[depth];
     }
@@ -40,10 +35,8 @@ void detach_pointer(long **ptr) {
 
 Node *test_chain(int depth, bool detach) {
     auto stack_start = reinterpret_cast<uintptr_t *>(__builtin_frame_address(0));
-    std::cout << "Stack start from test_chain:\t" << stack_start << std::endl;
 
     Node *node_chain = create_chain(depth);
-    // This generates a segmentation fault (should be investigated further)
     if (detach)
         node_chain->child = nullptr;
     return node_chain;
@@ -66,38 +59,34 @@ void test_some_types() {
 }
 
 int main() {
+    using namespace std::literals;
+
+    auto start = std::chrono::high_resolution_clock::now();
+    //std::cout << "Value of start: " << start.time_since_epoch().count() << std::endl;
     GC::Heap::init();
     GC::Heap &gc = GC::Heap::the();
     gc.set_profiler(true);
     gc.check_init();
     auto stack_start = reinterpret_cast<uintptr_t *>(__builtin_frame_address(0));
-    std::cout << "Stack start from main:\t" << stack_start << std::endl;
-    
-    // char *c = static_cast<char *>(gc->alloc(sizeof(char))); // 0x0      | 0x0
-    // int *i = static_cast<int *>(gc->alloc(sizeof(int)));    // 0x1-0x4  | 0x4-0x8
-    // char *c2 = static_cast<char *>(gc->alloc(sizeof(char)));// 0x5      | 0x9-0x
-    // long *l = static_cast<long *>(gc->alloc(sizeof(long))); // 0x6-0xd  | 0x
-    
-    // This is allocated outside of the scope of the GC (if gc->init() isn't called), thus garbage
-/*     long *longs;
-    std::cout << "Pointer to ints:\t" << longs << std::endl;
-    for (int i = 0; i < 21; i++) {
-        longs = static_cast<long *>(gc->alloc(sizeof(long)));
-        longs++;
-    }  */
 
-    Node *root = static_cast<Node *>(gc.alloc(sizeof(Node)));
-    root = test_chain(3, false);
-    Node *root_child = root->child;
-    std::cout << "Adress of root:\t" << &root << std::endl;
-    std::cout << "Root points to:\t" << root << std::endl;
-    std::cout << "Root child:\t" << root_child << std::endl;
-    std::cout << "Root child, child:\t" << root_child->child << std::endl;
+    Node *root1 = static_cast<Node *>(gc.alloc(sizeof(Node)));
+    //Node *root2 = static_cast<Node *>(gc.alloc(sizeof(Node)));
+    root1 = test_chain(60000, false);
+    //root2 = test_chain(50000, true);
 
 
     gc.collect(GC::COLLECT_ALL);     
-    gc.print_contents();
-    
-    gc.dispose();
+    auto end = std::chrono::high_resolution_clock::now();
+    //std::cout << "Value of end: " << end.time_since_epoch().count() << std::endl;
+
+    gc.print_summary();
+    //gc.dispose();
+
+    std::cout
+        << "Execution time: "
+        << std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() << " ≈ "
+        << (end - start) / 1ms << "ms ≈ " 
+        << (end - start) / 1s << "s.\n";
+
     return 0;
 }

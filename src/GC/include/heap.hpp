@@ -9,8 +9,8 @@
 #include "chunk.hpp"
 #include "profiler.hpp"
 
-#define HEAP_SIZE 65536
-#define FREE_THRESH (uint)20
+#define HEAP_SIZE 2097152 //65536
+#define FREE_THRESH (uint) 100000
 #define DEBUG
 
 namespace GC
@@ -94,6 +94,7 @@ namespace GC
 		void check_init();		  // print dummy things
 		void print_contents();	  // print dummy things
 		void print_allocated_chunks(Heap *heap); // print the contents in m_allocated_chunks
+		void print_summary();
 #endif
 	};
 }

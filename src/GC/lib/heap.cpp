@@ -130,7 +130,7 @@ namespace GC
 		// Check if there are any freed chunks large enough for current request
 		for (size_t i = 0; i < heap.m_freed_chunks.size(); i++)
 		{
-			// auto chunk = Heap::get_at(heap.m_freed_chunks, i);
+			//auto chunk = Heap::get_at(heap.m_freed_chunks, i);
 			auto chunk = heap.m_freed_chunks[i];
 			auto iter = heap.m_freed_chunks.begin();
 			advance(iter, i);
@@ -374,7 +374,7 @@ namespace GC
 	{
 		std::vector<Chunk *> filtered;
 		size_t i = 0;
-		// auto prev = Heap::get_at(heap.m_freed_chunks, i++);
+		//auto prev = Heap::get_at(heap.m_freed_chunks, i++);
 		auto prev = heap.m_freed_chunks[i++];
 		prev->m_marked = true;
 		filtered.push_back(prev);
@@ -382,7 +382,7 @@ namespace GC
 		for (; i < heap.m_freed_chunks.size(); i++)
 		{
 			prev = filtered.back();
-			// auto next = Heap::get_at(heap.m_freed_chunks, i);
+			//auto next = Heap::get_at(heap.m_freed_chunks, i);
 			auto next = heap.m_freed_chunks[i];
 			auto p_start = (uintptr_t)(prev->m_start);
 			auto p_size = (uintptr_t)(prev->m_size);
@@ -537,6 +537,27 @@ namespace GC
 			cout << "\nFREED CHUNKS #" << dec << heap.m_freed_chunks.size() << endl;
 			for (auto fchunk : heap.m_freed_chunks)
 				print_line(fchunk);
+		}
+		else
+		{
+			cout << "NO FREED CHUNKS" << endl;
+		}
+	}
+
+	void Heap::print_summary()
+	{
+		Heap &heap = Heap::the();
+		if (heap.m_allocated_chunks.size())
+		{
+			cout << "\nALLOCATED CHUNKS #" << dec << heap.m_allocated_chunks.size() << endl;
+		}
+		else
+		{
+			cout << "NO ALLOCATIONS\n" << endl;
+		}
+		if (heap.m_freed_chunks.size())
+		{
+			cout << "\nFREED CHUNKS #" << dec << heap.m_freed_chunks.size() << endl;
 		}
 		else
 		{
