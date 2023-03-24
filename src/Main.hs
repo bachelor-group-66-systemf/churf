@@ -42,7 +42,7 @@ main' debug s = do
 
     printToErr "-- Parse Tree -- "
     parsed <- fromSyntaxErr . pProgram $ myLexer file
-    bool (printToErr $ printTree parsed) (printToErr $ printTree parsed) debug
+    bool (printToErr $ printTree parsed) (printToErr $ show parsed) debug
 
     printToErr "\n-- Renamer --"
     renamed <- fromRenamerErr . rename $ parsed
