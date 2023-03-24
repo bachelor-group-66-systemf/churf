@@ -2,13 +2,13 @@
 
 module Monomorphizer.Monomorphizer (monomorphize) where
 
-import Data.Coerce (coerce)
-import Grammar.Abs (Constructor (..), Ident (..))
-import Unsafe.Coerce (unsafeCoerce)
+import           Data.Coerce                   (coerce)
+import           Grammar.Abs                   (Constructor (..), Ident (..))
+import           Unsafe.Coerce                 (unsafeCoerce)
 
-import Grammar.Abs qualified as GA
-import Monomorphizer.MonomorphizerIr qualified as M
-import TypeChecker.TypeCheckerIr qualified as T
+import qualified Grammar.Abs                   as GA
+import qualified Monomorphizer.MonomorphizerIr as M
+import qualified TypeChecker.TypeCheckerIr     as T
 
 monomorphize :: T.Program -> M.Program
 monomorphize (T.Program ds) = M.Program $ monoDefs ds
@@ -18,7 +18,7 @@ monoDefs = map monoDef
 
 monoDef :: T.Def -> M.Def
 monoDef (T.DBind bind) = M.DBind $ monoBind bind
-monoDef (T.DData d) = M.DData $ unsafeCoerce d
+monoDef (T.DData d)    = M.DData $ unsafeCoerce d
 
 monoBind :: T.Bind -> M.Bind
 monoBind (T.Bind name args (e, t)) = M.Bind (monoId name) (map monoId args) (monoExpr e, monoType t)
@@ -34,19 +34,19 @@ monoExpr = \case
     T.ECase expt injs -> M.ECase (monoexpt expt) (monoInjs injs)
 
 monoAbsType :: GA.Type -> M.Type
-monoAbsType (GA.TLit u) = M.TLit (coerce u)
-monoAbsType (GA.TVar _v) = error "NOT POLYMORHPIC TYPES"
+monoAbsType (GA.TLit u)     = M.TLit (coerce u)
+monoAbsType (GA.TVar _v)    = error "NOT POLYMORHPIC TYPES"
 monoAbsType (GA.TAll _v _t) = error "NOT ALL TYPES"
-monoAbsType (GA.TData _ i) = error "NOT INDEXED TYPES"
-monoAbsType (GA.TEVar _v) = error "I DONT KNOW WHAT THIS IS"
+monoAbsType (GA.TEVar _v)   = error "I DONT KNOW WHAT THIS IS"
 monoAbsType (GA.TFun t1 t2) = M.TFun (monoAbsType t1) (monoAbsType t2)
+monoAbsType (GA.TIndexed _) = error "NOT INDEXED TYPES"
 
 monoType :: T.Type -> M.Type
-monoType (T.TAll _ t) = monoType t
+monoType (T.TAll _ t)          = monoType t
 monoType (T.TVar (T.MkTVar i)) = error "NOT POLYMORPHIC TYPES"
-monoType (T.TLit i) = M.TLit i
-monoType (T.TFun t1 t2) = M.TFun (monoType t1) (monoType t2)
-monoType (T.TData _ _) = error "Not sure what this is"
+monoType (T.TLit i)            = M.TLit i
+monoType (T.TFun t1 t2)        = M.TFun (monoType t1) (monoType t2)
+monoType (T.TData _ _)         = error "Not sure what this is"
 
 monoexpt :: T.ExpT -> M.ExpT
 monoexpt (e, t) = (monoExpr e, monoType t)
@@ -55,7 +55,7 @@ monoId :: T.Id -> M.Id
 monoId (n, t) = (n, monoType t)
 
 monoLit :: T.Lit -> M.Lit
-monoLit (T.LInt i) = M.LInt i
+monoLit (T.LInt i)  = M.LInt i
 monoLit (T.LChar c) = M.LChar c
 
 monoInjs :: [T.Inj] -> [M.Injection]
