@@ -84,7 +84,6 @@ checkPrg (Program bs) = do
     preRun bs
     -- Type check the program twice to produce all top-level types in the first pass through
     bs' <- checkDef bs
-    trace ("FIRST ITERATION: " <> printTree bs') pure ()
     bs'' <- checkDef bs
     return $ T.Program bs''
   where
@@ -330,7 +329,6 @@ makeLambda = foldl (flip (EAbs . coerce))
 
 -- | Unify two types producing a new substitution
 unify :: T.Type -> T.Type -> Infer Subst
-unify t0 t1 | trace ("T0: " <> show t0 <> "\nT1: " <> show t1) False = undefined
 unify t0 t1 = do
     case (t0, t1) of
         (T.TFun a b, T.TFun c d) -> do
