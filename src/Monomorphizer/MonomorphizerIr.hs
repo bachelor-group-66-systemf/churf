@@ -40,3 +40,7 @@ data Lit
 
 data Type = TLit Ident | TFun Type Type
     deriving (Show, Ord, Eq)
+
+flattenType :: Type -> [Type]
+flattenType (TFun t1 t2) = t1 : flattenType t2
+flattenType x            = [x]
