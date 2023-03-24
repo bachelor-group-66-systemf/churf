@@ -51,7 +51,7 @@ ECons.  Exp4 ::= UIdent ;
 ELit.   Exp4 ::= Lit ;
 EApp.   Exp3 ::= Exp3 Exp4 ;
 EAdd.   Exp1 ::= Exp1 "+" Exp2 ;
-ELet.   Exp  ::= "let" LIdent "=" Exp "in" Exp ; 
+ELet.   Exp  ::= "let" Bind "in" Exp ; 
 EAbs.   Exp  ::= "\\" LIdent "." Exp ;
 ECase.  Exp  ::= "case" Exp "of" "{" [Inj] "}";
 

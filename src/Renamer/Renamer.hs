@@ -36,10 +36,7 @@ renameDefs defs = runIdentity $ runExceptT $ evalStateT (runRn $ mapM renameDef 
     renameDef :: Def -> Rn Def
     renameDef = \case
         DSig (Sig name typ) -> DSig . Sig name <$> renameTVars typ
-        DBind (Bind name vars rhs) -> do
-            (new_names, vars') <- newNames initNames (coerce vars)
-            rhs' <- snd <$> renameExp new_names rhs
-            pure . DBind $ Bind name (coerce vars') rhs'
+        DBind bind -> DBind . snd <$> renameBind initNames bind
         DData (Data (Indexed cname types) constrs) -> do
             tvars_ <- tvars
             tvars' <- mapM nextNameTVar tvars_
@@ -60,6 +57,12 @@ renameDefs defs = runIdentity $ runExceptT $ evalStateT (runRn $ mapM renameDef 
     renameConstr :: [(TVar, TVar)] -> Constructor -> Constructor
     renameConstr new_types (Constructor name typ) =
         Constructor name $ substituteTVar new_types typ
+
+renameBind :: Names -> Bind -> Rn (Names, Bind)
+renameBind old_names (Bind name vars rhs) = do
+    (new_names, vars') <- newNames old_names (coerce vars)
+    (newer_names, rhs') <- renameExp new_names rhs
+    pure (newer_names, Bind name (coerce vars') rhs')
 
 substituteTVar :: [(TVar, TVar)] -> Type -> Type
 substituteTVar new_names typ = case typ of
@@ -110,11 +113,10 @@ renameExp old_names = \case
         pure (Map.union env1 env2, EAdd e1' e2')
 
     -- TODO fix shadowing
-    ELet name rhs e -> do
-        (new_names, name') <- newName old_names (coerce name)
-        (new_names', rhs') <- renameExp new_names rhs
-        (new_names'', e') <- renameExp new_names' e
-        pure (new_names'', ELet (coerce name') rhs' e')
+    ELet bind e -> do
+        (new_names, bind') <- renameBind old_names bind
+        (new_names', e') <- renameExp new_names e
+        pure (new_names', ELet bind' e')
     EAbs par e -> do
         (new_names, par') <- newName old_names (coerce par)
         (new_names', e') <- renameExp new_names e
