@@ -21,16 +21,16 @@ goods =
     [ specify "Basic polymorphism with multiple type variables" $
         run
             ( D.do
-                const
+                _const
                 "main = const 'a' 65 ;"
             )
             `shouldSatisfy` ok
     , specify "Head with a correct signature is accepted" $
         run
             ( D.do
-                list
-                headSig
-                head
+                _list
+                _headSig
+                _head
             )
             `shouldSatisfy` ok
     , specify "A basic arithmetic function should be able to be inferred" $
@@ -59,13 +59,13 @@ goods =
     , specify "Most simple inference possible" $
         run
             ( D.do
-                "id x = x ;"
+                _id
             )
             `shouldSatisfy` ok
     , specify "Pattern matching on a nested list" $
         run
             ( D.do
-                list
+                _list
                 "main : List (List (a)) -> Int ;"
                 "main xs = case xs of {"
                 "    Cons Nil _ => 1 ;"
@@ -73,6 +73,24 @@ goods =
                 "};"
             )
             `shouldSatisfy` ok
+    , specify "List of function Int -> Int functions should be inferred corretly" $
+        run
+            ( D.do
+                _list
+                "main xs = case xs of {"
+                "    Cons f _ => f 1 ;"
+                "    Nil => 0 ;"
+                " };"
+            )
+            `shouldBe` run
+                ( D.do
+                    _list
+                    "main : List (Int -> Int) -> Int ;"
+                    "main xs = case xs of {"
+                    "    Cons f _ => f 1 ;"
+                    "    Nil => 0 ;"
+                    " };"
+                )
     ]
 
 bads =
@@ -85,7 +103,7 @@ bads =
     , specify "Pattern matching using different types should not succeed" $
         run
             ( D.do
-                list
+                _list
                 "bad xs = case xs of {"
                 "   1 => 0 ;"
                 "   Nil => 0 ;"
@@ -95,7 +113,7 @@ bads =
     , specify "Using a concrete function (data type) on a skolem variable should not succeed" $
         run
             ( D.do
-                bool
+                _bool
                 _not
                 "f : a -> Bool () ;"
                 "f x = not x ;"
@@ -113,19 +131,30 @@ bads =
     , specify "A function without signature used in an incompatible context should not succeed" $
         run
             ( D.do
-                "main = id 1 2 ;"
-                "id x = x ;"
+                "main = _id 1 2 ;"
+                "_id x = x ;"
             )
             `shouldSatisfy` bad
-    , specify "Pattern matching on literal and list should not succeed" $
+    , specify "Pattern matching on literal and _list should not succeed" $
         run
             ( D.do
-                list
+                _list
                 "length : List (c) -> Int;"
-                "length list = case list of {"
+                "length _list = case _list of {"
                 "  0         => 0;"
                 "  Cons x xs => 1 + length xs;"
                 "};"
+            )
+            `shouldSatisfy` bad
+    , specify "List of function Int -> Int functions should not be usable on Char" $
+        run
+            ( D.do
+                _list
+                "main : List (Int -> Int) -> Int ;"
+                "main xs = case xs of {"
+                "    Cons f _ => f 'a' ;"
+                "    Nil => 0 ;"
+                " };"
             )
             `shouldSatisfy` bad
     ]
@@ -139,26 +168,26 @@ bad = not . ok
 
 -- FUNCTIONS
 
-const = D.do
+_const = D.do
     "const : a -> b -> a ;"
     "const x y = x ;"
-list = D.do
+_list = D.do
     "data List (a) where"
     "  {"
     "    Nil : List (a)"
     "    Cons : a -> List (a) -> List (a)"
     "  };"
 
-headSig = D.do
+_headSig = D.do
     "head : List (a) -> a ;"
 
-head = D.do
+_head = D.do
     "head xs = "
     "  case xs of {"
     "    Cons x xs => x ;"
     "  };"
 
-bool = D.do
+_bool = D.do
     "data Bool () where {"
     "    True : Bool ()"
     "    False : Bool ()"
@@ -170,3 +199,4 @@ _not = D.do
     "    True => False ;"
     "    False => True ;"
     "};"
+_id = "id x = x ;"

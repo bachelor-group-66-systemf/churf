@@ -5,6 +5,7 @@ build:
 clean:
     rm -r src/Grammar
     rm language
+    rm -r dist-newstyle/
 
 # run all tests
 test:
