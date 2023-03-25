@@ -2,38 +2,53 @@
 
 module Main where
 
-import           Codegen.Codegen             (generateCode)
-import           Data.Bool                   (bool)
-import           GHC.IO.Handle.Text          (hPutStrLn)
-import           Grammar.ErrM                (Err)
-import           Grammar.Par                 (myLexer, pProgram)
-import           Grammar.Print               (printTree)
+import Codegen.Codegen (generateCode)
+import Data.Bool (bool)
+import GHC.IO.Handle.Text (hPutStrLn)
+import Grammar.ErrM (Err)
+import Grammar.Par (myLexer, pProgram)
+import Grammar.Print (printTree)
 
-import           Monomorphizer.Monomorphizer (monomorphize)
+import Monomorphizer.Monomorphizer (monomorphize)
 
-import           Control.Monad               (when)
-import           Data.List.Extra             (isSuffixOf)
+import Control.Monad (when)
+import Data.List.Extra (isSuffixOf)
 
-import           Compiler                    (compile)
-import           Renamer.Renamer             (rename)
-import           System.Directory            (createDirectory, doesPathExist,
-                                              getDirectoryContents,
-                                              removeDirectoryRecursive,
-                                              setCurrentDirectory)
-import           System.Environment          (getArgs)
-import           System.Exit                 (ExitCode, exitFailure,
-                                              exitSuccess)
-import           System.IO                   (stderr)
-import           System.Process.Extra        (readCreateProcess, shell,
-                                              spawnCommand, waitForProcess)
-import           TypeChecker.TypeChecker     (typecheck)
+import Compiler (compile)
+import Renamer.Renamer (rename)
+import System.Directory (
+    createDirectory,
+    doesPathExist,
+    getDirectoryContents,
+    removeDirectoryRecursive,
+    setCurrentDirectory,
+ )
+import System.Environment (getArgs)
+import System.Exit (
+    ExitCode,
+    exitFailure,
+    exitSuccess,
+ )
+import System.IO (stderr)
+import System.Process.Extra (
+    readCreateProcess,
+    shell,
+    spawnCommand,
+    waitForProcess,
+ )
+import TypeChecker.TypeChecker (typecheck)
 
 main :: IO ()
 main =
     getArgs >>= \case
-        [] -> print "Required file path missing"
-        ("-d" : s : _) -> main' True s
-        (s : _) -> main' False s
+        [] -> putStrLn "Required file path missing"
+        ["-d", s] -> do
+            when (".crf" `isSuffixOf` s) (main' True s)
+            putStrLn $ "File '" ++ s ++ "' is not a churf file"
+        [s] -> do
+            when (".crf" `isSuffixOf` s) (main' False s)
+            putStrLn $ "File '" ++ s ++ "' is not a churf file"
+        xs -> putStrLn $ "Can't process: " ++ unwords xs
 
 main' :: Bool -> String -> IO ()
 main' debug s = do

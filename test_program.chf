@@ -26,3 +26,5 @@ bind ma f = case ma of {
     Nothing => Nothing ;
     Just a => f a ;
 };
+
+
