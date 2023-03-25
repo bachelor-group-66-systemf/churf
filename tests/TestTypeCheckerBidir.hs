@@ -18,21 +18,31 @@ import qualified TypeChecker.TypeCheckerIr    as T
 
 
 testTypeCheckerBidir = describe "Bidirectional type checker test" $ do
-  tc_id
-  tc_const
-  tc_simple_rank2
-  tc_rank2
-  tc_identity
-  tc_pair
-  tc_tree
-  tc_mono_case
-  tc_pol_case
+   tc_id
+   tc_double
+   tc_add_lam
+   tc_const
+   tc_simple_rank2
+   tc_rank2
+   tc_identity
+   tc_pair
+   tc_tree
+   tc_mono_case
+   tc_pol_case
 
 tc_id = specify "Basic identity function polymorphism" $ run
     [ "id : forall a. a -> a;"
     , "id x = x;"
     , "main = id 4;"
     ] `shouldSatisfy` ok
+
+tc_double = specify "Addition inference" $ run
+     ["double x = x + x;"] `shouldSatisfy` ok
+
+
+tc_add_lam = specify "Addition lambda inference" $ run
+     ["four = (\\x. x + x) 2;"] `shouldSatisfy` ok
+
 
 tc_const = specify "Basic polymorphism with multiple type variables" $ run
     [ "const : forall a. forall b. a -> b -> a;"
@@ -215,7 +225,7 @@ tc_pol_case = describe "Polymophic pattern matching" $ do
         ]
 
 run :: [String] -> Err T.Program
-run ss = rmTEVar <$> ((typecheck <=<  pProgram . myLexer . unlines) ss)
+run = rmTEVar <=< typecheck <=<  pProgram . myLexer . unlines
 
 ok = \case
   Ok  _ -> True

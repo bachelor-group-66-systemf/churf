@@ -114,6 +114,7 @@ instance Print t => Print (Id' t) where
 instance Print t => Print (Exp' t) where
   prt i = \case
       EVar  name  -> prPrec i 3 $ prt 0 name
+      EInj  name  -> prPrec i 3 $ prt 0 name
       ELit lit -> prPrec i 3 $ prt 0 lit
       ELet b e -> prPrec i 3 $ concatD
                       [ doc $ showString "let"

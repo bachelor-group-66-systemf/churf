@@ -14,6 +14,6 @@ typecheck :: Program -> Err T.Program
 typecheck p = do
   p <- Bi.typecheck p
   trace (printTree p) pure ()
-  pure $ rmTEVar p
+  rmTEVar p
 
 -- typecheck p = rmTEVar <$> Hm.typecheck p

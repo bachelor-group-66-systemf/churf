@@ -22,7 +22,7 @@ import qualified Data.Map                  as Map
 import           Data.Maybe                (fromMaybe, isNothing)
 import           Data.Sequence             (Seq (..))
 import qualified Data.Sequence             as S
-import           Data.Tuple.Extra          (second)
+import           Data.Tuple.Extra          (second, secondM)
 import           Debug.Trace               (trace)
 import           Grammar.Abs
 import           Grammar.ErrM
@@ -103,7 +103,8 @@ typecheckBind (Bind name vars rhs) = do
         Nothing -> do
             (e, t) <- infer $ foldr EAbs rhs vars
             t'     <- applyEnv t
-            let rhs'  = skipLambdas (length vars) e
+            e'     <- applyEnvExp e
+            let rhs'  = skipLambdas (length vars) e'
                 vars' = zip vars  $ getVars t'
             pure (T.Bind (coerce name, t') (coerce vars') (rhs', t'))
     env <- gets env
@@ -396,10 +397,11 @@ check exp typ
     --  Γ ⊢ e ↑ B ⊣ Δ
     subsumption = do
       (exp', t) <- infer exp
+      exp'' <- applyEnvExp exp'
       t'   <- applyEnv t
       typ' <- applyEnv typ
       subtype t' typ'
-      pure (exp', t')
+      pure (exp'', t')
 
 -- | Γ ⊢ e ↓ A ⊣ Δ
 -- Under input context Γ, e infers output type A, with output context ∆
@@ -439,8 +441,9 @@ infer = \case
     EApp e1 e2 -> do
         (e1', t) <- infer e1
         t' <- applyEnv t
+        e1'' <- applyEnvExp e1'
         (e2', t'') <- apply t' e2
-        pure (T.EApp (e1', t) e2', t'')
+        pure (T.EApp (e1'', t) e2', t'')
 
     --  Γ,ά,έ,(x:ά) ⊢ e ↑ έ ⊣ Δ,(x:ά),Θ
     --  ------------------------------- →I
@@ -603,6 +606,33 @@ splitOn x env = second (S.drop 1) $ S.breakl (==x) env
 -- | Drop frontmost elements until and including element @x@.
 dropTrailing :: EnvElem -> Tc ()
 dropTrailing x = modifyEnv $ S.takeWhileL (/= x)
+
+applyEnvExp :: T.Exp' Type -> Tc (T.Exp' Type)
+applyEnvExp exp = case exp of
+    T.ELet (T.Bind id vars rhs) exp -> do
+        id <- applyEnvId id
+        vars' <- mapM applyEnvId vars
+        rhs' <- applyEnvExpT rhs
+        exp' <- applyEnvExpT exp
+        pure $ T.ELet (T.Bind id vars' rhs') exp'
+    T.EApp e1 e2 -> liftA2 T.EApp (applyEnvExpT e1) (applyEnvExpT e2)
+    T.EAdd e1 e2 -> liftA2 T.EAdd (applyEnvExpT e1) (applyEnvExpT e2)
+    T.EAbs name e  -> T.EAbs name <$> applyEnvExpT e
+    T.ECase e branches -> liftA2 T.ECase (applyEnvExpT e)
+                                         (mapM applyEnvBranch branches)
+    _ -> pure exp
+  where
+    applyEnvExpT (e, t) = liftA2 (,) (applyEnvExp e) (applyEnv t)
+    applyEnvId = secondM applyEnv
+    applyEnvBranch (T.Branch (p, t) e) = do
+        pt <- liftA2 (,) (applyEnvPattern p) (applyEnv t)
+        e' <- applyEnvExpT e
+        pure $ T.Branch pt e'
+    applyEnvPattern = \case
+        T.PVar id       -> T.PVar <$> applyEnvId id
+        T.PLit (lit, t) -> T.PLit . (lit, ) <$> applyEnv t
+        T.PInj name ps  -> T.PInj name <$> mapM applyEnvPattern ps
+        p               -> pure p
 
 applyEnv :: Type -> Tc Type
 applyEnv t = gets $ (`applyEnv'` t) . env
