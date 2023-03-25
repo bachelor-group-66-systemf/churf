@@ -7,7 +7,7 @@ import Control.Monad ((<=<))
 import DoStrings qualified as D
 import Grammar.Par (myLexer, pProgram)
 import Test.Hspec
-import Prelude (Bool (..), Either (..), IO, fmap, not, ($), (.))
+import Prelude (Bool (..), Either (..), IO, not, ($), (.))
 
 -- import Test.QuickCheck
 import TypeChecker.TypeChecker (typecheck)
@@ -16,9 +16,14 @@ main :: IO ()
 main = hspec $ do
     ok1
     ok2
+    ok3
+    ok4
+    ok5
     bad1
     bad2
     bad3
+    bad4
+    bad5
 
 ok1 =
     specify "Basic polymorphism with multiple type variables" $
@@ -35,6 +40,41 @@ ok2 =
                 list
                 headSig
                 head
+            )
+            `shouldSatisfy` ok
+
+ok3 =
+    specify "A basic arithmetic function should be able to be inferred" $
+        run
+            ( D.do
+                "plusOne x = x + 1 ;"
+                "main x = plusOne x ;"
+            )
+            `shouldBe` run
+                ( D.do
+                    "plusOne : Int -> Int ;"
+                    "plusOne x = x + 1 ;"
+                    "main : Int -> Int ;"
+                    "main x = plusOne x ;"
+                )
+
+ok4 =
+    specify "A basic arithmetic function should be able to be inferred" $
+        run
+            ( D.do
+                "plusOne x = x + 1 ;"
+            )
+            `shouldBe` run
+                ( D.do
+                    "plusOne : Int -> Int ;"
+                    "plusOne x = x + 1 ;"
+                )
+
+ok5 =
+    specify "Most simple inference possible" $
+        run
+            ( D.do
+                "id x = x ;"
             )
             `shouldSatisfy` ok
 
@@ -59,13 +99,33 @@ bad2 =
             `shouldSatisfy` bad
 
 bad3 =
-    specify "Using a concrete function on a skolem variable should not succeed" $
+    specify "Using a concrete function (data type) on a skolem variable should not succeed" $
         run
             ( D.do
                 bool
                 _not
                 "f : a -> Bool () ;"
                 " f x = not x ;"
+            )
+            `shouldSatisfy` bad
+
+bad4 =
+    specify "Using a concrete function (primitive type) on a skolem variable should not succeed" $
+        run
+            ( D.do
+                "plusOne : Int -> Int ;"
+                "plusOne x = x + 1 ;"
+                "f : a -> Int ;"
+                " f x = plusOne x ;"
+            )
+            `shouldSatisfy` bad
+
+bad5 =
+    specify "A function without signature used in an incompatible context should not succeed" $
+        run
+            ( D.do
+                "main = id 1 2 ;"
+                "id x = x ;"
             )
             `shouldSatisfy` bad
 
@@ -90,6 +150,7 @@ list = D.do
 
 headSig = D.do
     "head : List (a) -> a ;"
+
 head = D.do
     "head xs = "
     "  case xs of {"
@@ -108,3 +169,8 @@ _not = D.do
     "    True => False ;"
     "    False => True ;"
     "};"
+
+{-
+    [a, b, c] | (Int -> Int)
+    (a -> (b -> (c -> (Int -> Int))))
+-}
