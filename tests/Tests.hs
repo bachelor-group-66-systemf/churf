@@ -18,6 +18,7 @@ main = hspec $ do
     ok2
     bad1
     bad2
+    bad3
 
 ok1 =
     specify "Basic polymorphism with multiple type variables" $
@@ -57,6 +58,17 @@ bad2 =
             )
             `shouldSatisfy` bad
 
+bad3 =
+    specify "Using a concrete function on a skolem variable should not succeed" $
+        run
+            ( D.do
+                bool
+                _not
+                "f : a -> Bool () ;"
+                " f x = not x ;"
+            )
+            `shouldSatisfy` bad
+
 run = typecheck <=< pProgram . myLexer
 
 ok (Right _) = True
@@ -83,3 +95,16 @@ head = D.do
     "  case xs of {"
     "    Cons x xs => x ;"
     "  };"
+
+bool = D.do
+    "data Bool () where {"
+    "    True : Bool ()"
+    "    False : Bool ()"
+    "};"
+
+_not = D.do
+    "not : Bool () -> Bool () ;"
+    "not x = case x of {"
+    "    True => False ;"
+    "    False => True ;"
+    "};"
