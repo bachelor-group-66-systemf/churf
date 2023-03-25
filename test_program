@@ -1,9 +1,28 @@
-data Bool () where {
-    True : Bool ()
-    False : Bool ()
-   };
+data Maybe (a) where {
+    Nothing : Maybe (a)
+    Just : a -> Maybe (a)
+    };
 
-main = case True of {
-    True => 1;
-    False => 0;
-                      };
+fmap : (a -> b) -> Maybe (a) -> Maybe (b) ;
+fmap f ma = case ma of {
+    Nothing => Nothing ;
+    Just a => Just (f a) ;
+};
+
+pure : a -> Maybe (a) ;
+pure x = Just x ;
+
+ap mf ma = case mf of {
+    Just f => case ma of {
+        Nothing => Nothing;
+        Just a => Just (f a);
+    };
+    Nothing => Nothing;
+};
+    
+return = pure;
+
+bind ma f = case ma of {
+    Nothing => Nothing ;
+    Just a => f a ;
+};

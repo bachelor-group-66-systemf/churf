@@ -10,6 +10,7 @@ import Control.Monad.State
 import Data.Char (isDigit)
 import Data.Functor.Identity (Identity)
 import Data.Map (Map)
+import Data.Set (Set)
 import Data.String qualified
 import Grammar.Print
 import Prelude
@@ -20,8 +21,10 @@ newtype Ctx = Ctx {vars :: Map Ident Type}
 
 data Env = Env
     { count :: Int
+    , nextChar :: Char
     , sigs :: Map Ident (Maybe Type)
     , constructors :: Map Ident Type
+    , takenTypeVars :: Set Ident
     }
     deriving (Show)
 
