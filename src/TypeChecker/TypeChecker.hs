@@ -339,7 +339,6 @@ makeLambda = foldl (flip (EAbs . coerce))
 
 -- | Unify two types producing a new substitution
 unify :: T.Type -> T.Type -> Infer Subst
--- unify t0 t1 | trace ("T0: " ++ show t0 ++ "\nT1: " ++ show t1 ++ "\n") False = undefined
 unify t0 t1 = do
     case (t0, t1) of
         (T.TFun a b, T.TFun c d) -> do
@@ -573,6 +572,7 @@ checkCase expT injs = do
 inferBranch :: Branch -> Infer (T.Type, T.Branch, T.Type)
 inferBranch (Branch pat expr) = do
     newPat@(pat, branchT) <- inferPattern pat
+    trace ("BRANCH TYPE: " ++ show branchT) pure ()
     newExp@(_, exprT) <- withPattern pat (inferExp expr)
     return (branchT, T.Branch newPat newExp, exprT)
 
@@ -592,8 +592,8 @@ inferPattern = \case
         t <- maybeToRightM ("Constructor: " <> printTree constr <> " does not exist") t
         (vs, ret) <- maybeToRightM "Partial pattern match not allowed" (unsnoc $ flattenType t)
         patterns <- mapM inferPattern patterns
-        zipWithM_ unify vs (map snd patterns)
-        return (T.PInj (coerce constr) (map fst patterns), ret)
+        sub <- foldl' compose nullSubst <$> zipWithM unify vs (map snd patterns)
+        return (T.PInj (coerce constr) (map fst patterns), apply sub ret)
     PCatch -> (T.PCatch,) <$> fresh
     PEnum p -> do
         t <- gets (M.lookup (coerce p) . constructors)

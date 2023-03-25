@@ -7,34 +7,25 @@ import Control.Monad ((<=<))
 import DoStrings qualified as D
 import Grammar.Par (myLexer, pProgram)
 import Test.Hspec
-import Prelude (Bool (..), Either (..), IO, not, ($), (.))
+import Prelude (Bool (..), Either (..), IO, mapM_, not, ($), (.))
 
 -- import Test.QuickCheck
 import TypeChecker.TypeChecker (typecheck)
 
 main :: IO ()
-main = hspec $ do
-    ok1
-    ok2
-    ok3
-    ok4
-    ok5
-    bad1
-    bad2
-    bad3
-    bad4
-    bad5
+main = do
+    mapM_ hspec goods
+    mapM_ hspec bads
 
-ok1 =
-    specify "Basic polymorphism with multiple type variables" $
+goods =
+    [ specify "Basic polymorphism with multiple type variables" $
         run
             ( D.do
                 const
                 "main = const 'a' 65 ;"
             )
             `shouldSatisfy` ok
-ok2 =
-    specify "Head with a correct signature is accepted" $
+    , specify "Head with a correct signature is accepted" $
         run
             ( D.do
                 list
@@ -42,9 +33,7 @@ ok2 =
                 head
             )
             `shouldSatisfy` ok
-
-ok3 =
-    specify "A basic arithmetic function should be able to be inferred" $
+    , specify "A basic arithmetic function should be able to be inferred" $
         run
             ( D.do
                 "plusOne x = x + 1 ;"
@@ -57,9 +46,7 @@ ok3 =
                     "main : Int -> Int ;"
                     "main x = plusOne x ;"
                 )
-
-ok4 =
-    specify "A basic arithmetic function should be able to be inferred" $
+    , specify "A basic arithmetic function should be able to be inferred" $
         run
             ( D.do
                 "plusOne x = x + 1 ;"
@@ -69,25 +56,33 @@ ok4 =
                     "plusOne : Int -> Int ;"
                     "plusOne x = x + 1 ;"
                 )
-
-ok5 =
-    specify "Most simple inference possible" $
+    , specify "Most simple inference possible" $
         run
             ( D.do
                 "id x = x ;"
             )
             `shouldSatisfy` ok
+    , specify "Pattern matching on a nested list" $
+        run
+            ( D.do
+                list
+                "main : List (List (a)) -> Int ;"
+                "main xs = case xs of {"
+                "    Cons Nil _ => 1 ;"
+                "    _ => 0 ;"
+                "};"
+            )
+            `shouldSatisfy` ok
+    ]
 
-bad1 =
-    specify "Infinite type unification should not succeed" $
+bads =
+    [ specify "Infinite type unification should not succeed" $
         run
             ( D.do
                 "main = \\x. x x ;"
             )
             `shouldSatisfy` bad
-
-bad2 =
-    specify "Pattern matching using different types should not succeed" $
+    , specify "Pattern matching using different types should not succeed" $
         run
             ( D.do
                 list
@@ -97,20 +92,16 @@ bad2 =
                 "};"
             )
             `shouldSatisfy` bad
-
-bad3 =
-    specify "Using a concrete function (data type) on a skolem variable should not succeed" $
+    , specify "Using a concrete function (data type) on a skolem variable should not succeed" $
         run
             ( D.do
                 bool
                 _not
                 "f : a -> Bool () ;"
-                " f x = not x ;"
+                "f x = not x ;"
             )
             `shouldSatisfy` bad
-
-bad4 =
-    specify "Using a concrete function (primitive type) on a skolem variable should not succeed" $
+    , specify "Using a concrete function (primitive type) on a skolem variable should not succeed" $
         run
             ( D.do
                 "plusOne : Int -> Int ;"
@@ -119,15 +110,25 @@ bad4 =
                 " f x = plusOne x ;"
             )
             `shouldSatisfy` bad
-
-bad5 =
-    specify "A function without signature used in an incompatible context should not succeed" $
+    , specify "A function without signature used in an incompatible context should not succeed" $
         run
             ( D.do
                 "main = id 1 2 ;"
                 "id x = x ;"
             )
             `shouldSatisfy` bad
+    , specify "Pattern matching on literal and list should not succeed" $
+        run
+            ( D.do
+                list
+                "length : List (c) -> Int;"
+                "length list = case list of {"
+                "  0         => 0;"
+                "  Cons x xs => 1 + length xs;"
+                "};"
+            )
+            `shouldSatisfy` bad
+    ]
 
 run = typecheck <=< pProgram . myLexer
 
@@ -169,8 +170,3 @@ _not = D.do
     "    True => False ;"
     "    False => True ;"
     "};"
-
-{-
-    [a, b, c] | (Int -> Int)
-    (a -> (b -> (c -> (Int -> Int))))
--}
