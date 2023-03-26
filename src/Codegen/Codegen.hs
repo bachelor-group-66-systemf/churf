@@ -79,8 +79,8 @@ getFunctions bs = Map.fromList $ go bs
                 ( \(Constructor id xs) ->
                     ( (coerce id, MIR.TLit (extractTypeName n))
                     , FunctionInfo
-                        { numArgs = length xs
-                        , arguments = createArgs (snd <$> xs)
+                        { numArgs = length (flattenType xs)
+                        , arguments = createArgs (flattenType xs)
                         }
                     )
                 )
@@ -105,8 +105,8 @@ getConstructors bs = Map.fromList $ go bs
                     ( \(acc, i) (Constructor (GA.Ident id) xs) ->
                         ( ( (GA.Ident (n <> "_" <> id), MIR.TLit (coerce n))
                           , ConstructorInfo
-                                { numArgsCI = length xs
-                                , argumentsCI = createArgs (snd <$> xs)
+                                { numArgsCI = length (flattenType xs)
+                                , argumentsCI = createArgs (flattenType xs)
                                 , numCI = i
                                 }
                           )
@@ -267,7 +267,7 @@ compileScs (MIR.DData (MIR.Data typ ts) : xs) = do
     emit $ LIR.Type (Ident outer_id) [I8, Array biggestVariant I8]
     mapM_
         ( \(Constructor (GA.Ident inner_id) fi) -> do
-            emit $ LIR.Type (GA.Ident $ outer_id <> "_" <> inner_id) (I8 : map type2LlvmType (snd <$> fi))
+            emit $ LIR.Type (GA.Ident $ outer_id <> "_" <> inner_id) (I8 : map type2LlvmType (flattenType fi))
         )
         ts
     compileScs xs
