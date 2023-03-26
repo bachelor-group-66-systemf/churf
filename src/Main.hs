@@ -1,67 +1,104 @@
-{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedRecordDot #-}
 
 module Main where
 
-import           Codegen.Codegen             (generateCode)
-import           Data.Bool                   (bool)
-import           GHC.IO.Handle.Text          (hPutStrLn)
-import           Grammar.ErrM                (Err)
-import           Grammar.Par                 (myLexer, pProgram)
-import           Grammar.Print               (printTree)
-
-import           Monomorphizer.Monomorphizer (monomorphize)
-
-import           Compiler                    (compile)
 import           Control.Monad               (when)
+import           Data.Bool                   (bool)
 import           Data.List.Extra             (isSuffixOf)
+import           Data.Maybe                  (fromJust, isNothing)
 import           GHC.IO.Handle.Text          (hPutStrLn)
-import           Grammar.ErrM                (Err)
-import           Grammar.Par                 (myLexer, pProgram)
-import           Grammar.Print               (printTree)
-import           Renamer.Renamer             (rename)
+import           System.Console.GetOpt       (ArgDescr (NoArg, ReqArg),
+                                              ArgOrder (RequireOrder),
+                                              OptDescr (Option), getOpt,
+                                              usageInfo)
 import           System.Directory            (createDirectory, doesPathExist,
                                               getDirectoryContents,
                                               removeDirectoryRecursive,
                                               setCurrentDirectory)
 import           System.Environment          (getArgs)
-import           System.Exit                 (ExitCode, exitFailure,
-                                              exitSuccess)
+import           System.Exit                 (ExitCode (ExitFailure),
+                                              exitFailure, exitSuccess,
+                                              exitWith)
 import           System.IO                   (stderr)
-import           System.Process.Extra        (readCreateProcess, shell,
-                                              spawnCommand, waitForProcess)
-import           TypeChecker.TypeChecker     (typecheck)
 
--- import           Interpreter        (interpret)
+
+import           Codegen.Codegen             (generateCode)
+import           Compiler                    (compile)
+import           Grammar.ErrM                (Err)
+import           Grammar.Par                 (myLexer, pProgram)
+import           Grammar.Print               (printTree)
 import           LambdaLifter                (lambdaLift)
+import           Monomorphizer.Monomorphizer (monomorphize)
 import           Renamer.Renamer             (rename)
-import           System.Environment          (getArgs)
-import           System.Exit                 (exitFailure, exitSuccess)
-import           System.IO                   (stderr)
-import           TypeChecker.RemoveTEVar     (RemoveTEVar (rmTEVar))
-import           TypeChecker.TypeChecker     (typecheck)
+import           System.Process              (spawnCommand, waitForProcess)
+import           TypeChecker.TypeChecker     (TypeChecker (Bi, Hm), typecheck)
 
 main :: IO ()
-main =
-    getArgs >>= \case
-        []             -> print "Required file path missing"
-        ("-d" : s : _) -> main' True s
-        (s : _)        -> main' False s
+main = getArgs >>= parseArgs >>= uncurry main'
 
-main' :: Bool -> String -> IO ()
-main' debug s = do
+parseArgs :: [String] -> IO (Options, String)
+parseArgs argv = case getOpt RequireOrder flags argv of
+  (os, f:_, [])
+      | opts.help || isNothing opts.typechecker -> do
+          hPutStrLn stderr (usageInfo header flags)
+          exitSuccess
+      | otherwise -> pure (opts, f)
+    where
+      opts = foldr ($) initOpts os
+  (_, _, errs) -> do
+      hPutStrLn stderr (concat errs ++ usageInfo header flags)
+      exitWith (ExitFailure 1)
+  where
+    header = "Usage: language [--help] [-d|--debug] [-t|type-checker bi/hm] FILE \n"
+
+flags :: [OptDescr (Options -> Options)]
+flags =
+    [ Option ['d'] ["debug"]        (NoArg  enableDebug)                  "Print debug messages."
+    , Option ['t'] ["type-checker"] (ReqArg chooseTypechecker "bi/hm") "Choose type checker. Possible options are bi and hm"
+    , Option []    ["help"]         (NoArg  enableHelp)                   "Print this help message"
+    ]
+
+initOpts :: Options
+initOpts = Options { help        = False
+                   , debug       = False
+                   , typechecker = Nothing
+                   }
+
+enableHelp :: Options -> Options
+enableHelp opts = opts { help = True }
+
+enableDebug :: Options -> Options
+enableDebug opts = opts { debug = True }
+
+chooseTypechecker :: String -> Options -> Options
+chooseTypechecker s options = options { typechecker = tc }
+  where
+    tc = case s of
+           "hm" -> pure Hm
+           "bi" -> pure Bi
+           _    -> Nothing
+
+data Options = Options
+  { help        :: Bool
+  , debug       :: Bool
+  , typechecker :: Maybe TypeChecker
+  }
+
+main' :: Options -> String -> IO ()
+main' opts s = do
     file <- readFile s
 
     printToErr "-- Parse Tree -- "
     parsed <- fromSyntaxErr . pProgram $ myLexer file
-    bool (printToErr $ printTree parsed) (printToErr $ show parsed) debug
+    bool (printToErr $ printTree parsed) (printToErr $ show parsed) opts.debug
 
     printToErr "\n-- Renamer --"
     renamed <- fromRenamerErr . rename $ parsed
-    bool (printToErr $ printTree renamed) (printToErr $ show renamed) debug
+    bool (printToErr $ printTree renamed) (printToErr $ show renamed) opts.debug
 
     printToErr "\n-- TypeChecker --"
-    typechecked <- fromTypeCheckerErr $ typecheck renamed
-    bool (printToErr $ printTree typechecked) (printToErr $ show typechecked) debug
+    typechecked <- fromTypeCheckerErr $ typecheck (fromJust opts.typechecker) renamed
+    bool (printToErr $ printTree typechecked) (printToErr $ show typechecked) opts.debug
 
     printToErr "\n-- Lambda Lifter --"
     let lifted = lambdaLift typechecked
@@ -74,13 +111,12 @@ main' debug s = do
     check <- doesPathExist "output"
     when check (removeDirectoryRecursive "output")
     createDirectory "output"
-    when debug $ do
+    when opts.debug $ do
         writeFile "output/llvm.ll" generatedCode
         debugDotViz
 
     compile generatedCode
     spawnWait "./hello_world"
-
 
     -- interpred <- fromInterpreterErr $ interpret lifted
     -- putStrLn "\n-- interpret"

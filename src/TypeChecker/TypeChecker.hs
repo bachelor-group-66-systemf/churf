@@ -1,19 +1,20 @@
 
-module TypeChecker.TypeChecker (typecheck) where
+module TypeChecker.TypeChecker (typecheck, TypeChecker(..)) where
 
-import           Debug.Trace                  (trace)
+import           Control.Monad                ((<=<))
 import           Grammar.Abs
 import           Grammar.ErrM                 (Err)
-import           Grammar.Print                (printTree)
 import           TypeChecker.RemoveTEVar      (RemoveTEVar (rmTEVar))
 import qualified TypeChecker.TypeCheckerBidir as Bi
 import qualified TypeChecker.TypeCheckerHm    as Hm
 import qualified TypeChecker.TypeCheckerIr    as T
 
-typecheck :: Program -> Err T.Program
-typecheck p = do
-  p <- Bi.typecheck p
-  trace (printTree p) pure ()
-  rmTEVar p
 
--- typecheck p = rmTEVar <$> Hm.typecheck p
+data TypeChecker = Bi | Hm
+
+typecheck :: TypeChecker -> Program -> Err T.Program
+typecheck tc = rmTEVar <=< f
+  where
+    f = case tc of
+          Bi -> Bi.typecheck
+          Hm -> Hm.typecheck
