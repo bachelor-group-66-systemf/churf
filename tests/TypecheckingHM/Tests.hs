@@ -117,6 +117,19 @@ bads =
             " };"
         )
         bad
+    , testSatisfy
+        "id with incorrect signature"
+        ( D.do
+            "id : a -> b;"
+            "id x = x;"
+        )
+        bad
+    , testSatisfy
+        "incorrect type signature on id lambda"
+        ( D.do
+            "id = ((\\x. x) : a -> b);"
+        )
+        bad
     ]
 
 bes =

@@ -50,7 +50,7 @@ typecheck = run . checkPrg
 checkData :: Data -> Infer ()
 checkData d = do
     case d of
-        (Data typ@(TData name ts) constrs) -> do
+        (Data typ@(TData _ ts) constrs) -> do
             unless
                 (all isPoly ts)
                 (throwError $ unwords ["Data type incorrectly declared"])
@@ -62,7 +62,7 @@ checkData d = do
                             throwError $
                                 unwords
                                     [ "return type of constructor:"
-                                    , printTree name
+                                    , printTree name'
                                     , "with type:"
                                     , printTree (retType t')
                                     , "does not match data: "
@@ -345,8 +345,6 @@ algoW = \case
         (sub, (e', t)) <- algoW caseExpr
         (subst, injs, ret_t) <- checkCase t injs
         let comp = subst `compose` sub
-        trace ("EXPR: " ++ show (apply comp t)) pure ()
-        trace ("CASES: " ++ show (apply comp ret_t)) pure ()
         return (comp, apply comp (T.ECase (e', t) injs, ret_t))
 
 makeLambda :: Exp -> [T.Ident] -> Exp
@@ -635,8 +633,8 @@ inferPattern = \case
                     ++ " arguments but has been given "
                     ++ show (length patterns)
             )
-        sub <- composeAll <$> zipWithM unify vs (map snd patterns)
-        return (T.PInj (coerce constr) (map fst patterns), apply sub ret)
+        sub <- composeAll <$> zipWithM unify (map snd patterns) vs
+        return (T.PInj (coerce constr) (apply sub (map fst patterns)), apply sub ret)
     PCatch -> (T.PCatch,) <$> fresh
     PEnum p -> do
         t <- gets (M.lookup (coerce p) . constructors)
