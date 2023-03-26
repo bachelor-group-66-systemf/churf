@@ -86,7 +86,7 @@ data Bind = Bind Id [Id] ExpT
     deriving (C.Eq, C.Ord, C.Show, C.Read)
 
 instance Print Ident where
-    prt _ (Ident str) = prt 0 str
+    prt _ (Ident str) = doc . showString $ str
 
 instance Print [Def] where
     prt _ [] = concatD []
