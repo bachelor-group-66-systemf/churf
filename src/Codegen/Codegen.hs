@@ -14,6 +14,7 @@ import           Data.Map                      (Map)
 import qualified Data.Map                      as Map
 import           Data.Maybe                    (fromJust, fromMaybe)
 import           Data.Tuple.Extra              (dupe, first, second)
+import           Debug.Trace                   (trace)
 import qualified Grammar.Abs                   as GA
 import           Grammar.ErrM                  (Err)
 import           Monomorphizer.MonomorphizerIr as MIR
@@ -22,7 +23,7 @@ import           Monomorphizer.MonomorphizerIr as MIR
 data CodeGenerator = CodeGenerator
     { instructions  :: [LLVMIr]
     , functions     :: Map MIR.Id FunctionInfo
-    , constructors  :: Map MIR.Id ConstructorInfo
+    , constructors  :: Map GA.Ident ConstructorInfo
     , variableCount :: Integer
     , labelCount    :: Integer
     }
@@ -36,9 +37,10 @@ data FunctionInfo = FunctionInfo
     }
     deriving (Show)
 data ConstructorInfo = ConstructorInfo
-    { numArgsCI   :: Int
-    , argumentsCI :: [Id]
-    , numCI       :: Integer
+    { numArgsCI    :: Int
+    , argumentsCI  :: [Id]
+    , numCI        :: Integer
+    , returnTypeCI :: MIR.Type
     }
     deriving (Show)
 
@@ -56,7 +58,7 @@ getVarCount = gets variableCount
 
 -- | Increases the variable count and returns it from the CodeGenerator state
 getNewVar :: CompilerState GA.Ident
-getNewVar = (GA.Ident . show) <$> (increaseVarCount >> getVarCount)
+getNewVar = GA.Ident . show <$> (increaseVarCount >> getVarCount)
 
 -- | Increses the label count and returns a label from the CodeGenerator state
 getNewLabel :: CompilerState Integer
@@ -74,18 +76,7 @@ getFunctions bs = Map.fromList $ go bs
     go (MIR.DBind (MIR.Bind id args _) : xs) =
         (id, FunctionInfo{numArgs = length args, arguments = args})
             : go xs
-    go (MIR.DData (MIR.Data n cons) : xs) =
-        do map
-                ( \(Constructor id xs) ->
-                    ( (coerce id, MIR.TLit (extractTypeName n))
-                    , FunctionInfo
-                        { numArgs = length (flattenType xs)
-                        , arguments = createArgs (flattenType xs)
-                        }
-                    )
-                )
-                cons
-            <> go xs
+    go (_ : xs) = go xs
 
 createArgs :: [MIR.Type] -> [Id]
 createArgs xs = fst $ foldl (\(acc, l) t -> (acc ++ [(GA.Ident ("arg_" <> show l), t)], l + 1)) ([], 0) xs
@@ -93,21 +84,20 @@ createArgs xs = fst $ foldl (\(acc, l) t -> (acc ++ [(GA.Ident ("arg_" <> show l
 {- | Produces a map of functions infos from a list of binds,
  which contains useful data for code generation.
 -}
-getConstructors :: [MIR.Def] -> Map MIR.Id ConstructorInfo
+getConstructors :: [MIR.Def] -> Map GA.Ident ConstructorInfo
 getConstructors bs = Map.fromList $ go bs
   where
     go []                                        = []
     go (MIR.DData (MIR.Data t cons) : xs) =
-        do
-            let (GA.Ident n) = extractTypeName t
             fst
                 ( foldl
-                    ( \(acc, i) (Constructor (GA.Ident id) xs) ->
-                        ( ( (GA.Ident (n <> "_" <> id), MIR.TLit (coerce n))
+                    ( \(acc, i) (Constructor id xs) ->
+                        ( ( id
                           , ConstructorInfo
-                                { numArgsCI = length (flattenType xs)
-                                , argumentsCI = createArgs (flattenType xs)
+                                { numArgsCI = length (init . flattenType $ xs)
+                                , argumentsCI = createArgs (init . flattenType $ xs)
                                 , numCI = i
+                                , returnTypeCI = t --last . flattenType $ xs
                                 }
                           )
                             : acc
@@ -183,11 +173,13 @@ generateCode (MIR.Program scs) = do
 
 compileScs :: [MIR.Def] -> CompilerState ()
 compileScs [] = do
+    emit $ UnsafeRaw "\n"
     -- as a last step create all the constructors
     -- //TODO maybe merge this with the data type match?
     c <- gets (Map.toList . constructors)
     mapM_
-        ( \((id, t), ci) -> do
+        ( \(id, ci) -> do
+            let t = returnTypeCI ci
             let t' = type2LlvmType t
             let x = BI.second type2LlvmType <$> argumentsCI ci
             emit $ Define FastCC t' id x
@@ -213,9 +205,6 @@ compileScs [] = do
             ptr' <- getNewVar
             emit $ SetVariable ptr' (Bitcast (Ref t') (VIdent top Ptr) (Ref $ CustomType id))
 
-            -- emit $ UnsafeRaw "\n"
-
-            -- warning this segfaults!!
             enumerateOneM_
                 ( \i (GA.Ident arg_n, arg_t) -> do
                     let arg_t' = type2LlvmType arg_t
@@ -237,14 +226,13 @@ compileScs [] = do
                 )
                 (argumentsCI ci)
 
-            -- emit $ UnsafeRaw "\n"
-
             -- load and return the constructed value
             emit $ Comment "Return the newly constructed value"
             load <- getNewVar
             emit $ SetVariable load (Load t' Ptr top)
             emit $ Ret t' (VIdent load t')
             emit DefineEnd
+            emit $ UnsafeRaw "\n"
 
             modify $ \s -> s{variableCount = 0}
         )
@@ -263,11 +251,12 @@ compileScs (MIR.DBind (MIR.Bind (name, _t) args exp) : xs) = do
     compileScs xs
 compileScs (MIR.DData (MIR.Data typ ts) : xs) = do
     let (Ident outer_id) = extractTypeName typ
-    let biggestVariant = 1--maximum (sum . (\(Constructor _ t) -> typeByteSize . type2LlvmType . snd <$> t) <$> ts)
+    let variantTypes fi = init $ map type2LlvmType (flattenType fi)
+    let biggestVariant = maximum (sum . (\(Constructor _ fi) -> typeByteSize <$> variantTypes fi) <$> ts)
     emit $ LIR.Type (Ident outer_id) [I8, Array biggestVariant I8]
     mapM_
-        ( \(Constructor (GA.Ident inner_id) fi) -> do
-            emit $ LIR.Type (GA.Ident $ outer_id <> "_" <> inner_id) (I8 : map type2LlvmType (flattenType fi))
+        ( \(Constructor inner_id fi) -> do
+            emit $ LIR.Type inner_id (I8 : variantTypes fi)
         )
         ts
     compileScs xs
@@ -348,7 +337,7 @@ emitECased t e cases = do
     emitCases :: LLVMType -> LLVMType -> GA.Ident -> GA.Ident -> LLVMValue -> Branch -> CompilerState ()
     emitCases rt ty label stackPtr vs (Branch (MIR.PInj consId cs, t) exp) = do
         cons <- gets constructors
-        let r = fromJust $ Map.lookup (coerce consId, t) cons
+        let r = fromJust $ Map.lookup consId cons
 
         lbl_failPos <- (\x -> GA.Ident $ "failed_" <> show x) <$> getNewLabel
         lbl_succPos <- (\x -> GA.Ident $ "success_" <> show x) <$> getNewLabel
@@ -362,35 +351,38 @@ emitECased t e cases = do
         emit $ Label lbl_succPos
 
         castPtr <- getNewVar
-        castedPtr <- getNewVar
         casted <- getNewVar
         emit $ SetVariable castPtr (Alloca rt)
         emit $ Store rt vs Ptr castPtr
-        emit $ SetVariable castedPtr (Bitcast Ptr (VIdent castPtr Ptr) Ptr)
-        emit $ SetVariable casted (Load (CustomType (coerce consId)) Ptr castedPtr)
+        emit $ SetVariable casted (Load (CustomType (coerce consId)) Ptr castPtr)
 
         val <- exprToValue exp
-        -- enumerateOneM_
-        --     (\i c -> do
-        --         case c of
-        --             CIdent x -> do
-        --                 emit . Comment $ "ident " <> show x
-        --                 emit $ SetVariable x (ExtractValue (CustomType (fst consId)) (VIdent casted Ptr) i)
-        --                 emit $ Store ty val Ptr stackPtr
-        --             CCons x cs -> error "nested constructor"
-        --             CLit l -> do
-        --                 testVar <- getNewVar
-        --                 emit $ SetVariable testVar (ExtractValue (CustomType (fst consId)) (VIdent casted Ptr) i)
-        --                 case l of
-        --                     LInt l -> emit $ Icmp LLEq I64 (VIdent testVar Ptr) (VInteger l)
-        --                     LChar c -> emit $ Icmp LLEq I8 (VIdent testVar Ptr) (VChar c)
-        --             CCatch -> emit . Comment $ "Catch all"
-        --         emit . Comment $ "return this " <> toIr val
-        --         emit . Comment . show $ c
-        --         emit . Comment . show $ i
-        --     )
-        --     cs
-        -- emit $ Store ty val Ptr stackPtr
+        enumerateOneM_
+            (\i c -> do
+                case c of
+                    PVar x      -> do
+                        emit . Comment $ "ident " <> show x
+                        emit $ SetVariable (fst x) (ExtractValue (CustomType (coerce consId)) (VIdent casted Ptr) i)
+                    PLit (l, t) -> undefined
+                    PInj id ps  -> undefined
+                    PCatch      -> undefined
+                    PEnum id    -> undefined
+                --case c of
+                --    CIdent x -> do
+                --        emit . Comment $ "ident " <> show x
+                --        emit $ SetVariable x (ExtractValue (CustomType (fst consId)) (VIdent casted Ptr) i)
+                --        emit $ Store ty val Ptr stackPtr
+                --    CCons x cs -> error "nested constructor"
+                --    CLit l -> do
+                --        testVar <- getNewVar
+                --        emit $ SetVariable testVar (ExtractValue (CustomType (fst consId)) (VIdent casted Ptr) i)
+                --        case l of
+                --            LInt l -> emit $ Icmp LLEq I64 (VIdent testVar Ptr) (VInteger l)
+                --            LChar c -> emit $ Icmp LLEq I8 (VIdent testVar Ptr) (VChar c)
+                --    CCatch -> emit . Comment $ "Catch all"
+            )
+            cs
+        emit $ Store ty val Ptr stackPtr
         emit $ Br label
         emit $ Label lbl_failPos
     emitCases rt ty label stackPtr vs (Branch (MIR.PLit i, _) exp) = do
@@ -417,6 +409,10 @@ emitECased t e cases = do
         val <- exprToValue  exp
         emit $ Store ty val Ptr stackPtr
         emit $ Br label
+    emitCases rt ty label stackPtr vs (Branch (MIR.PEnum id, _) exp) = do
+        val <- exprToValue exp
+        emit $ Store ty val Ptr stackPtr
+        emit $ Br label
     emitCases _ ty label stackPtr _ (Branch (MIR.PCatch, _) exp) = do
         val <- exprToValue exp
         emit $ Store ty val Ptr stackPtr
@@ -435,13 +431,13 @@ emitLet xs e = do
                 ]
 
 emitApp :: MIR.Type -> ExpT -> ExpT -> CompilerState ()
-emitApp t e1 e2 = appEmitter e1 e2 []
+emitApp rt e1 e2 = appEmitter e1 e2 []
   where
     appEmitter :: ExpT -> ExpT -> [ExpT] -> CompilerState ()
     appEmitter e1 e2 stack = do
         let newStack = e2 : stack
         case e1 of
-            (MIR.EApp e1' e2', t) -> appEmitter e1' e2' newStack
+            (MIR.EApp e1' e2', _) -> appEmitter e1' e2' newStack
             (MIR.EId name, t) -> do
                 args <- traverse exprToValue newStack
                 vs <- getNewVar
@@ -449,11 +445,13 @@ emitApp t e1 e2 = appEmitter e1 e2 []
                 consts <- gets constructors
                 let visibility =
                         fromMaybe Local $
-                            Global <$ Map.lookup (name, t) consts
-                                <|> Global <$ Map.lookup (name,t) funcs
+                            Global <$ Map.lookup name consts
+                            <|>
+                            Global <$ Map.lookup (name, t) funcs
                     -- this piece of code could probably be improved, i.e remove the double `const Global`
                     args' = map (first valueGetType . dupe) args
-                    call = Call FastCC (type2LlvmType t) visibility name args'
+                    call = Call FastCC (type2LlvmType rt) visibility name args'
+                emit $ Comment $ show rt
                 emit $ SetVariable vs call
             x -> error $ "The unspeakable happened: " <> show x
 

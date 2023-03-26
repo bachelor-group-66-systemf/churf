@@ -2,41 +2,31 @@
 
 module Main where
 
-import Codegen.Codegen (generateCode)
-import Data.Bool (bool)
-import GHC.IO.Handle.Text (hPutStrLn)
-import Grammar.ErrM (Err)
-import Grammar.Par (myLexer, pProgram)
-import Grammar.Print (printTree)
+import           Codegen.Codegen             (generateCode)
+import           Data.Bool                   (bool)
+import           GHC.IO.Handle.Text          (hPutStrLn)
+import           Grammar.ErrM                (Err)
+import           Grammar.Par                 (myLexer, pProgram)
+import           Grammar.Print               (printTree)
 
-import Monomorphizer.Monomorphizer (monomorphize)
+import           Monomorphizer.Monomorphizer (monomorphize)
 
-import Control.Monad (when)
-import Data.List.Extra (isSuffixOf)
+import           Control.Monad               (when)
+import           Data.List.Extra             (isSuffixOf)
 
-import Compiler (compile)
-import Renamer.Renamer (rename)
-import System.Directory (
-    createDirectory,
-    doesPathExist,
-    getDirectoryContents,
-    removeDirectoryRecursive,
-    setCurrentDirectory,
- )
-import System.Environment (getArgs)
-import System.Exit (
-    ExitCode,
-    exitFailure,
-    exitSuccess,
- )
-import System.IO (stderr)
-import System.Process.Extra (
-    readCreateProcess,
-    shell,
-    spawnCommand,
-    waitForProcess,
- )
-import TypeChecker.TypeChecker (typecheck)
+import           Compiler                    (compile)
+import           Renamer.Renamer             (rename)
+import           System.Directory            (createDirectory, doesPathExist,
+                                              getDirectoryContents,
+                                              removeDirectoryRecursive,
+                                              setCurrentDirectory)
+import           System.Environment          (getArgs)
+import           System.Exit                 (ExitCode, exitFailure,
+                                              exitSuccess)
+import           System.IO                   (stderr)
+import           System.Process.Extra        (readCreateProcess, shell,
+                                              spawnCommand, waitForProcess)
+import           TypeChecker.TypeChecker     (typecheck)
 
 main :: IO ()
 main =
@@ -70,15 +60,15 @@ main' debug s = do
     -- let lifted = lambdaLift typechecked
     -- printToErr $ printTree lifted
     --
-    printToErr "\n -- Compiler --"
+    --printToErr "\n -- Compiler --"
     generatedCode <- fromCompilerErr $ generateCode (monomorphize typechecked)
-    putStrLn generatedCode
+    --putStrLn generatedCode
 
     check <- doesPathExist "output"
     when check (removeDirectoryRecursive "output")
     createDirectory "output"
     when debug $ do
-        writeFile "output/llvm.ll" generatedCode
+        _ <- writeFile "output/llvm.ll" generatedCode
         debugDotViz
 
     compile generatedCode

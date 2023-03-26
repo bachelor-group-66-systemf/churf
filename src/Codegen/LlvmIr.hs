@@ -14,7 +14,7 @@ module Codegen.LlvmIr (
 import           Data.List   (intercalate)
 import           Grammar.Abs (Ident (..))
 
-data CallingConvention = TailCC | FastCC | CCC | ColdCC
+data CallingConvention = TailCC | FastCC | CCC | ColdCC deriving Show
 instance ToIr CallingConvention where
     toIr :: CallingConvention -> String
     toIr TailCC = "tailcc"
@@ -33,6 +33,7 @@ data LLVMType
     | Function LLVMType [LLVMType]
     | Array Integer LLVMType
     | CustomType Ident
+    deriving Show
 
 class ToIr a where
     toIr :: a -> String
@@ -61,6 +62,7 @@ data LLVMComp
     | LLSge
     | LLSlt
     | LLSle
+    deriving Show
 instance ToIr LLVMComp where
     toIr :: LLVMComp -> String
     toIr = \case
@@ -75,7 +77,7 @@ instance ToIr LLVMComp where
         LLSlt -> "slt"
         LLSle -> "sle"
 
-data Visibility = Local | Global
+data Visibility = Local | Global deriving Show
 instance ToIr Visibility where
     toIr :: Visibility -> String
     toIr Local  = "%"
@@ -89,6 +91,7 @@ data LLVMValue
     | VIdent Ident LLVMType
     | VConstant String
     | VFunction Ident Visibility LLVMType
+    deriving Show
 
 instance ToIr LLVMValue where
     toIr :: LLVMValue -> String
@@ -132,6 +135,7 @@ data LLVMIr
     | Comment String
     | UnsafeRaw String -- This should generally be avoided, and proper
     -- instructions should be used in its place
+    deriving Show
 
 -- | Converts a list of LLVMIr instructions to a string
 llvmIrToString :: [LLVMIr] -> String
