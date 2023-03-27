@@ -1,7 +1,7 @@
 {-# LANGUAGE QualifiedDo #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
-module Main where
+module TestTypeCheckerHm where
 
 import Control.Monad ((<=<))
 import DoStrings qualified as D
