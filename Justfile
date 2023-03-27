@@ -13,9 +13,11 @@ clean:
 test:
     cabal test
 
-# compile a specific file
-run FILE:
-    cabal run language {{FILE}}
-
 debug FILE:
     cabal run language -- -d {{FILE}}
+
+hm FILE:
+    cabal run language -- -t hm {{FILE}}
+
+bi FILE:
+    cabal run language -- -t bi {{FILE}}
