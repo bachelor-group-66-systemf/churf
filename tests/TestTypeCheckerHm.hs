@@ -7,16 +7,15 @@ import Control.Monad ((<=<))
 import DoStrings qualified as D
 import Grammar.Par (myLexer, pProgram)
 import Test.Hspec
-import Prelude (Bool (..), Either (..), IO, mapM_, not, ($), (.))
+import Prelude (Bool (..), Either (..), IO, foldl1, mapM_, not, ($), (.), (>>))
 
 -- import Test.QuickCheck
-import TypeChecker.TypeChecker (typecheck)
+import TypeChecker.TypeCheckerHm (typecheck)
 
-main :: IO ()
-main = do
-    mapM_ hspec goods
-    mapM_ hspec bads
-    mapM_ hspec bes
+testTypeCheckerHm = describe "Hindley-Milner type checker test" $ do
+    foldl1 (>>) goods
+    foldl1 (>>) bads
+    foldl1 (>>) bes
 
 goods =
     [ testSatisfy
