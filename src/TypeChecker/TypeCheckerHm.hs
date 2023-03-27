@@ -113,7 +113,7 @@ preRun :: [Def] -> Infer ()
 preRun [] = return ()
 preRun (x : xs) = case x of
     DSig (Sig n t) -> do
-        collect (collectTypeVars t)
+        collect (collectTVars t)
         gets (M.member (coerce n) . sigs)
             >>= flip
                 when
@@ -123,20 +123,23 @@ preRun (x : xs) = case x of
                 )
         insertSig (coerce n) (Just t) >> preRun xs
     DBind (Bind n _ e) -> do
-        collect (collectTypeVars e)
+        collect (collectTVars e)
         s <- gets sigs
         case M.lookup (coerce n) s of
             Nothing -> insertSig (coerce n) Nothing >> preRun xs
             Just _ -> preRun xs
-    DData d@(Data t _) -> collect (collectTypeVars t) >> checkData d >> preRun xs
+    DData d@(Data t _) -> collect (collectTVars t) >> checkData d >> preRun xs
 
 checkDef :: [Def] -> Infer [T.Def' Type]
 checkDef [] = return []
 checkDef (x : xs) = case x of
     (DBind b) -> do
         b' <- checkBind b
-        fmap (T.DBind b' :) (checkDef xs)
-    (DData d) -> fmap (T.DData (coerceData d) :) (checkDef xs)
+        xs' <- checkDef xs
+        return $ T.DBind b' : xs'
+    (DData d) -> do
+        xs' <- checkDef xs
+        return $ T.DData (coerceData d) : xs'
     (DSig _) -> checkDef xs
   where
     coerceData (Data t injs) =
@@ -145,22 +148,24 @@ checkDef (x : xs) = case x of
 checkBind :: Bind -> Infer (T.Bind' Type)
 checkBind (Bind name args e) = do
     let lambda = makeLambda e (reverse (coerce args))
-    e@(_, args_t) <- inferExp lambda
+    (e, lambda_t) <- inferExp lambda
     s <- gets sigs
     case M.lookup (coerce name) s of
         Just (Just t') -> do
+            sub1 <- unify lambda_t t'
+            sub2 <- unify t' lambda_t
             unless
-                (args_t `typeEq` t')
+                (apply sub1 lambda_t == t' && lambda_t == apply sub2 t')
                 ( throwError $ Aux.do
                     "Inferred type"
-                    quote $ printTree args_t
+                    quote $ printTree lambda_t
                     "does not match specified type"
                     quote $ printTree t'
                 )
-            return $ T.Bind (coerce name, t') [] e
+            return $ T.Bind (coerce name, t') [] (e, lambda_t)
         _ -> do
-            insertSig (coerce name) (Just args_t)
-            return (T.Bind (coerce name, args_t) [] e)
+            insertSig (coerce name) (Just lambda_t)
+            return (T.Bind (coerce name, lambda_t) [] (e, lambda_t))
 
 typeEq :: Type -> Type -> Bool
 typeEq (TFun l r) (TFun l' r') = typeEq l l' && typeEq r r'
@@ -203,18 +208,18 @@ inferExp e = do
     return $ second (const subbed) (e', t)
 
 class CollectTVars a where
-    collectTypeVars :: a -> Set T.Ident
+    collectTVars :: a -> Set T.Ident
 
 instance CollectTVars Exp where
-    collectTypeVars (EAnn e t) = collectTypeVars t `S.union` collectTypeVars e
-    collectTypeVars _ = S.empty
+    collectTVars (EAnn e t) = collectTVars t `S.union` collectTVars e
+    collectTVars _ = S.empty
 
 instance CollectTVars Type where
-    collectTypeVars (TVar (MkTVar i)) = S.singleton (coerce i)
-    collectTypeVars (TAll _ t) = collectTypeVars t
-    collectTypeVars (TFun t1 t2) = (S.union `on` collectTypeVars) t1 t2
-    collectTypeVars (TData _ ts) = foldl' (\acc x -> acc `S.union` collectTypeVars x) S.empty ts
-    collectTypeVars _ = S.empty
+    collectTVars (TVar (MkTVar i)) = S.singleton (coerce i)
+    collectTVars (TAll _ t) = collectTVars t
+    collectTVars (TFun t1 t2) = (S.union `on` collectTVars) t1 t2
+    collectTVars (TData _ ts) = foldl' (\acc x -> acc `S.union` collectTVars x) S.empty ts
+    collectTVars _ = S.empty
 
 collect :: Set T.Ident -> Infer ()
 collect s = modify (\st -> st{takenTypeVars = s `S.union` takenTypeVars st})

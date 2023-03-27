@@ -1,17 +1,28 @@
+{-# LANGUAGE QualifiedDo #-}
 {-# LANGUAGE NoImplicitPrelude #-}
-{-# LANGUAGE QualifiedDo       #-}
 
 module TestTypeCheckerHm where
 
-import           Control.Monad             ((<=<))
-import qualified DoStrings                 as D
-import           Grammar.Par               (myLexer, pProgram)
-import           Prelude                   (Bool (..), Either (..), IO, foldl1,
-                                            mapM_, not, ($), (.), (>>))
-import           Test.Hspec
+import Control.Monad ((<=<))
+import DoStrings qualified as D
+import Grammar.Par (myLexer, pProgram)
+import Grammar.Print (printTree)
+import Test.Hspec
+import Prelude (
+    Bool (..),
+    Either (..),
+    IO,
+    fmap,
+    foldl1,
+    mapM_,
+    not,
+    ($),
+    (.),
+    (>>),
+ )
 
 -- import Test.QuickCheck
-import           TypeChecker.TypeCheckerHm (typecheck)
+import TypeChecker.TypeCheckerHm (typecheck)
 
 testTypeCheckerHm = describe "Hindley-Milner type checker test" $ do
     foldl1 (>>) goods
@@ -125,6 +136,13 @@ bads =
         )
         bad
     , testSatisfy
+        "incorrect signature on const"
+        ( D.do
+            "const : a -> b -> b;"
+            "const x y = x"
+        )
+        bad
+    , testSatisfy
         "incorrect type signature on id lambda"
         ( D.do
             "id = ((\\x. x) : a -> b);"
@@ -176,10 +194,10 @@ bes =
 testSatisfy desc test satisfaction = specify desc $ run test `shouldSatisfy` satisfaction
 testBe desc test shouldbe = specify desc $ run test `shouldBe` run shouldbe
 
-run = typecheck <=< pProgram . myLexer
+run = fmap printTree . typecheck <=< pProgram . myLexer
 
 ok (Right _) = True
-ok (Left _)  = False
+ok (Left _) = False
 
 bad = not . ok
 
