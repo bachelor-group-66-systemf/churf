@@ -2,87 +2,97 @@
 
 module Main where
 
-import           Control.Monad               (when)
-import           Data.Bool                   (bool)
-import           Data.List.Extra             (isSuffixOf)
-import           Data.Maybe                  (fromJust, isNothing)
-import           GHC.IO.Handle.Text          (hPutStrLn)
-import           System.Console.GetOpt       (ArgDescr (NoArg, ReqArg),
-                                              ArgOrder (RequireOrder),
-                                              OptDescr (Option), getOpt,
-                                              usageInfo)
-import           System.Directory            (createDirectory, doesPathExist,
-                                              getDirectoryContents,
-                                              removeDirectoryRecursive,
-                                              setCurrentDirectory)
-import           System.Environment          (getArgs)
-import           System.Exit                 (ExitCode (ExitFailure),
-                                              exitFailure, exitSuccess,
-                                              exitWith)
-import           System.IO                   (stderr)
+import Control.Monad (when)
+import Data.Bool (bool)
+import Data.List.Extra (isSuffixOf)
+import Data.Maybe (fromJust, isNothing)
+import GHC.IO.Handle.Text (hPutStrLn)
+import System.Console.GetOpt (
+    ArgDescr (NoArg, ReqArg),
+    ArgOrder (RequireOrder),
+    OptDescr (Option),
+    getOpt,
+    usageInfo,
+ )
+import System.Directory (
+    createDirectory,
+    doesPathExist,
+    getDirectoryContents,
+    removeDirectoryRecursive,
+    setCurrentDirectory,
+ )
+import System.Environment (getArgs)
+import System.Exit (
+    ExitCode (ExitFailure),
+    exitFailure,
+    exitSuccess,
+    exitWith,
+ )
+import System.IO (stderr)
 
-
-import           Codegen.Codegen             (generateCode)
-import           Compiler                    (compile)
-import           Grammar.ErrM                (Err)
-import           Grammar.Par                 (myLexer, pProgram)
-import           Grammar.Print               (printTree)
-import           LambdaLifter                (lambdaLift)
-import           Monomorphizer.Monomorphizer (monomorphize)
-import           Renamer.Renamer             (rename)
-import           System.Process              (spawnCommand, waitForProcess)
-import           TypeChecker.TypeChecker     (TypeChecker (Bi, Hm), typecheck)
+import Codegen.Codegen (generateCode)
+import Compiler (compile)
+import Grammar.ErrM (Err)
+import Grammar.Par (myLexer, pProgram)
+import Grammar.Print (printTree)
+import LambdaLifter (lambdaLift)
+import Monomorphizer.Monomorphizer (monomorphize)
+import Renamer.Renamer (rename)
+import System.Process (spawnCommand, waitForProcess)
+import TypeChecker.TypeChecker (TypeChecker (Bi, Hm), typecheck)
 
 main :: IO ()
 main = getArgs >>= parseArgs >>= uncurry main'
 
 parseArgs :: [String] -> IO (Options, String)
 parseArgs argv = case getOpt RequireOrder flags argv of
-  (os, f:_, [])
-      | opts.help || isNothing opts.typechecker -> do
-          hPutStrLn stderr (usageInfo header flags)
-          exitSuccess
-      | otherwise -> pure (opts, f)
-    where
-      opts = foldr ($) initOpts os
-  (_, _, errs) -> do
-      hPutStrLn stderr (concat errs ++ usageInfo header flags)
-      exitWith (ExitFailure 1)
+    (os, f : _, [])
+        | opts.help || isNothing opts.typechecker -> do
+            hPutStrLn stderr (usageInfo header flags)
+            exitSuccess
+        | otherwise -> pure (opts, f)
+      where
+        opts = foldr ($) initOpts os
+    (_, _, errs) -> do
+        hPutStrLn stderr (concat errs ++ usageInfo header flags)
+        exitWith (ExitFailure 1)
   where
     header = "Usage: language [--help] [-d|--debug] [-t|type-checker bi/hm] FILE \n"
 
 flags :: [OptDescr (Options -> Options)]
 flags =
-    [ Option ['d'] ["debug"]        (NoArg  enableDebug)                  "Print debug messages."
+    [ Option ['d'] ["debug"] (NoArg enableDebug) "Print debug messages."
     , Option ['t'] ["type-checker"] (ReqArg chooseTypechecker "bi/hm") "Choose type checker. Possible options are bi and hm"
-    , Option []    ["help"]         (NoArg  enableHelp)                   "Print this help message"
+    , Option [] ["help"] (NoArg enableHelp) "Print this help message"
     ]
 
 initOpts :: Options
-initOpts = Options { help        = False
-                   , debug       = False
-                   , typechecker = Nothing
-                   }
+initOpts =
+    Options
+        { help = False
+        , debug = False
+        , typechecker = Nothing
+        }
 
 enableHelp :: Options -> Options
-enableHelp opts = opts { help = True }
+enableHelp opts = opts{help = True}
 
 enableDebug :: Options -> Options
-enableDebug opts = opts { debug = True }
+enableDebug opts = opts{debug = True}
 
 chooseTypechecker :: String -> Options -> Options
-chooseTypechecker s options = options { typechecker = tc }
+chooseTypechecker s options = options{typechecker = tc}
   where
     tc = case s of
-           "hm" -> pure Hm
-           "bi" -> pure Bi
-           _    -> Nothing
+        "hm" -> pure Hm
+        "bi" -> pure Bi
+        _ -> Nothing
 
 data Options = Options
-  { help        :: Bool
-  , debug       :: Bool
-  , typechecker :: Maybe TypeChecker
-  }
+    { help :: Bool
+    , debug :: Bool
+    , typechecker :: Maybe TypeChecker
+    }
 
 main' :: Options -> String -> IO ()
 main' opts s = do
@@ -110,12 +120,12 @@ main' opts s = do
     --
     printToErr "\n -- Compiler --"
     generatedCode <- fromCompilerErr $ generateCode (monomorphize typechecked)
-    --putStrLn generatedCode
+    -- putStrLn generatedCode
 
     check <- doesPathExist "output"
     when check (removeDirectoryRecursive "output")
     createDirectory "output"
-    when debug $ do
+    when opts.debug $ do
         _ <- writeFile "output/llvm.ll" generatedCode
         debugDotViz
 

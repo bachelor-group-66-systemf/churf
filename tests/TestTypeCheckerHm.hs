@@ -1,27 +1,32 @@
+{-# LANGUAGE QualifiedDo #-}
 {-# LANGUAGE NoImplicitPrelude #-}
-{-# LANGUAGE QualifiedDo       #-}
 
 module TestTypeCheckerHm (testTypeCheckerHm) where
 
-import           Control.Monad             ((<=<))
-import qualified DoStrings                 as D
-import           Grammar.Par               (myLexer, pProgram)
-import           Prelude                   (Bool (..), Either (..), IO, fmap,
-                                            not, ($), (.))
-import           Test.Hspec
+import Control.Monad ((<=<))
+import DoStrings qualified as D
+import Grammar.Par (myLexer, pProgram)
+import Test.Hspec
+import Prelude (
+    Bool (..),
+    Either (..),
+    IO,
+    fmap,
+    not,
+    ($),
+    (.),
+ )
 
 -- import Test.QuickCheck
-import           TypeChecker.TypeCheckerHm (typecheck)
-
-
+import TypeChecker.TypeCheckerHm (typecheck)
 
 testTypeCheckerHm = describe "Hillner Milner type checker test" $ do
     ok1
     ok2
     bad1
     bad2
-    -- bad3
 
+-- bad3
 
 ok1 =
     specify "Basic polymorphism with multiple type variables" $
@@ -75,7 +80,7 @@ bad3 =
 run = typecheck <=< pProgram . myLexer
 
 ok (Right _) = True
-ok (Left _)  = False
+ok (Left _) = False
 
 bad = not . ok
 
