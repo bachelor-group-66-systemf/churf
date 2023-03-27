@@ -32,7 +32,6 @@ executable language
       Grammar.ErrM
       Auxiliary
       Renamer.Renamer
-      TypeChecker.TypeChecker
       TypeChecker.TypeCheckerHm
       TypeChecker.TypeCheckerBidir
       TypeChecker.TypeCheckerIr
