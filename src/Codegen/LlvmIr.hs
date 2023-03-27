@@ -8,19 +8,18 @@ module Codegen.LlvmIr (
     LLVMComp (..),
     Visibility (..),
     CallingConvention (..),
-    ToIr(..)
+    ToIr (..),
 ) where
 
-import           Data.List                 (intercalate)
-import           Grammar.Abs               (Character)
-import           TypeChecker.TypeCheckerIr (Ident (..))
+import Data.List (intercalate)
+import TypeChecker.TypeCheckerIr (Ident (..))
 
-data CallingConvention = TailCC | FastCC | CCC | ColdCC deriving Show
+data CallingConvention = TailCC | FastCC | CCC | ColdCC deriving (Show)
 instance ToIr CallingConvention where
     toIr :: CallingConvention -> String
     toIr TailCC = "tailcc"
     toIr FastCC = "fastcc"
-    toIr CCC    = "ccc"
+    toIr CCC = "ccc"
     toIr ColdCC = "coldcc"
 
 -- | A datatype which represents some basic LLVM types
@@ -34,7 +33,7 @@ data LLVMType
     | Function LLVMType [LLVMType]
     | Array Integer LLVMType
     | CustomType Ident
-    deriving Show
+    deriving (Show)
 
 class ToIr a where
     toIr :: a -> String
@@ -63,12 +62,12 @@ data LLVMComp
     | LLSge
     | LLSlt
     | LLSle
-    deriving Show
+    deriving (Show)
 instance ToIr LLVMComp where
     toIr :: LLVMComp -> String
     toIr = \case
-        LLEq  -> "eq"
-        LLNe  -> "ne"
+        LLEq -> "eq"
+        LLNe -> "ne"
         LLUgt -> "ugt"
         LLUge -> "uge"
         LLUlt -> "ult"
@@ -78,30 +77,31 @@ instance ToIr LLVMComp where
         LLSlt -> "slt"
         LLSle -> "sle"
 
-data Visibility = Local | Global deriving Show
+data Visibility = Local | Global deriving (Show)
 instance ToIr Visibility where
     toIr :: Visibility -> String
-    toIr Local  = "%"
+    toIr Local = "%"
     toIr Global = "@"
 
--- | Represents a LLVM "value", as in an integer, a register variable,
--- or a string contstant
+{- | Represents a LLVM "value", as in an integer, a register variable,
+or a string contstant
+-}
 data LLVMValue
     = VInteger Integer
-    | VChar Character
+    | VChar Char
     | VIdent Ident LLVMType
     | VConstant String
     | VFunction Ident Visibility LLVMType
-    deriving Show
+    deriving (Show)
 
 instance ToIr LLVMValue where
     toIr :: LLVMValue -> String
     toIr v = case v of
-        VInteger i                -> show i
-        VChar i                   -> show i
-        VIdent (Ident n) _        -> "%" <> n
+        VInteger i -> show i
+        VChar i -> show i
+        VIdent (Ident n) _ -> "%" <> n
         VFunction (Ident n) vis _ -> toIr vis <> n
-        VConstant s               -> "c" <> show s
+        VConstant s -> "c" <> show s
 
 type Params = [(Ident, LLVMType)]
 type Args = [(LLVMType, LLVMValue)]
@@ -114,8 +114,8 @@ data LLVMIr
     | Declare LLVMType Ident Params
     | SetVariable Ident LLVMIr
     | Variable Ident
-    -- extractvalue <aggregate type> <val>, <idx>{, <idx>}*
-    | ExtractValue LLVMType LLVMValue Integer
+    | -- extractvalue <aggregate type> <val>, <idx>{, <idx>}*
+      ExtractValue LLVMType LLVMValue Integer
     | GetElementPtr LLVMType LLVMType LLVMValue LLVMType LLVMValue LLVMType LLVMValue
     | GetElementPtrInbounds LLVMType LLVMType LLVMValue LLVMType LLVMValue LLVMType LLVMValue
     | Add LLVMType LLVMValue LLVMValue
@@ -136,7 +136,7 @@ data LLVMIr
     | Comment String
     | UnsafeRaw String -- This should generally be avoided, and proper
     -- instructions should be used in its place
-    deriving Show
+    deriving (Show)
 
 -- | Converts a list of LLVMIr instructions to a string
 llvmIrToString :: [LLVMIr] -> String
@@ -146,14 +146,15 @@ llvmIrToString = go 0
     go _ [] = mempty
     go i (x : xs) = do
         let (i', n) = case x of
-                Define{}  -> (i + 1, 0)
+                Define{} -> (i + 1, 0)
                 DefineEnd -> (i - 1, 0)
-                _         -> (i, i)
+                _ -> (i, i)
         insToString n x <> go i' xs
-    {- | Converts a LLVM inststruction to a String, allowing for printing etc.
-      The integer represents the indentation
-    -}
-    {- FOURMOLU_DISABLE -}
+
+-- \| Converts a LLVM inststruction to a String, allowing for printing etc.
+--      The integer represents the indentation
+--
+{- FOURMOLU_DISABLE -}
     insToString :: Int -> LLVMIr -> String
     insToString i l =
         replicate i '\t' <> case l of
@@ -261,4 +262,3 @@ llvmIrToString = go 0
 
 lblPfx :: String
 lblPfx = "lbl_"
-
