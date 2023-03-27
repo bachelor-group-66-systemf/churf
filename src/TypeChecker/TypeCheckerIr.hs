@@ -8,7 +8,7 @@ module TypeChecker.TypeCheckerIr
   ) where
 
 import           Data.String   (IsString)
-import           Grammar.Abs   (Character (..), Lit (..), TVar (..))
+import           Grammar.Abs   (Lit (..), TVar (..))
 import           Grammar.Print
 import           Prelude
 import qualified Prelude       as C (Eq, Ord, Read, Show)
