@@ -62,4 +62,3 @@ bind ma f = case ma of {
 ```
 TYPECHECKER ERROR
 Inferred type '("c" -> "Int") -> "Maybe" -> "Maybe" does not match specified type '("Int" -> "Int") -> "Maybe" -> "Maybe"'
-```
