@@ -2,7 +2,7 @@
 
 module Main where
 
-import Codegen.Codegen (generateCode)
+--import Codegen.Codegen (generateCode)
 import Data.Bool (bool)
 import GHC.IO.Handle.Text (hPutStrLn)
 import Grammar.ErrM (Err)
@@ -66,23 +66,27 @@ main' debug s = do
     typechecked <- fromTypeCheckerErr $ typecheck renamed
     bool (printToErr $ printTree typechecked) (printToErr $ show typechecked) debug
 
+    printToErr "\n -- Compiler --"
+    let monomorphized = monomorphize typechecked
+    printToErr $ show monomorphized
+
     -- printToErr "\n-- Lambda Lifter --"
     -- let lifted = lambdaLift typechecked
     -- printToErr $ printTree lifted
     --
-    printToErr "\n -- Compiler --"
-    generatedCode <- fromCompilerErr $ generateCode (monomorphize typechecked)
-    putStrLn generatedCode
+    --printToErr "\n -- Compiler --"
+    --generatedCode <- fromCompilerErr $ generateCode (monomorphize typechecked)
+    --putStrLn generatedCode
 
-    check <- doesPathExist "output"
-    when check (removeDirectoryRecursive "output")
-    createDirectory "output"
-    when debug $ do
-        writeFile "output/llvm.ll" generatedCode
-        debugDotViz
+    --check <- doesPathExist "output"
+    --when check (removeDirectoryRecursive "output")
+    --createDirectory "output"
+    --when debug $ do
+    --    writeFile "output/llvm.ll" generatedCode
+    --    debugDotViz
 
-    compile generatedCode
-    spawnWait "./hello_world"
+    --compile generatedCode
+    --spawnWait "./hello_world"
     -- interpred <- fromInterpreterErr $ interpret lifted
     -- putStrLn "\n-- interpret"
     -- print interpred

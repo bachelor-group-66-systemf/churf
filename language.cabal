@@ -36,8 +36,8 @@ executable language
       Monomorphizer.Monomorphizer
       Monomorphizer.MonomorphizerIr
       Renamer.Renamer
-      Codegen.Codegen
-      Codegen.LlvmIr
+      --Codegen.Codegen
+      --Codegen.LlvmIr
       TreeConverter
 
     hs-source-dirs:   src
@@ -70,8 +70,8 @@ Test-suite language-testsuite
       Auxiliary
       TypeChecker.TypeChecker
       TypeChecker.TypeCheckerIr
-      Monomorpher.Monomorpher
-      Monomorpher.MonomorpherIr
+      Monomorphizer.Monomorphizer
+      Monomorphizer.MonomorphizerIr
       Renamer.Renamer
       Compiler
 

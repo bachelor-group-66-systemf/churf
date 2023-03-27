@@ -1,0 +1,5 @@
+const x y = x;
+
+f x = (const x 'c');
+
+main = f 5;

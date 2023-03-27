@@ -111,7 +111,7 @@ getMonoFromPoly t = do env <- ask
  where
   getMono :: Map.Map Ident M.Type -> T.Type -> M.Type
   getMono polys t = case t of
-    (T.TLit ident)            -> M.TLit (convertIdent ident)
+    (T.TLit ident)            -> M.TLit (coerce ident)
     (T.TFun t1 t2)            -> M.TFun (getMono polys t1) (getMono polys t2)
     (T.TVar (T.MkTVar ident)) -> case Map.lookup ident polys of
                          Just concrete -> concrete
@@ -130,14 +130,14 @@ morphBind expectedType b@(T.Bind (Ident _, btype) args (exp, t)) =
                        }) $ do
       -- The "new name" is used to find out if it is already marked or not.
       let name' = newName expectedType b
-      bindMarked <- isBindMarked (convertIdent name')
+      bindMarked <- isBindMarked (coerce name')
       -- Return with right name if already marked
       if bindMarked then return name' else do
         -- Mark so that this bind will not be processed in recursive or cyclic 
         -- function calls
         markBind (coerce name')
         exp' <- morphExp expectedType exp
-        addOutputBind $ M.Bind (convertIdent name', expectedType) 
+        addOutputBind $ M.Bind (coerce name', expectedType) 
             [] (exp', expectedType)
         return name'
 
@@ -155,9 +155,6 @@ morphApp expectedType (e1, t1) (e2, t2)= do
 convertLit :: T.Lit -> M.Lit
 convertLit (T.LInt v) = M.LInt v
 convertLit (T.LChar v) = M.LChar v
--- Converts Ident
-convertIdent :: T.Ident -> M.Ident
-convertIdent (T.Ident str) = M.Ident str
 
 morphExp :: M.Type -> T.Exp -> EnvM M.Exp
 morphExp expectedType exp = case exp of
@@ -166,12 +163,13 @@ morphExp expectedType exp = case exp of
     morphApp expectedType e1 e2
   T.EAdd e1 e2 -> do
     morphApp expectedType e1 e2
-  T.EAbs _ _ -> do
-    error "EAbs found in Monomorpher, not implemented"
+  T.EAbs ident (exp, t) -> local (\env -> env { locals = Set.insert ident (locals env) }) $ do 
+    t' <- getMonoFromPoly t
+    morphExp t' exp
   T.EId ident@(Ident str) -> do
     isLocal <- localExists ident
     if isLocal then do
-      return $ M.EId (convertIdent ident)
+      return $ M.EId (coerce ident)
     else do
       bind <- getInputBind ident
       case bind of
@@ -180,7 +178,7 @@ morphExp expectedType exp = case exp of
         Just bind' -> do
           -- New bind to process
           newBindName <- morphBind expectedType bind'
-          return $ M.EId (convertIdent newBindName)
+          return $ M.EId (coerce newBindName)
 
   T.ELet (T.Bind {}) _ -> error "lets not possible yet"
 
