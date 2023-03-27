@@ -72,7 +72,7 @@ main' debug s = do
         debugDotViz
 
     compile generatedCode
-    spawnWait "./hello_world"
+    spawnWait "./output/hello_world"
     -- interpred <- fromInterpreterErr $ interpret lifted
     -- putStrLn "\n-- interpret"
     -- print interpred

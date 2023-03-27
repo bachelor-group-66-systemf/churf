@@ -16,7 +16,7 @@ optimize :: String -> IO String
 optimize = readCreateProcess (shell "opt --O3 -S")
 
 compileClang :: String -> IO String
-compileClang = readCreateProcess (shell "clang -x ir -o hello_world -")
+compileClang = readCreateProcess (shell "clang -x ir -o output/hello_world -")
 
 compile :: String -> IO String
 compile s = optimize s >>= compileClang
