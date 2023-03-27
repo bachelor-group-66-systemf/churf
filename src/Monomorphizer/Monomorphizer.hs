@@ -26,11 +26,11 @@ monoBind (T.Bind name args (e, t)) = M.Bind (monoId name) (map monoId args) (mon
 --monoData (T.Data (Ident id) cs) = M.Data (M.TLit (M.Ident id)) (map monoConstructor cs)
 
 monoConstructor :: T.Inj -> M.Inj
-monoConstructor (T.Inj (Ident i) t) = M.Inj (M.Ident i) (monoType t)
+monoConstructor (T.Inj (Ident i) t) = M.Inj (T.Ident i) (monoType t)
 
 monoExpr :: T.Exp -> M.Exp
 monoExpr = \case
-    T.EVar (Ident i)   -> M.EVar (M.Ident i)
+    T.EVar (Ident i)   -> M.EVar (T.Ident i)
     T.ELit lit         -> M.ELit $ monoLit lit
     T.ELet bind expt   -> M.ELet (monoBind bind) (monoexpt expt)
     T.EApp expt1 expt2 -> M.EApp (monoexpt expt1) (monoexpt expt2)
@@ -48,9 +48,9 @@ monoAbsType (T.TData _ _)  = error "NOT INDEXED TYPES"
 monoType :: T.Type -> M.Type
 monoType (T.TAll _ t)          = monoType t
 monoType (T.TVar (T.MkTVar i)) = M.TLit "Int"
-monoType (T.TLit (Ident i))    = M.TLit (M.Ident i)
+monoType (T.TLit (Ident i))    = M.TLit (T.Ident i)
 monoType (T.TFun t1 t2)        = M.TFun (monoType t1) (monoType t2)
-monoType (T.TData (Ident n) t) = M.TLit (M.Ident (n ++ concatMap show t))
+monoType (T.TData (Ident n) t) = M.TLit (T.Ident (n ++ concatMap show t))
 
 monoexpt :: T.ExpT -> M.ExpT
 monoexpt (e, t) = (monoExpr e, monoType t)
@@ -73,5 +73,5 @@ monoPattern (T.PVar (id, t))    = M.PVar (id, monoType t)
 monoPattern (T.PLit (lit, t))   = M.PLit (monoLit lit, monoType t)
 monoPattern (T.PInj id ps)      = M.PInj (coerce id) (map monoPattern ps)
 -- DO NOT DO THIS FOR REAL THOUGH
-monoPattern (T.PEnum (Ident i)) = M.PInj (M.Ident i) []
+monoPattern (T.PEnum (Ident i)) = M.PInj (T.Ident i) []
 monoPattern T.PCatch            = M.PCatch
