@@ -2,7 +2,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 -- | A module for type checking and inference using algorithm W, Hindley-Milner
-module TypeChecker.TypeChecker where
+module TypeChecker.TypeCheckerHm where
 
 import           Auxiliary
 import           Control.Monad.Except
