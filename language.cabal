@@ -38,6 +38,7 @@ executable language
       Renamer.Renamer
       Codegen.Codegen
       Codegen.LlvmIr
+      TreeConverter
 
     hs-source-dirs:   src
 
@@ -69,6 +70,8 @@ Test-suite language-testsuite
       Auxiliary
       TypeChecker.TypeChecker
       TypeChecker.TypeCheckerIr
+      Monomorpher.Monomorpher
+      Monomorpher.MonomorpherIr
       Renamer.Renamer
       Compiler
 
@@ -85,5 +88,7 @@ Test-suite language-testsuite
       , QuickCheck
       , process
       , bytestring
+      , hspec
 
     default-language: GHC2021
+
