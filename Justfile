@@ -15,4 +15,4 @@ test:
 
 # compile a specific file
 run FILE:
-    cabal run language {{FILE}}
+    cabal run language -- -d {{FILE}}

@@ -300,8 +300,10 @@ defaultStart :: [LLVMIr]
 defaultStart =
     [ UnsafeRaw "target triple = \"x86_64-pc-linux-gnu\"\n"
     , UnsafeRaw "target datalayout = \"e-m:o-i64:64-f80:128-n8:16:32:64-S128\"\n"
-    , UnsafeRaw "@.str = private unnamed_addr constant [3 x i8] c\"%x\n\", align 1\n"
+    , UnsafeRaw "@.str = private unnamed_addr constant [3 x i8] c\"%i\n\", align 1\n"
+    , UnsafeRaw "@.non_exhaustive_patterns = private unnamed_addr constant [41 x i8] c\"Non-exhaustive patterns in case at %i:%i\n\""
     , UnsafeRaw "declare i32 @printf(ptr noalias nocapture, ...)\n"
+    , UnsafeRaw "declare i32 @exit(i32)\n"
     ]
 
 compileExp :: ExpT -> CompilerState ()
@@ -330,6 +332,11 @@ emitECased t e cases = do
     stackPtr <- getNewVar
     emit $ SetVariable stackPtr (Alloca ty)
     mapM_ (emitCases rt ty label stackPtr vs) cs
+    emit . UnsafeRaw $ "call i32 (ptr, ...) @printf(ptr noundef @.non_exhaustive_patterns, i64 noundef 6, i64 noundef 6)\n"
+    emit . UnsafeRaw $ "call i32 @exit(i32 1)\n"
+    emit . UnsafeRaw $ "unreachable\n"
+    increaseVarCount >> increaseVarCount >> increaseVarCount
+    emit $ Br label
     emit $ Label label
     res <- getNewVar
     emit $ SetVariable res (Load ty Ptr stackPtr)

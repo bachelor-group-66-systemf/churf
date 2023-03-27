@@ -1,8 +1,7 @@
-module Monomorphizer.MonomorphizerIr (module Monomorphizer.MonomorphizerIr, module RE, module GA) where
+module Monomorphizer.MonomorphizerIr (module Monomorphizer.MonomorphizerIr, module GA) where
 
-import Grammar.Abs (Ident (..), UIdent)
-import Grammar.Abs qualified as GA (Ident (..))
-import TypeChecker.TypeCheckerIr qualified as RE
+import           Grammar.Abs (Ident (..))
+import qualified Grammar.Abs as GA (Ident (..))
 
 type Id = (Ident, Type)
 
@@ -27,7 +26,8 @@ data Exp
     | ECase ExpT [Branch]
     deriving (Show, Ord, Eq)
 
-data Pattern = PVar Id | PLit (Lit, Type) | PInj Ident [Pattern] | PCatch | PEnum Ident
+data Pattern = PVar Id | PLit (Lit, Type) | PInj Ident [Pattern]
+             | PCatch | PEnum Ident
     deriving (Eq, Ord, Show)
 
 data Branch = Branch (Pattern, Type) ExpT
@@ -48,4 +48,4 @@ data Type = TLit Ident | TFun Type Type
 
 flattenType :: Type -> [Type]
 flattenType (TFun t1 t2) = t1 : flattenType t2
-flattenType x = [x]
+flattenType x            = [x]

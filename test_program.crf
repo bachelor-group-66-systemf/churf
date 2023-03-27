@@ -1,7 +1,7 @@
 data Maybe () where {
     Nothing : Maybe ()
     Just : Int -> Maybe ()
-    };
+};
 
 -- fmap : (Int -> Int) -> Maybe () -> Maybe () ;
 -- fmap f ma = case ma of {
@@ -9,10 +9,9 @@ data Maybe () where {
 --     Just a => Just (f a) ;
 -- };
 
-main = case (Just 5) of {
+main = case (Just 10) of {
     Just a => a ;
     Nothing => 1 ;
-    _ => 66 ;
 };
 
 -- pure : Int -> Maybe () ;
