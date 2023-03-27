@@ -1,16 +1,17 @@
-{-# LANGUAGE QualifiedDo #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE QualifiedDo       #-}
 
 module TestTypeCheckerHm where
 
-import Control.Monad ((<=<))
-import DoStrings qualified as D
-import Grammar.Par (myLexer, pProgram)
-import Test.Hspec
-import Prelude (Bool (..), Either (..), IO, foldl1, mapM_, not, ($), (.), (>>))
+import           Control.Monad             ((<=<))
+import qualified DoStrings                 as D
+import           Grammar.Par               (myLexer, pProgram)
+import           Prelude                   (Bool (..), Either (..), IO, foldl1,
+                                            mapM_, not, ($), (.), (>>))
+import           Test.Hspec
 
 -- import Test.QuickCheck
-import TypeChecker.TypeCheckerHm (typecheck)
+import           TypeChecker.TypeCheckerHm (typecheck)
 
 testTypeCheckerHm = describe "Hindley-Milner type checker test" $ do
     foldl1 (>>) goods
@@ -178,7 +179,7 @@ testBe desc test shouldbe = specify desc $ run test `shouldBe` run shouldbe
 run = typecheck <=< pProgram . myLexer
 
 ok (Right _) = True
-ok (Left _) = False
+ok (Left _)  = False
 
 bad = not . ok
 
