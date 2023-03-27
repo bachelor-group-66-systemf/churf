@@ -633,7 +633,7 @@ inferPattern = \case
                     ++ " arguments but has been given "
                     ++ show (length patterns)
             )
-        sub <- composeAll <$> zipWithM unify (map snd patterns) vs
+        sub <- composeAll <$> zipWithM unify vs (map snd patterns)
         return (T.PInj (coerce constr) (apply sub (map fst patterns)), apply sub ret)
     PCatch -> (T.PCatch,) <$> fresh
     PEnum p -> do
