@@ -1,9 +1,9 @@
 module Monomorphizer.MonomorphizerIr (module Monomorphizer.MonomorphizerIr, module GA) where
 
-import           Grammar.Abs (Ident (..))
-import qualified Grammar.Abs as GA (Ident (..))
+import qualified Grammar.Abs               as GA (Ident (..))
+import qualified TypeChecker.TypeCheckerIr as TIR (Ident (..))
 
-type Id = (Ident, Type)
+type Id = (TIR.Ident, Type)
 
 newtype Program = Program [Def]
     deriving (Show, Ord, Eq)
@@ -18,7 +18,7 @@ data Bind = Bind Id [Id] ExpT
     deriving (Show, Ord, Eq)
 
 data Exp
-    = EVar Ident
+    = EVar TIR.Ident
     | ELit Lit
     | ELet Bind ExpT
     | EApp ExpT ExpT
@@ -26,8 +26,8 @@ data Exp
     | ECase ExpT [Branch]
     deriving (Show, Ord, Eq)
 
-data Pattern = PVar Id | PLit (Lit, Type) | PInj Ident [Pattern]
-             | PCatch | PEnum Ident
+data Pattern = PVar Id | PLit (Lit, Type) | PInj TIR.Ident [Pattern]
+             | PCatch | PEnum TIR.Ident
     deriving (Eq, Ord, Show)
 
 data Branch = Branch (Pattern, Type) ExpT
@@ -35,15 +35,15 @@ data Branch = Branch (Pattern, Type) ExpT
 
 type ExpT = (Exp, Type)
 
-data Inj = Inj Ident Type
+data Inj = Inj TIR.Ident Type
     deriving (Show, Ord, Eq)
 
 data Lit
     = LInt Integer
-    | LChar Character
+    | LChar Char
     deriving (Show, Ord, Eq)
 
-data Type = TLit Ident | TFun Type Type
+data Type = TLit TIR.Ident | TFun Type Type
     deriving (Show, Ord, Eq)
 
 flattenType :: Type -> [Type]

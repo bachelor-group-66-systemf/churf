@@ -18,12 +18,13 @@ import           Debug.Trace                   (trace)
 import qualified Grammar.Abs                   as GA
 import           Grammar.ErrM                  (Err)
 import           Monomorphizer.MonomorphizerIr as MIR
+import qualified TypeChecker.TypeCheckerIr     as TIR
 
 -- | The record used as the code generator state
 data CodeGenerator = CodeGenerator
     { instructions  :: [LLVMIr]
     , functions     :: Map MIR.Id FunctionInfo
-    , constructors  :: Map GA.Ident ConstructorInfo
+    , constructors  :: Map TIR.Ident ConstructorInfo
     , variableCount :: Integer
     , labelCount    :: Integer
     }
@@ -50,15 +51,15 @@ emit l = modify $ \t -> t{instructions = Auxiliary.snoc l $ instructions t}
 
 -- | Increases the variable counter in the CodeGenerator state
 increaseVarCount :: CompilerState ()
-increaseVarCount = modify $ \t -> t{variableCount = variableCount t + 1}
+increaseVarCount = (emit $ Comment "increase") >> (modify $ \t -> t{variableCount = variableCount t + 1})
 
 -- | Returns the variable count from the CodeGenerator state
 getVarCount :: CompilerState Integer
 getVarCount = gets variableCount
 
 -- | Increases the variable count and returns it from the CodeGenerator state
-getNewVar :: CompilerState GA.Ident
-getNewVar = GA.Ident . show <$> (increaseVarCount >> getVarCount)
+getNewVar :: CompilerState TIR.Ident
+getNewVar = TIR.Ident . show <$> (increaseVarCount >> getVarCount)
 
 -- | Increses the label count and returns a label from the CodeGenerator state
 getNewLabel :: CompilerState Integer
@@ -79,19 +80,19 @@ getFunctions bs = Map.fromList $ go bs
     go (_ : xs) = go xs
 
 createArgs :: [MIR.Type] -> [Id]
-createArgs xs = fst $ foldl (\(acc, l) t -> (acc ++ [(GA.Ident ("arg_" <> show l), t)], l + 1)) ([], 0) xs
+createArgs xs = fst $ foldl (\(acc, l) t -> (acc ++ [(TIR.Ident ("arg_" <> show l), t)], l + 1)) ([], 0) xs
 
 {- | Produces a map of functions infos from a list of binds,
  which contains useful data for code generation.
 -}
-getConstructors :: [MIR.Def] -> Map GA.Ident ConstructorInfo
+getConstructors :: [MIR.Def] -> Map TIR.Ident ConstructorInfo
 getConstructors bs = Map.fromList $ go bs
   where
     go []                                        = []
     go (MIR.DData (MIR.Data t cons) : xs) =
             fst
                 ( foldl
-                    ( \(acc, i) (Constructor id xs) ->
+                    ( \(acc, i) (Inj id xs) ->
                         ( ( id
                           , ConstructorInfo
                                 { numArgsCI = length (init . flattenType $ xs)
@@ -133,30 +134,30 @@ test :: Integer -> Program
 test v =
     Program
         [ DataType
-            (GA.Ident "Craig")
-            [ Constructor (GA.Ident "Bob") [MIR.Type (GA.Ident "_Int")]
-            , Constructor (GA.Ident "Betty") [MIR.Type (GA.Ident "_Int")]
+            (TIR.Ident "Craig")
+            [ Constructor (TIR.Ident "Bob") [MIR.Type (TIR.Ident "_Int")]
+            , Constructor (TIR.Ident "Betty") [MIR.Type (TIR.Ident "_Int")]
             ]
         , DataType
-            (GA.Ident "Alice")
-            [ Constructor (GA.Ident "Eve") [MIR.Type (GA.Ident "_Int")] -- ,
-            -- (GA.Ident "Alice", [TInt, TInt])
+            (TIR.Ident "Alice")
+            [ Constructor (TIR.Ident "Eve") [MIR.Type (TIR.Ident "_Int")] -- ,
+            -- (TIR.Ident "Alice", [TInt, TInt])
             ]
-        , Bind (GA.Ident "fibonacci", MIR.Type (GA.Ident "_Int")) [(GA.Ident "x", MIR.Type (GA.Ident "_Int"))] (EId ("x", MIR.Type (GA.Ident "Craig")), MIR.Type (GA.Ident "Craig"))
-        , Bind (GA.Ident "main", MIR.Type (GA.Ident "_Int")) []
-          -- (EApp (MIR.Type (GA.Ident "Craig")) (EId (GA.Ident "Craig_Bob", MIR.Type (GA.Ident "Craig")), MIR.Type (GA.Ident "Craig")) (ELit (LInt v), MIR.Type (GA.Ident "_Int")), MIR.Type (GA.Ident "Craig"))-- (EInt 92)
+        , Bind (TIR.Ident "fibonacci", MIR.Type (TIR.Ident "_Int")) [(TIR.Ident "x", MIR.Type (TIR.Ident "_Int"))] (EId ("x", MIR.Type (TIR.Ident "Craig")), MIR.Type (TIR.Ident "Craig"))
+        , Bind (TIR.Ident "main", MIR.Type (TIR.Ident "_Int")) []
+          -- (EApp (MIR.Type (TIR.Ident "Craig")) (EId (TIR.Ident "Craig_Bob", MIR.Type (TIR.Ident "Craig")), MIR.Type (TIR.Ident "Craig")) (ELit (LInt v), MIR.Type (TIR.Ident "_Int")), MIR.Type (TIR.Ident "Craig"))-- (EInt 92)
           $
             eCaseInt
-                (EApp (MIR.TLit (GA.Ident "Craig")) (EId (GA.Ident "Craig_Bob", MIR.TLit (GA.Ident "Craig")), MIR.TLit (GA.Ident "Craig")) (ELit (LInt v), MIR.Type (GA.Ident "_Int")), MIR.Type (GA.Ident "Craig"))
-                [ injectionCons "Craig_Bob" "Craig" [CIdent (GA.Ident "x")] (EId (GA.Ident "x", MIR.Type (GA.Ident "_Int")), MIR.Type (GA.Ident "_Int"))
+                (EApp (MIR.TLit (TIR.Ident "Craig")) (EId (TIR.Ident "Craig_Bob", MIR.TLit (TIR.Ident "Craig")), MIR.TLit (TIR.Ident "Craig")) (ELit (LInt v), MIR.Type (TIR.Ident "_Int")), MIR.Type (TIR.Ident "Craig"))
+                [ injectionCons "Craig_Bob" "Craig" [CIdent (TIR.Ident "x")] (EId (TIR.Ident "x", MIR.Type (TIR.Ident "_Int")), MIR.Type (TIR.Ident "_Int"))
                 , injectionCons "Craig_Betty" "Craig" [CLit (LInt 5)] (int 2)
-                , Injection (CIdent (GA.Ident "z")) (int 3)
+                , Injection (CIdent (TIR.Ident "z")) (int 3)
                 , -- , injectionInt 5 (int 6)
                   injectionCatchAll (int 10)
                 ]
         ]
   where
-    injectionCons x y xs = Injection (CCons (GA.Ident x, MIR.Type (GA.Ident y)) xs)
+    injectionCons x y xs = Injection (CCons (TIR.Ident x, MIR.Type (TIR.Ident y)) xs)
     injectionInt x = Injection (CLit (LInt x))
     injectionCatchAll = Injection CatchAll
     eCaseInt x xs = (ECase (MIR.TLit (MIR.Ident "_Int")) x xs, MIR.TLit (MIR.Ident "_Int"))
@@ -206,7 +207,7 @@ compileScs [] = do
             emit $ SetVariable ptr' (Bitcast (Ref t') (VIdent top Ptr) (Ref $ CustomType id))
 
             enumerateOneM_
-                ( \i (GA.Ident arg_n, arg_t) -> do
+                ( \i (TIR.Ident arg_n, arg_t) -> do
                     let arg_t' = type2LlvmType arg_t
                     emit $ Comment (toIr arg_t' <> " " <> arg_n <> " " <> show i)
                     elemPtr <- getNewVar
@@ -222,7 +223,7 @@ compileScs [] = do
                                 I32
                                 (VInteger i)
                             )
-                    emit $ Store arg_t' (VIdent (GA.Ident arg_n) arg_t') Ptr elemPtr
+                    emit $ Store arg_t' (VIdent (TIR.Ident arg_n) arg_t') Ptr elemPtr
                 )
                 (argumentsCI ci)
 
@@ -250,12 +251,12 @@ compileScs (MIR.DBind (MIR.Bind (name, _t) args exp) : xs) = do
     modify $ \s -> s{variableCount = 0}
     compileScs xs
 compileScs (MIR.DData (MIR.Data typ ts) : xs) = do
-    let (Ident outer_id) = extractTypeName typ
+    let (TIR.Ident outer_id) = extractTypeName typ
     let variantTypes fi = init $ map type2LlvmType (flattenType fi)
-    let biggestVariant = 7 + maximum (sum . (\(Constructor _ fi) -> typeByteSize <$> variantTypes fi) <$> ts)
-    emit $ LIR.Type (Ident outer_id) [I8, Array biggestVariant I8]
+    let biggestVariant = 7 + maximum (sum . (\(Inj _ fi) -> typeByteSize <$> variantTypes fi) <$> ts)
+    emit $ LIR.Type (TIR.Ident outer_id) [I8, Array biggestVariant I8]
     mapM_
-        ( \(Constructor inner_id fi) -> do
+        ( \(Inj inner_id fi) -> do
             emit $ LIR.Type inner_id (I8 : variantTypes fi)
         )
         ts
@@ -282,17 +283,17 @@ mainContent var =
         -- "    %4 = load i72, ptr %3\n" <>
         -- "    call i32 (ptr, ...) @printf(ptr noundef @.str, i72 noundef %4)\n"
         "call i32 (ptr, ...) @printf(ptr noundef @.str, i64 noundef " <> toIr var <> ")\n"
-    , -- , SetVariable (GA.Ident "p") (Icmp LLEq I64 (VInteger 2) (VInteger 2))
-      -- , BrCond (VIdent (GA.Ident "p")) (GA.Ident "b_1") (GA.Ident "b_2")
-      -- , Label (GA.Ident "b_1")
+    , -- , SetVariable (TIR.Ident "p") (Icmp LLEq I64 (VInteger 2) (VInteger 2))
+      -- , BrCond (VIdent (TIR.Ident "p")) (TIR.Ident "b_1") (TIR.Ident "b_2")
+      -- , Label (TIR.Ident "b_1")
       -- , UnsafeRaw
       --     "call i32 (ptr, ...) @printf(ptr noundef @.str, i64 noundef 1)\n"
-      -- , Br (GA.Ident "end")
-      -- , Label (GA.Ident "b_2")
+      -- , Br (TIR.Ident "end")
+      -- , Label (TIR.Ident "b_2")
       -- , UnsafeRaw
       --     "call i32 (ptr, ...) @printf(ptr noundef @.str, i64 noundef 2)\n"
-      -- , Br (GA.Ident "end")
-      -- , Label (GA.Ident "end")
+      -- , Br (TIR.Ident "end")
+      -- , Label (TIR.Ident "end")
       Ret I64 (VInteger 0)
     ]
 
@@ -301,16 +302,16 @@ defaultStart =
     [ UnsafeRaw "target triple = \"x86_64-pc-linux-gnu\"\n"
     , UnsafeRaw "target datalayout = \"e-m:o-i64:64-f80:128-n8:16:32:64-S128\"\n"
     , UnsafeRaw "@.str = private unnamed_addr constant [3 x i8] c\"%i\n\", align 1\n"
-    , UnsafeRaw "@.non_exhaustive_patterns = private unnamed_addr constant [41 x i8] c\"Non-exhaustive patterns in case at %i:%i\n\""
+    , UnsafeRaw "@.non_exhaustive_patterns = private unnamed_addr constant [41 x i8] c\"Non-exhaustive patterns in case at %i:%i\n\"\n"
     , UnsafeRaw "declare i32 @printf(ptr noalias nocapture, ...)\n"
-    , UnsafeRaw "declare i32 @exit(i32)\n"
+    , UnsafeRaw "declare i32 @exit(i32 noundef)\n"
     ]
 
 compileExp :: ExpT -> CompilerState ()
 compileExp (MIR.ELit lit,t)     = emitLit lit
 compileExp (MIR.EAdd e1 e2,t)   = emitAdd t e1 e2
 -- compileExp (ESub t e1 e2)  = emitSub t e1 e2
-compileExp (MIR.EId name,t)     = emitIdent name
+compileExp (MIR.EVar name, t)   = emitIdent name
 compileExp (MIR.EApp e1 e2,t)   = emitApp t e1 e2
 -- compileExp (EAbs t ti e)   = emitAbs t ti e
 compileExp (MIR.ELet binds e,t) = undefined -- emitLet binds (fst e)
@@ -328,26 +329,28 @@ emitECased t e cases = do
     let rt = type2LlvmType (snd e)
     vs <- exprToValue e
     lbl <- getNewLabel
-    let label = GA.Ident $ "escape_" <> show lbl
+    let label = TIR.Ident $ "escape_" <> show lbl
     stackPtr <- getNewVar
     emit $ SetVariable stackPtr (Alloca ty)
     mapM_ (emitCases rt ty label stackPtr vs) cs
+    crashLbl <- TIR.Ident . ("crash_" <>) . show <$> getNewLabel
+    emit $ Label crashLbl
     emit . UnsafeRaw $ "call i32 (ptr, ...) @printf(ptr noundef @.non_exhaustive_patterns, i64 noundef 6, i64 noundef 6)\n"
-    emit . UnsafeRaw $ "call i32 @exit(i32 1)\n"
-    emit . UnsafeRaw $ "unreachable\n"
-    increaseVarCount >> increaseVarCount >> increaseVarCount
+    emit . UnsafeRaw $ "call i32 @exit(i32 noundef 1)\n"
+    mapM_ (const increaseVarCount) [0..1]
     emit $ Br label
     emit $ Label label
     res <- getNewVar
     emit $ SetVariable res (Load ty Ptr stackPtr)
   where
-    emitCases :: LLVMType -> LLVMType -> GA.Ident -> GA.Ident -> LLVMValue -> Branch -> CompilerState ()
+    emitCases :: LLVMType -> LLVMType -> TIR.Ident -> TIR.Ident -> LLVMValue -> Branch -> CompilerState ()
     emitCases rt ty label stackPtr vs (Branch (MIR.PInj consId cs, t) exp) = do
+        emit $ Comment "Inj"
         cons <- gets constructors
         let r = fromJust $ Map.lookup consId cons
 
-        lbl_failPos <- (\x -> GA.Ident $ "failed_" <> show x) <$> getNewLabel
-        lbl_succPos <- (\x -> GA.Ident $ "success_" <> show x) <$> getNewLabel
+        lbl_failPos <- (\x -> TIR.Ident $ "failed_" <> show x) <$> getNewLabel
+        lbl_succPos <- (\x -> TIR.Ident $ "success_" <> show x) <$> getNewLabel
 
         consVal <- getNewVar
         emit $ SetVariable consVal (ExtractValue rt vs 0)
@@ -362,7 +365,6 @@ emitECased t e cases = do
         emit $ SetVariable castPtr (Alloca rt)
         emit $ Store rt vs Ptr castPtr
         emit $ SetVariable casted (Load (CustomType (coerce consId)) Ptr castPtr)
-
         val <- exprToValue exp
         enumerateOneM_
             (\i c -> do
@@ -393,12 +395,13 @@ emitECased t e cases = do
         emit $ Br label
         emit $ Label lbl_failPos
     emitCases rt ty label stackPtr vs (Branch (MIR.PLit i, _) exp) = do
+        emit $ Comment "Plit"
         let i' = case i of
                 (MIR.LInt i, _)  -> VInteger i
                 (MIR.LChar i, _) -> VChar i
         ns <- getNewVar
-        lbl_failPos <- (\x -> GA.Ident $ "failed_" <> show x) <$> getNewLabel
-        lbl_succPos <- (\x -> GA.Ident $ "success_" <> show x) <$> getNewLabel
+        lbl_failPos <- (\x -> TIR.Ident $ "failed_" <> show x) <$> getNewLabel
+        lbl_succPos <- (\x -> TIR.Ident $ "success_" <> show x) <$> getNewLabel
         emit $ SetVariable ns (Icmp LLEq ty vs i')
         emit $ BrCond (VIdent ns ty) lbl_succPos lbl_failPos
         emit $ Label lbl_succPos
@@ -407,20 +410,22 @@ emitECased t e cases = do
         emit $ Br label
         emit $ Label lbl_failPos
     emitCases rt ty label stackPtr vs (Branch (MIR.PVar (id,_), _) exp) = do
+        emit $ Comment "Pvar"
         -- //TODO this is pretty disgusting and would heavily benefit from a rewrite
         valPtr <- getNewVar
         emit $ SetVariable valPtr (Alloca rt)
         emit $ Store rt vs Ptr valPtr
         emit $ SetVariable id (Load rt Ptr valPtr)
-        increaseVarCount
-        val <- exprToValue  exp
+        val <- exprToValue exp
         emit $ Store ty val Ptr stackPtr
         emit $ Br label
     emitCases rt ty label stackPtr vs (Branch (MIR.PEnum id, _) exp) = do
+        emit $ Comment "Penum"
         val <- exprToValue exp
         emit $ Store ty val Ptr stackPtr
         emit $ Br label
     emitCases _ ty label stackPtr _ (Branch (MIR.PCatch, _) exp) = do
+        emit $ Comment "Pcatch"
         val <- exprToValue exp
         emit $ Store ty val Ptr stackPtr
         emit $ Br label
@@ -445,7 +450,7 @@ emitApp rt e1 e2 = appEmitter e1 e2 []
         let newStack = e2 : stack
         case e1 of
             (MIR.EApp e1' e2', _) -> appEmitter e1' e2' newStack
-            (MIR.EId name, t) -> do
+            (MIR.EVar name, t) -> do
                 args <- traverse exprToValue newStack
                 vs <- getNewVar
                 funcs <- gets functions
@@ -462,7 +467,7 @@ emitApp rt e1 e2 = appEmitter e1 e2 []
                 emit $ SetVariable vs call
             x -> error $ "The unspeakable happened: " <> show x
 
-emitIdent :: GA.Ident -> CompilerState ()
+emitIdent :: TIR.Ident -> CompilerState ()
 emitIdent id = do
     -- !!this should never happen!!
     emit $ Comment "This should not have happened!"
@@ -477,14 +482,14 @@ emitLit i = do
             (MIR.LChar i'') -> (VChar i'', I8)
     varCount <- getNewVar
     emit $ Comment "This should not have happened!"
-    emit $ SetVariable (GA.Ident (show varCount)) (Add t i' (VInteger 0))
+    emit $ SetVariable varCount (Add t i' (VInteger 0))
 
 emitAdd :: MIR.Type -> ExpT -> ExpT -> CompilerState ()
 emitAdd t e1 e2 = do
     v1 <- exprToValue e1
     v2 <- exprToValue e2
     v <- getNewVar
-    emit $ SetVariable (GA.Ident $ show v) (Add (type2LlvmType t) v1 v2)
+    emit $ SetVariable v (Add (type2LlvmType t) v1 v2)
 
 emitSub :: MIR.Type -> ExpT -> ExpT -> CompilerState ()
 emitSub t e1 e2 = do
@@ -498,7 +503,7 @@ exprToValue = \case
     (MIR.ELit i, t) -> pure $ case i of
         (MIR.LInt i)  -> VInteger i
         (MIR.LChar i) -> VChar i
-    (MIR.EId name, t) -> do
+    (MIR.EVar name, t) -> do
         funcs <- gets functions
         case Map.lookup (name, t) funcs of
             Just fi -> do
@@ -515,10 +520,10 @@ exprToValue = \case
     e -> do
         compileExp e
         v <- getVarCount
-        pure $ VIdent (GA.Ident $ show v) (getType e)
+        pure $ VIdent (TIR.Ident $ show v) (getType e)
 
 type2LlvmType :: MIR.Type -> LLVMType
-type2LlvmType (MIR.TLit id@(Ident name)) = case name of
+type2LlvmType (MIR.TLit id@(TIR.Ident name)) = case name of
     "Int" -> I64
     _     -> CustomType id
 type2LlvmType (MIR.TFun t xs)           = do
@@ -532,11 +537,11 @@ type2LlvmType (MIR.TFun t xs)           = do
 getType :: ExpT -> LLVMType
 getType (_, t)     = type2LlvmType t
 
-extractTypeName :: MIR.Type -> Ident
+extractTypeName :: MIR.Type -> TIR.Ident
 extractTypeName (MIR.TLit id) = id
-extractTypeName (MIR.TFun t xs) = let (Ident i) = extractTypeName t
-                                      (Ident is) = extractTypeName xs
-                                      in Ident $ i <> "_$_" <> is
+extractTypeName (MIR.TFun t xs) = let (TIR.Ident i) = extractTypeName t
+                                      (TIR.Ident is) = extractTypeName xs
+                                      in TIR.Ident $ i <> "_$_" <> is
 
 valueGetType :: LLVMValue -> LLVMType
 valueGetType (VInteger _)      = I64
@@ -558,4 +563,3 @@ typeByteSize (CustomType _) = 8
 
 enumerateOneM_ :: Monad m => (Integer -> a -> m b) -> [a] -> m ()
 enumerateOneM_ f = foldM_ (\i a -> f i a >> pure (i + 1)) 1
-
