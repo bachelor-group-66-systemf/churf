@@ -58,7 +58,7 @@ ECase. Exp  ::= "case" Exp "of" "{" [Branch] "}";
 -------------------------------------------------------------------------------
 
 LInt.  Lit ::= Integer;
-LChar. Lit ::= Character;
+LChar. Lit ::= Char;
 
 -------------------------------------------------------------------------------
 -- * PATTERN MATCHING 
@@ -88,7 +88,6 @@ coercions Pattern 1;
 coercions Exp 4;
 coercions Type 1 ;
 
-token Character '\''(char)'\'' ;
 token UIdent (upper (letter | digit | '_')*) ;
 token LIdent (lower (letter | digit | '_')*) ;
 
