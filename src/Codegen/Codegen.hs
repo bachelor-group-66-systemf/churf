@@ -252,7 +252,7 @@ compileScs (MIR.DBind (MIR.Bind (name, _t) args exp) : xs) = do
 compileScs (MIR.DData (MIR.Data typ ts) : xs) = do
     let (Ident outer_id) = extractTypeName typ
     let variantTypes fi = init $ map type2LlvmType (flattenType fi)
-    let biggestVariant = maximum (sum . (\(Constructor _ fi) -> typeByteSize <$> variantTypes fi) <$> ts)
+    let biggestVariant = 7 + maximum (sum . (\(Constructor _ fi) -> typeByteSize <$> variantTypes fi) <$> ts)
     emit $ LIR.Type (Ident outer_id) [I8, Array biggestVariant I8]
     mapM_
         ( \(Constructor inner_id fi) -> do
