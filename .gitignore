@@ -11,4 +11,6 @@ llvm.ll
 
 src/GC/lib/*.o
 src/GC/lib/*.so
+src/GC/lib/*.a
 src/GC/tests/*.out
+src/GC/tests/logs

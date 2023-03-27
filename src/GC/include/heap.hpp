@@ -2,89 +2,99 @@
 
 #include <assert.h>
 #include <iostream>
-#include <list>
 #include <setjmp.h>
 #include <stdlib.h>
+#include <vector>
 
 #include "chunk.hpp"
+#include "profiler.hpp"
 
-#define HEAP_SIZE   65536
+#define HEAP_SIZE 2097152 //65536
+#define FREE_THRESH (uint) 100000
+#define DEBUG
 
-#define MARK        (uint) 0x1
-#define SWEEP       (uint) 0x2
-#define FREE        (uint) 0x4
-#define COLLECT_ALL (uint) 0x7
+namespace GC
+{
+	/**
+	 * Flags for the collect overlead for conditional
+	 * collection (mark/sweep/free/all).
+	*/
+	enum CollectOption {
+		MARK=0x1,
+		SWEEP=0x2,
+		MARK_SWEEP = 0x3,
+		FREE=0x4,
+		COLLECT_ALL=0x7
+	};
 
-#define FREE_THRESH (uint) 20
+	/**
+	 * The heap class to represent the heap for the
+	 * garbage collection. The heap is a singleton
+	 * instance and can be retrieved by Heap::the()
+	 * inside the heap class. The heap is represented
+	 * by a char array of size 65536 and can enable
+	 * a profiler to track the actions on the heap.
+	*/
+	class Heap
+	{
+	private:
+		Heap() : m_heap(static_cast<char *>(malloc(HEAP_SIZE))) {}
 
-namespace GC {
+		~Heap()
+		{
+			std::free((char *)m_heap);
+		}
 
-  class Heap {
+		char *const m_heap;
+		size_t m_size {0};
+		// static Heap *m_instance {nullptr};
+		uintptr_t *m_stack_top {nullptr};
+		bool m_profiler_enable {false};
 
-  private:
+		std::vector<Chunk *> m_allocated_chunks;
+		std::vector<Chunk *> m_freed_chunks;
 
-    //Private constructor according to the singleton pattern
-    Heap() {
-      m_heap = reinterpret_cast<char *>(malloc(HEAP_SIZE));
-      m_size = 0;
-      m_allocated_size = 0;
-    }
+		static bool profiler_enabled();
+		// static Chunk *get_at(std::vector<Chunk *> &list, size_t n);
+		void collect();
+		void sweep(Heap &heap);
+		Chunk *try_recycle_chunks(size_t size);
+		void free(Heap &heap);
+		void free_overlap(Heap &heap);
+		void mark(uintptr_t *start, const uintptr_t *end, std::vector<Chunk *> &worklist);
+		void print_line(Chunk *chunk);
+		void print_worklist(std::vector<Chunk *> &list);
+		void mark_step(uintptr_t start, uintptr_t end, std::vector<Chunk *> &worklist);
 
-    // BEWARE only for testing, this should be adressed
-    ~Heap() {
-      std::free((char *)m_heap);
-    }
+		// Temporary
+		Chunk *try_recycle_chunks_new(size_t size);
+		void free_overlap_new(Heap &heap);
 
-    static inline Heap *the() { // TODO: make private
-      if (m_instance) // if m_instance is not a nullptr
-        return m_instance;
-      m_instance = new Heap();
-      return m_instance;
-    }
+	public:
+		/**
+		 * These are the only five functions which are exposed
+		 * as the API for LLVM. At the absolute start of the
+		 * program the developer has to call init() to ensure
+		 * that the address of the topmost stack frame is
+		 * saved as the limit for scanning the stack in collect.
+		 */
 
-    static inline Chunk *getAt(std::list<Chunk *> list, size_t n) {
-      auto iter = list.begin();
-      if (!n)
-        return *iter;
-      std::advance(iter, n);
-      return *iter;
-    }
+		static Heap &the();
+		static void init();
+		static void dispose();
+		static void *alloc(size_t size);
+		void set_profiler(bool mode);
 
-    void collect();
-    void sweep(Heap *heap);
-    uintptr_t *try_recycle_chunks(size_t size);
-    void free(Heap* heap);
-    void free_overlap(Heap *heap);
-    void mark(uintptr_t *start, const uintptr_t *end, std::list<Chunk *> worklist);
-    void print_line(Chunk *chunk);
-    void print_worklist(std::list<Chunk *> list);
+		// Stop the compiler from generating copy-methods
+		Heap(Heap const&) = delete;
+		Heap& operator=(Heap const&) = delete;
 
-    inline static Heap *m_instance = nullptr;
-    const char *m_heap;
-    size_t m_size;
-    size_t m_allocated_size;
-    uintptr_t *m_stack_top = nullptr;
-
-    // maybe change to std::list
-    std::list<Chunk *> m_allocated_chunks;
-    std::list<Chunk *> m_freed_chunks;
-
-  public:
-
-    /**
-     * These are the only two functions which are exposed
-     * as the API for LLVM. At the absolute start of the
-     * program the developer has to call init() to ensure
-     * that the address of the topmost stack frame is
-     * saved as the limit for scanning the stack in collect.
-    */
-    static void init();              // TODO: make static
-    static void dispose();           // -||-
-    static void *alloc(size_t size); // -||-
-    
-    // DEBUG ONLY
-    void collect(uint flags); // conditional collection
-    void check_init();        // print dummy things
-    void print_contents();    // print dummy things
-  };
+#ifdef DEBUG
+		void collect(CollectOption flags); // conditional collection
+		void check_init();		  // print dummy things
+		void print_contents();	  // print dummy things
+		void print_allocated_chunks(Heap *heap); // print the contents in m_allocated_chunks
+		void print_summary();
+#endif
+	};
 }

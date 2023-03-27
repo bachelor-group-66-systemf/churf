@@ -1,15 +1,25 @@
 #pragma once
 
+#include <stdint.h>
 #include <stdlib.h>
 
-#define CHUNK_LIST_CAP 1024
+namespace GC
+{
+    /**
+     * The basic element of what can be stored on
+     * the heap. A chunk contains a start address
+     * on the actual heap, the size of memory that
+     * is allocated at that address and if the
+     * chunk is reachable (marked).
+    */
+    struct Chunk
+    {
+        bool m_marked {false};
+        uintptr_t *const m_start {nullptr};
+        const size_t m_size {0};
 
-namespace GC {
-  
-  struct Chunk {
-    bool marked;
-    uintptr_t *start;
-    size_t size;
-  };
-
+        Chunk(size_t size, uintptr_t *start) : m_start(start), m_size(size) {}
+        Chunk(const Chunk *const c) : m_marked(c->m_marked), m_start(c->m_start), m_size(c->m_size) {}
+        Chunk(const Chunk &c) : m_marked(c.m_marked), m_start(c.m_start), m_size(c.m_size) {}
+    };
 }

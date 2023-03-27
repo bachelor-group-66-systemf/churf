@@ -1,10 +1,14 @@
+#include <chrono>
+#include <cstring>
 #include <iostream>
 #include <list>
+#include <time.h>
 #include <stdlib.h>
 
-using namespace std;
-
 int main() {
+    using namespace std;
+    using TimeStamp = std::chrono::_V2::system_clock::time_point;
+
     list<char> l;
     char c = 'a';
     for (int i = 1; i <= 5; i++) {
@@ -28,7 +32,13 @@ int main() {
     cout << endl;
 
     cout << "rebased" << endl;
-    // cout << "iter: " << *iter << "\nstop: " << *stop << endl;
+    cout << "iter: " << *iter << "\nstop: " << *stop << endl;
+
+    TimeStamp ts = std::chrono::system_clock::now();
+    std::time_t tt = std::chrono::system_clock::to_time_t(ts);
+    std::string tstr = std::ctime(&tt);
+    tstr.resize(tstr.size()-1);
+    std::cout << tstr << std::endl;
 
     return 0;
 }
