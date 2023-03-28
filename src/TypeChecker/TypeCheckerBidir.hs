@@ -246,6 +246,8 @@ subtype t1 t2 = case (t1, t2) of
       , t1:t1s <- typs1
       , t2:t2s <- typs2
       -> do
+          traceT "t1" (TData name1 typs1)
+          traceT "t2" (TData name2 typs2)
           subtype t1 t2
           zipWithM_ go t1s t2s
      where
@@ -574,17 +576,21 @@ checkPattern patt t_patt = (, t_patt) <$> case patt of
         --  Γ ⊢ B₁ → ‥ → Bₘ₊₁ <: A₁ + ‥ + Aₙ ⊣ Θ₁   Θₘ ⊢ pₘ ↑ [Θₘ₋₁]Bₘ ⊣ Δ
         --  --------------------------------------------------------------
         --  Γ ⊢ injₖ xₖ. p₁ ‥ pₘ ↑ A₁ + ‥ + Aₙ ⊣ Δ
-        PInj name ps -> undefined
-            -- injs <- maybeToRightM err1 =<< lookupDataType name_d
-            -- tinj <- liftEither . maybeToRight err2 $ lookup name injs
-            -- trace (show $ length foralls) pure ()
-            -- (tinj', tdata) <- substituteTVars foralls tinj tdata
-            -- traceT "tinj'" tinj'
-            -- traceT "tdata" tdata
-            -- subtype (getTData $ getReturn tinj') tdata
-            -- t_inj'' <- applyEnv tinj'
-            -- tdata'  <- applyEnv tdata
-            -- pure $ T.PInj (coerce name) []
+        PInj name ps -> do
+            traceT "t_patt :" t_patt
+            (tdata, injs) <- maybeToRightM err1 =<< lookupDataType name_d
+            tinj <- liftEither . maybeToRight err2 $ lookup name injs
+            let foralls = getForallsData tdata
+            (tinj', tdata) <- substituteTVars foralls tinj tdata
+            let t = getTData $ getReturn tinj'
+            traceT "t :" t
+            let super = getTData tdata
+            traceT "super" super
+            subtype t super
+            t_inj'' <- applyEnv tinj'
+            tdata'  <- applyEnv tdata
+            pure $ T.PInj (coerce name) []
+            -- §ps' <- zipWithM (\p t -> checkPattern p =<< applyEnv t) ps t_ps
           where
             substituteTVars fas t1 t2 = case fas of
                 []      -> pure (t1, t2)
@@ -595,10 +601,9 @@ checkPattern patt t_patt = (, t_patt) <$> case patt of
                 go fa (t1, t2) = let TAll tvar _ = fa dummy in do
                   tevar <- fresh
                   insertEnv (EnvTEVar tevar)
-                  traceT "tevar:" (TEVar tevar)
                   pure $ on (,) (substitute tvar tevar) t1 t2
 
-            (foralls, tdata@(TData name_d _)) = partitionData t_patt
+            TData name_d _ = getTData t_patt
             err1 = unwords ["Unknown data type", show name_d]
             err2 = unwords ["No", show name, "constructor for data type", show name_d]
 
@@ -904,7 +909,7 @@ dummy = TLit "Int"
 
 traceEnv s = do
   env <- gets env
-  trace (s ++ " " ++ show env) pure ()
+  trace (s ++ " " ++ ppEnv env) pure ()
 
 traceD s x = trace (s ++ " " ++ show x) pure ()
 

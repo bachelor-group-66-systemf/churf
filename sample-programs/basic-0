@@ -3,9 +3,14 @@ data forall a. List (a) where {
   Cons : a -> List (a) -> List (a)
 };
 
-length : forall c. List (c) -> Int;
+length : List (Int) -> Int;
 length = \list. case list of {
   Cons x xs           => 1 + length xs;
 --  Nil                 => 0;
 --  Cons x (Cons y Nil) => 2;
 };
+
+
+
+
+
