@@ -421,10 +421,10 @@ unify t0 t1 =
             s1 <- unify a c
             s2 <- unify (apply s1 b) (apply s1 d)
             return $ s1 `compose` s2
-        (TVar (T.MkTVar a), t@(TData _ _)) -> return $ M.singleton (coerce a) t
-        (t@(TData _ _), TVar (T.MkTVar b)) -> return $ M.singleton (coerce b) t
-        (TVar (T.MkTVar a), t) -> occurs (coerce a) t
-        (t, TVar (T.MkTVar b)) -> occurs (coerce b) t
+        (TVar (MkTVar a), t@(TData _ _)) -> return $ M.singleton (coerce a) t
+        (t@(TData _ _), TVar (MkTVar b)) -> return $ M.singleton (coerce b) t
+        (TVar (MkTVar a), t) -> occurs (coerce a) t
+        (t, TVar (MkTVar b)) -> occurs (coerce b) t
         (TAll _ t, b) -> unify t b
         (a, TAll _ t) -> unify a t
         (TLit a, TLit b) ->
@@ -478,7 +478,7 @@ occurs i t =
             catchableErr
                 ( Aux.do
                     "Occurs check failed, can't unify"
-                    quote $ printTree (TVar $ T.MkTVar (coerce i))
+                    quote $ printTree (TVar $ MkTVar (coerce i))
                     "with"
                     quote $ printTree t
                 )
@@ -495,7 +495,7 @@ generalize env t = go (S.toList $ free t S.\\ free env) (removeForalls t)
   where
     go :: [T.Ident] -> Type -> Type
     go [] t = t
-    go (x : xs) t = TAll (T.MkTVar (coerce x)) (go xs t)
+    go (x : xs) t = TAll (MkTVar (coerce x)) (go xs t)
     removeForalls :: Type -> Type
     removeForalls (TAll _ t) = removeForalls t
     removeForalls (TFun t1 t2) = TFun (removeForalls t1) (removeForalls t2)
@@ -506,7 +506,7 @@ with fresh ones.
 -}
 inst :: Type -> Infer Type
 inst = \case
-    TAll (T.MkTVar bound) t -> do
+    TAll (MkTVar bound) t -> do
         fr <- fresh
         let s = M.singleton (coerce bound) fr
         apply s <$> inst t
@@ -528,8 +528,8 @@ fresh = do
             fresh
         else
             if n == 0
-                then return . TVar . T.MkTVar $ LIdent [c]
-                else return . TVar . T.MkTVar . LIdent $ c : show n
+                then return . TVar . MkTVar $ LIdent [c]
+                else return . TVar . MkTVar . LIdent $ c : show n
   where
     next :: Char -> Char
     next 'z' = 'a'
@@ -546,8 +546,8 @@ class FreeVars t where
 
 instance FreeVars Type where
     free :: Type -> Set T.Ident
-    free (TVar (T.MkTVar a)) = S.singleton (coerce a)
-    free (TAll (T.MkTVar bound) t) =
+    free (TVar (MkTVar a)) = S.singleton (coerce a)
+    free (TAll (MkTVar bound) t) =
         S.singleton (coerce bound) `S.intersection` free t
     free (TLit _) = mempty
     free (TFun a b) = free a `S.union` free b
@@ -562,11 +562,11 @@ instance SubstType Type where
     apply sub t = do
         case t of
             TLit a -> TLit a
-            TVar (T.MkTVar a) -> case M.lookup (coerce a) sub of
-                Nothing -> TVar (T.MkTVar $ coerce a)
+            TVar (MkTVar a) -> case M.lookup (coerce a) sub of
+                Nothing -> TVar (MkTVar $ coerce a)
                 Just t -> t
-            TAll (T.MkTVar i) t -> case M.lookup (coerce i) sub of
-                Nothing -> TAll (T.MkTVar i) (apply sub t)
+            TAll (MkTVar i) t -> case M.lookup (coerce i) sub of
+                Nothing -> TAll (MkTVar i) (apply sub t)
                 Just _ -> apply sub t
             TFun a b -> TFun (apply sub a) (apply sub b)
             TData name a -> TData name (apply sub a)
@@ -683,7 +683,7 @@ int = TLit "Int"
 char = TLit "Char"
 
 typeEq :: Type -> Type -> StateT Subst (ExceptT Error Identity) ()
-typeEq (TVar (T.MkTVar a)) t@(TVar _) = do
+typeEq (TVar (MkTVar a)) t@(TVar _) = do
     st <- get
     case M.lookup (coerce a) st of
         Nothing -> put $ M.insert (coerce a) t st
