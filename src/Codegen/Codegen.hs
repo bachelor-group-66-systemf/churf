@@ -14,8 +14,6 @@ import           Data.Map                      (Map)
 import qualified Data.Map                      as Map
 import           Data.Maybe                    (fromJust, fromMaybe)
 import           Data.Tuple.Extra              (dupe, first, second)
-import           Debug.Trace                   (trace)
-import qualified Grammar.Abs                   as GA
 import           Grammar.ErrM                  (Err)
 import           Monomorphizer.MonomorphizerIr as MIR
 import qualified TypeChecker.TypeCheckerIr     as TIR
@@ -376,7 +374,7 @@ emitECased t e cases = do
                         emit $ SetVariable (fst x) (ExtractValue (CustomType (coerce consId)) (VIdent casted Ptr) i)
                     PLit (l, t) -> undefined
                     PInj id ps  -> undefined
-                    PCatch      -> undefined
+                    PCatch      -> pure()
                     PEnum id    -> undefined
                 --case c of
                 --    CIdent x -> do
@@ -513,7 +511,13 @@ exprToValue = \case
         (MIR.LChar i) -> VChar i
     (MIR.EVar name, t) -> do
         funcs <- gets functions
-        case Map.lookup (name, t) funcs of
+        cons <- gets constructors
+        let res = Map.lookup (name, t) funcs
+                  <|>
+                  (\c -> FunctionInfo { numArgs = numArgsCI c
+                                     , arguments = argumentsCI c} )
+                    <$> Map.lookup name cons
+        case res of
             Just fi -> do
                 if numArgs fi == 0
                     then do

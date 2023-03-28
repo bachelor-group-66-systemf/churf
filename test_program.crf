@@ -1,26 +1,20 @@
-data Maybe () where {
-    Nothing : Maybe ()
-    Just : Int -> Maybe ()
+data List () where {
+    Nil : List ()
+    Cons : Int -> List () -> List ()
 };
 
--- fmap : (Int -> Int) -> Maybe () -> Maybe () ;
--- fmap f ma = case ma of {
---     Nothing => Nothing ;
---     Just a => Just (f a) ;
--- };
-
-main = case (Just 10) of {
-    Just a => a ;
-    Nothing => 1 ;
+main = case Nil of {
+    Nil => 0 ;
+    Cons a _ => a ;
 };
 
--- pure : Int -> Maybe () ;
--- pure x = Just x ;
---     
--- return = pure;
--- 
--- bind : Maybe () -> (Int -> Maybe ()) -> Maybe () ;
--- bind ma f = case ma of {
---     Nothing => Nothing ;
---     Just a => f a ;
+-- length : List () -> Int ;
+-- length xs = case xs of {
+--     Nil => 0;
+--     Cons _ xs => 1 + length xs ;
 -- };
+
+--sum xs = case xs of {
+--    Nil => 0 ;
+--    Cons a xs => a + main xs ;
+--};
