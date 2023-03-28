@@ -46,12 +46,12 @@ type Env = Seq EnvElem
 -- | Ordered context
 -- Γ ::= ・| Γ, α | Γ, ά | Γ, ▶ ά | Γ, x:A
 data Cxt = Cxt
-    { env        :: Env                          -- ^ Local scope context  Γ
-    , sig        :: Map LIdent Type              -- ^ Top-level signatures x : A
-    , binds      :: Map LIdent Exp               -- ^ Top-level binds x : e
-    , next_tevar :: Int                          -- ^ Counter to distinguish ά
-    , data_injs  :: Map UIdent Type              -- ^ Data injections (constructors) K/inj : A
-    , data_types :: Map UIdent [(UIdent, Type)]  -- ^ Data types D : (K₁:A₁ + ‥ + Kₙ:Aₙ)
+    { env        :: Env                                  -- ^ Local scope context  Γ
+    , sig        :: Map LIdent Type                      -- ^ Top-level signatures x : A
+    , binds      :: Map LIdent Exp                       -- ^ Top-level binds x : e
+    , next_tevar :: Int                                  -- ^ Counter to distinguish ά
+    , data_injs  :: Map UIdent Type                      -- ^ Data injections (constructors) K/inj : A
+    , data_types :: Map UIdent (Type, [(UIdent, Type)])  -- ^ Data types (∀α. D (α), K₁:A₁ + ‥ + Kₙ:Aₙ)
     } deriving (Show, Eq)
 
 newtype Tc a = Tc { runTc :: ExceptT String (State Cxt) a }
@@ -79,7 +79,7 @@ typecheck (Program defs) = do
                                             TData name _ = getTData typ
                                             kts = [(k,t) | Inj k t <- injs ]
                                           in
-                                            (name, kts)
+                                            (name, (typ, kts))
                                         | Data typ injs <- datatypes
                                         ]
             }
@@ -574,45 +574,39 @@ checkPattern patt t_patt = (, t_patt) <$> case patt of
         --  Γ ⊢ B₁ → ‥ → Bₘ₊₁ <: A₁ + ‥ + Aₙ ⊣ Θ₁   Θₘ ⊢ pₘ ↑ [Θₘ₋₁]Bₘ ⊣ Δ
         --  --------------------------------------------------------------
         --  Γ ⊢ injₖ xₖ. p₁ ‥ pₘ ↑ A₁ + ‥ + Aₙ ⊣ Δ
-        PInj name ps -> do
-            t <- maybeToRightM ("Unknown constructor " ++ show name)
-                     =<< lookupInj name
-            subtype t t_patt
+        PInj name ps -> undefined
+            -- injs <- maybeToRightM err1 =<< lookupDataType name_d
+            -- tinj <- liftEither . maybeToRight err2 $ lookup name injs
+            -- trace (show $ length foralls) pure ()
+            -- (tinj', tdata) <- substituteTVars foralls tinj tdata
+            -- traceT "tinj'" tinj'
+            -- traceT "tdata" tdata
+            -- subtype (getTData $ getReturn tinj') tdata
+            -- t_inj'' <- applyEnv tinj'
+            -- tdata'  <- applyEnv tdata
+            -- pure $ T.PInj (coerce name) []
+          where
+            substituteTVars fas t1 t2 = case fas of
+                []      -> pure (t1, t2)
+                fa:fas' -> do
+                  (t1', t2') <- go fa (t1, t2)
+                  substituteTVars fas' t1' t2'
+              where
+                go fa (t1, t2) = let TAll tvar _ = fa dummy in do
+                  tevar <- fresh
+                  insertEnv (EnvTEVar tevar)
+                  traceT "tevar:" (TEVar tevar)
+                  pure $ on (,) (substitute tvar tevar) t1 t2
 
+            (foralls, tdata@(TData name_d _)) = partitionData t_patt
+            err1 = unwords ["Unknown data type", show name_d]
+            err2 = unwords ["No", show name, "constructor for data type", show name_d]
 
-            let (t_ps, t_return) = partitionTypeWithForall t
-            unless (length ps == length t_ps) $
-                throwError "Wrong number of variables"
 
             -- §ps' <- zipWithM (\p t -> checkPattern p =<< applyEnv t) ps t_ps
             -- let ps'' = map fst ps' -- TODO
-            pure $ T.PInj (coerce name) []
+            -- pure $ T.PInj (coerce name) []
 
-subtypeData :: UIdent -> Type -> Tc ()
-subtypeData name_inj typ = do
-    injs <- maybeToRightM err1 =<< lookupDataType name_d
-    t_inj <- liftEither . maybeToRight err2 $ lookup name_k injs
-    (t_inj', typs')<- substituteTVars foralls t_inj data_t
-    subtype ()
-
-    undefined
-  where
-    substituteTVars fas t1 t2 = case fas of
-        []      -> pure (t1, t2)
-        fa:fas' -> do
-          (t1', t2') <- go fa (t1, t2)
-          substituteTVars fas' t1' t2'
-      where
-        go fa (t1, t2) = let TAll tvar _ = fa dummy in do
-          tevar <- fresh
-          insertEnv (EnvTEVar tevar)
-          pure $ on (,) (substitute tvar tevar) t1 t2
-
-
-
-    (foralls, data_t@(TData name_d typs)) = partitionData typ
-    err1 = unwords ["Unknown data type", show name_d]
-    err2 = unwords ["No", show name_k, "constructor for data type", show name_d]
 
     -- TAll tvar t -> do
     --     tevar <- fresh
@@ -875,7 +869,7 @@ insertEnv x = modifyEnv (:|> x)
 lookupBind :: LIdent -> Tc (Maybe Exp)
 lookupBind x = gets (Map.lookup x . binds)
 
-lookupDataType :: UIdent -> Tc (Maybe [(UIdent, Type)])
+lookupDataType :: UIdent -> Tc (Maybe (Type, [(UIdent, Type)]))
 lookupDataType x = gets (Map.lookup x . data_types)
 
 lookupSig :: LIdent -> Tc (Maybe Type)
@@ -897,7 +891,7 @@ putEnv = modifyEnv . const
 
 modifyEnv :: (Env -> Env) -> Tc ()
 modifyEnv f =
-  modify $ \cxt -> {- trace (ppEnv (f cxt.env)) -} cxt { env = f cxt.env }
+  modify $ \cxt -> trace (ppEnv (f cxt.env)) cxt { env = f cxt.env }
 
 pattern DBind' name vars exp = DBind (Bind name vars exp)
 pattern DSig' name typ = DSig (Sig name typ)
