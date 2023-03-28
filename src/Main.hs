@@ -116,14 +116,14 @@ main' opts s = do
 
     printToErr "\n-- Lambda Lifter --"
     let lifted = lambdaLift typechecked
-    printToErr $ printTree lifted
+    bool (printToErr $ printTree lifted) (printToErr $ show lifted) opts.debug
 
     printToErr "\n -- Monomorphizer --"
     let monomorphized = monomorphize lifted
-    printToErr $ printTree monomorphized
+    bool (printToErr $ printTree monomorphized) (printToErr $ show monomorphized) opts.debug
 
     printToErr "\n -- Compiler --"
-    generatedCode <- fromCompilerErr $ generateCode (monomorphize typechecked)
+    generatedCode <- fromCompilerErr $ generateCode monomorphized
 
     check <- doesPathExist "output"
     when check (removeDirectoryRecursive "output")
