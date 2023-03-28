@@ -66,7 +66,7 @@ preRun (x : xs) = case x of
                     "Duplicate signatures for function"
                     quote $ printTree n
                 )
-        insertSig (coerce n) (Just t) >> preRun xs
+        insertSig (coerce n) (Just $ skolemize t) >> preRun xs
     DBind (Bind n _ e) -> do
         collect (collectTVars e)
         s <- gets sigs
@@ -537,6 +537,12 @@ fresh = do
     next :: Char -> Char
     next 'z' = 'a'
     next a = succ a
+
+skolemize :: Type -> Type
+skolemize (TVar (MkTVar a)) = TEVar $ MkTEVar a
+skolemize (TAll x t) = TAll x (skolemize t)
+skolemize (TFun t1 t2) = (TFun `on` skolemize) t1 t2
+skolemize t = t
 
 -- | A class for substitutions
 class SubstType t where
