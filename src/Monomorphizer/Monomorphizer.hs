@@ -134,9 +134,15 @@ morphBind expectedType b@(T.Bind (Ident _, btype) args (exp, t)) =
         -- function calls
         markBind (coerce name')
         exp' <- morphExp expectedType exp
+        -- Get monomorphic type sof args
+        args' <- mapM convertArg args
         addOutputBind $ M.Bind (coerce name', expectedType) 
-            [] (exp', expectedType)
+            args' (exp', expectedType)
         return name'
+
+convertArg :: (Ident, T.Type) -> EnvM (Ident, M.Type)
+convertArg (ident, t) = do t' <- getMonoFromPoly t
+                           return (ident,  t')
 
 -- Morphs function applications, such as EApp and EAdd
 morphApp :: M.Type -> T.ExpT -> T.ExpT -> EnvM M.Exp
@@ -153,9 +159,20 @@ convertLit :: T.Lit -> M.Lit
 convertLit (T.LInt v) = M.LInt v
 convertLit (T.LChar v) = M.LChar v
 
+-- | Conv
+--data Pattern' t
+--    = PVar (Id' t) -- TODO should be Ident
+--    | PLit (Lit, t) -- TODO should be Lit
+--    | PCatch
+--    | PEnum Ident
+--    | PInj Ident [Pattern' t] -- TODO should be (Pattern' t, t)
+--    deriving (C.Eq, C.Ord, C.Show, C.Read)
+
 morphExp :: M.Type -> T.Exp -> EnvM M.Exp
 morphExp expectedType exp = case exp of
   T.ELit lit -> return $ M.ELit (convertLit lit)
+  T.EInj ident -> do
+    return $ M.EVar ident
   T.EApp e1 e2 -> do
     morphApp expectedType e1 e2
   T.EAdd e1 e2 -> do
@@ -163,6 +180,12 @@ morphExp expectedType exp = case exp of
   T.EAbs ident (exp, t) -> local (\env -> env { locals = Set.insert ident (locals env) }) $ do 
     t' <- getMonoFromPoly t
     morphExp t' exp
+--  T.ECase (exp, t) bs -> do
+--    t' <- getMonoFromPoly t
+--    exp' <- morphExp t' exp
+--    return M.ECase (exp', t')
+--data Branch' t = Branch (Pattern' t, t) (ExpT' t)
+--    deriving (C.Eq, C.Ord, C.Show, C.Read)
   T.EVar ident@(Ident str) -> do
     isLocal <- localExists ident
     if isLocal then do
