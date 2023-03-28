@@ -11,10 +11,8 @@ import Test.Hspec
 import Prelude (
     Bool (..),
     Either (..),
-    IO,
     fmap,
     foldl1,
-    mapM_,
     not,
     ($),
     (.),

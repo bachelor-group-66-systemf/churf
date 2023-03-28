@@ -228,8 +228,10 @@ algoW :: Exp -> Infer (Subst, T.ExpT' Type)
 algoW = \case
     err@(EAnn e t) -> do
         (s1, (e', t')) <- exprErr (algoW e) err
+        sub1 <- unify t t'
+        sub2 <- unify t' t
         unless
-            (t `isMoreSpecificOrEq` t')
+            (apply sub1 t == t' && apply sub2 t' == t)
             ( throwError $
                 unwords
                     [ "Annotated type:"
