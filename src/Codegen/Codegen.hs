@@ -13,6 +13,8 @@ import           Data.Coerce                   (coerce)
 import           Data.Map                      (Map)
 import qualified Data.Map                      as Map
 import           Data.Maybe                    (fromJust, fromMaybe)
+import           Data.Set                      (Set)
+import qualified Data.Set                      as Set
 import           Data.Tuple.Extra              (dupe, first, second)
 import           Grammar.ErrM                  (Err)
 import           Monomorphizer.MonomorphizerIr as MIR
@@ -22,6 +24,7 @@ import qualified TypeChecker.TypeCheckerIr     as TIR
 data CodeGenerator = CodeGenerator
     { instructions  :: [LLVMIr]
     , functions     :: Map MIR.Id FunctionInfo
+    , customTypes   :: Set LLVMType
     , constructors  :: Map TIR.Ident ConstructorInfo
     , variableCount :: Integer
     , labelCount    :: Integer
@@ -88,28 +91,24 @@ createArgs xs = fst $ foldl (\(acc, l) t -> (acc ++ [(TIR.Ident ("arg_" <> show 
 getConstructors :: [MIR.Def] -> Map TIR.Ident ConstructorInfo
 getConstructors bs = Map.fromList $ go bs
   where
-    go []                                        = []
-    go (MIR.DData (MIR.Data t cons) : xs) =
-            fst
-                ( foldl
-                    ( \(acc, i) (Inj id xs) ->
-                        ( ( id
-                          , ConstructorInfo
+    go [] = []
+    go (MIR.DData (MIR.Data t cons) : xs) = fst
+                (foldl (\(acc, i) (Inj id xs) ->
+                        (( id, ConstructorInfo
                                 { numArgsCI = length (init . flattenType $ xs)
                                 , argumentsCI = createArgs (init . flattenType $ xs)
                                 , numCI = i
                                 , returnTypeCI = t --last . flattenType $ xs
                                 }
-                          )
-                            : acc
-                        , i + 1
-                        )
-                    )
-                    ([], 0)
-                    cons
-                )
-            <> go xs
-    go (_ : xs)                                  = go xs
+                          ) : acc, i + 1)) ([], 0) cons) <> go xs
+    go (_ : xs) = go xs
+
+getTypes :: [MIR.Def] -> Set LLVMType
+getTypes bs = Set.fromList $ go bs
+  where
+    go []                              = []
+    go (MIR.DData (MIR.Data t _) : xs) = type2LlvmType t : go xs
+    go (_:xs)                          = go xs
 
 initCodeGenerator :: [MIR.Def] -> CodeGenerator
 initCodeGenerator scs =
@@ -117,6 +116,7 @@ initCodeGenerator scs =
         { instructions = defaultStart
         , functions = getFunctions scs
         , constructors = getConstructors scs
+        , customTypes = getTypes scs
         , variableCount = 0
         , labelCount = 0
         }
