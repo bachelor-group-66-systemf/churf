@@ -36,3 +36,13 @@ main = case \x. x of {
     _ => 0;
 };
 ```
+
+# Inference should not depend on order
+
+This one is really tough, strangely
+Spent many hours on this so far
+
+```hs
+main = id 0 ;
+id x = x;
+```
