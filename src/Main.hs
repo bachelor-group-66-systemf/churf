@@ -103,7 +103,7 @@ main' opts s = do
     --let lifted = lambdaLift typechecked
     --printToErr $ printTree lifted
 
-    printToErr "\n -- Compiler --"
+    printToErr "\n -- Monomorphizer --"
     let monomorphized = monomorphize typechecked
     printToErr $ show monomorphized
 
