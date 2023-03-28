@@ -187,6 +187,31 @@ bes =
             "    Nil => 0 ;"
             " };"
         )
+    , testBe
+        "length function on int list infers correct signature"
+        ( D.do
+            "data List () where {"
+            "    Nil : List ()"
+            "    Cons : Int -> List () -> List ()"
+            "};"
+
+            "length xs = case xs of {"
+            "    Nil => 0 ;"
+            "    Cons _ xs => 1 + length xs ;"
+            "};"
+        )
+        ( D.do
+            "data List () where {"
+            "    Nil : List ()"
+            "    Cons : Int -> List () -> List ()"
+            "};"
+
+            "length : List () -> Int ;"
+            "length xs = case xs of {"
+            "    Nil => 0 ;"
+            "    Cons _ xs => 1 + length xs ;"
+            "};"
+        )
     ]
 
 testSatisfy desc test satisfaction = specify desc $ run test `shouldSatisfy` satisfaction
