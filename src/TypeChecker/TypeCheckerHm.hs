@@ -97,8 +97,8 @@ checkBind (Bind name args e) = do
     s <- gets sigs
     case M.lookup (coerce name) s of
         Just (Just t') -> do
-            sab <- unify t' lambda_t
-            let fsig = apply (sab `compose` sub0) t'
+            -- \| TODO: Fix, this is not correct
+            let fsig = apply sub0 t'
             sub1 <- liftEither $ runIdentity $ runExceptT $ execStateT (typeEq fsig lambda_t) mempty
             sub2 <- liftEither $ runIdentity $ runExceptT $ execStateT (typeEq lambda_t fsig) mempty
             unless
