@@ -51,7 +51,9 @@ emit l = modify $ \t -> t{instructions = Auxiliary.snoc l $ instructions t}
 
 -- | Increases the variable counter in the CodeGenerator state
 increaseVarCount :: CompilerState ()
-increaseVarCount = (emit $ Comment "increase") >> (modify $ \t -> t{variableCount = variableCount t + 1})
+increaseVarCount = do
+    gets variableCount >>= \s -> emit.Comment $ "increase: " <> show (s + 1)
+    modify $ \t -> t{variableCount = variableCount t + 1}
 
 -- | Returns the variable count from the CodeGenerator state
 getVarCount :: CompilerState Integer
@@ -333,8 +335,8 @@ emitECased t e cases = do
     stackPtr <- getNewVar
     emit $ SetVariable stackPtr (Alloca ty)
     mapM_ (emitCases rt ty label stackPtr vs) cs
-    crashLbl <- TIR.Ident . ("crash_" <>) . show <$> getNewLabel
-    emit $ Label crashLbl
+    -- crashLbl <- TIR.Ident . ("crash_" <>) . show <$> getNewLabel
+    -- emit $ Label crashLbl
     emit . UnsafeRaw $ "call i32 (ptr, ...) @printf(ptr noundef @.non_exhaustive_patterns, i64 noundef 6, i64 noundef 6)\n"
     emit . UnsafeRaw $ "call i32 @exit(i32 noundef 1)\n"
     mapM_ (const increaseVarCount) [0..1]
@@ -419,16 +421,22 @@ emitECased t e cases = do
         val <- exprToValue exp
         emit $ Store ty val Ptr stackPtr
         emit $ Br label
+        lbl_failPos <- (\x -> TIR.Ident $ "failed_" <> show x) <$> getNewLabel
+        emit $ Label lbl_failPos
     emitCases rt ty label stackPtr vs (Branch (MIR.PEnum id, _) exp) = do
         emit $ Comment "Penum"
         val <- exprToValue exp
         emit $ Store ty val Ptr stackPtr
         emit $ Br label
+        lbl_failPos <- (\x -> TIR.Ident $ "failed_" <> show x) <$> getNewLabel
+        emit $ Label lbl_failPos
     emitCases _ ty label stackPtr _ (Branch (MIR.PCatch, _) exp) = do
         emit $ Comment "Pcatch"
         val <- exprToValue exp
         emit $ Store ty val Ptr stackPtr
         emit $ Br label
+        lbl_failPos <- (\x -> TIR.Ident $ "failed_" <> show x) <$> getNewLabel
+        emit $ Label lbl_failPos
 
 --emitLet :: Bind -> Exp -> CompilerState ()
 emitLet xs e = do

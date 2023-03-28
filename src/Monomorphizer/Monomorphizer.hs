@@ -17,26 +17,27 @@ monoDefs = map monoDef
 
 monoDef :: T.Def -> M.Def
 monoDef (T.DBind bind) = M.DBind $ monoBind bind
---monoDef (T.DData d)    = M.DData $ monoData d
+monoDef (T.DData d)    = M.DData $ monoData d
 
 monoBind :: T.Bind -> M.Bind
 monoBind (T.Bind name args (e, t)) = M.Bind (monoId name) (map monoId args) (monoExpr e, monoType t)
 
---monoData :: T.Data -> M.Data
---monoData (T.Data (Ident id) cs) = M.Data (M.TLit (M.Ident id)) (map monoConstructor cs)
+monoData :: T.Data -> M.Data
+monoData (T.Data id cs) = M.Data (monoType id) (map monoConstructor cs)
 
 monoConstructor :: T.Inj -> M.Inj
 monoConstructor (T.Inj (Ident i) t) = M.Inj (T.Ident i) (monoType t)
 
 monoExpr :: T.Exp -> M.Exp
 monoExpr = \case
-    T.EVar (Ident i)   -> M.EVar (T.Ident i)
+    T.EVar i           -> M.EVar i
     T.ELit lit         -> M.ELit $ monoLit lit
     T.ELet bind expt   -> M.ELet (monoBind bind) (monoexpt expt)
     T.EApp expt1 expt2 -> M.EApp (monoexpt expt1) (monoexpt expt2)
     T.EAdd expt1 expt2 -> M.EAdd (monoexpt expt1) (monoexpt expt2)
     T.EAbs _i _expt    -> error "BUG"
     T.ECase expt injs  -> M.ECase (monoexpt expt) (monoInjs injs)
+    T.EInj i           -> M.EVar i
 
 monoAbsType :: T.Type -> M.Type
 monoAbsType (T.TLit u)     = M.TLit (coerce u)
