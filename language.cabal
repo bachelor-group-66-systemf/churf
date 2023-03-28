@@ -32,6 +32,7 @@ executable language
       Grammar.ErrM
       Auxiliary
       Renamer.Renamer
+      TypeChecker.TypeChecker
       TypeChecker.TypeCheckerHm
       TypeChecker.TypeCheckerBidir
       TypeChecker.TypeCheckerIr
@@ -75,6 +76,7 @@ Test-suite language-testsuite
       Grammar.ErrM
       Auxiliary
       Renamer.Renamer
+      TypeChecker.TypeChecker
       TypeChecker.TypeCheckerHm
       TypeChecker.TypeCheckerBidir
       TypeChecker.RemoveTEVar
