@@ -6,9 +6,11 @@ module Codegen.Codegen (generateCode) where
 import           Auxiliary                     (snoc)
 import           Codegen.LlvmIr                as LIR
 import           Control.Applicative           ((<|>))
+import           Control.Monad                 (when)
 import           Control.Monad.State           (StateT, execStateT, foldM_,
                                                 gets, modify)
 import qualified Data.Bifunctor                as BI
+import           Data.Char                     (ord)
 import           Data.Coerce                   (coerce)
 import           Data.Map                      (Map)
 import qualified Data.Map                      as Map
@@ -243,9 +245,10 @@ compileScs (MIR.DBind (MIR.Bind (name, _t) args exp) : xs) = do
     emit . Comment $ show name <> ": " <> show exp
     let args' = map (second type2LlvmType) args
     emit $ Define FastCC I64 {-(type2LlvmType t_return)-} name args'
+    when (name == "main") (mapM_ emit firstMainContent)
     functionBody <- exprToValue exp
     if name == "main"
-        then mapM_ emit $ mainContent functionBody
+        then mapM_ emit $ lastMainContent functionBody
         else emit $ Ret I64 functionBody
     emit DefineEnd
     modify $ \s -> s{variableCount = 0}
@@ -262,39 +265,15 @@ compileScs (MIR.DData (MIR.Data typ ts) : xs) = do
         ts
     compileScs xs
 
-mainContent :: LLVMValue -> [LLVMIr]
-mainContent var =
+firstMainContent :: [LLVMIr]
+firstMainContent =
+    [ UnsafeRaw "call void @_ZN2GC4Heap4initEv()\n"
+    ]
+lastMainContent :: LLVMValue -> [LLVMIr]
+lastMainContent var =
     [ UnsafeRaw $
-        -- "%2 = alloca %Craig\n" <>
-        -- "    store %Craig %1, ptr %2\n" <>
-        -- "    %3 = bitcast %Craig* %2 to i72*\n" <>
-        -- "    %4 = load i72, ptr %3\n" <>
-        -- "    call i32 (ptr, ...) @printf(ptr noundef @.str, i72 noundef %4)\n"
-
-        -- "%2 = alloca %Craig\n" <>
-        -- "    store %Craig %1, ptr %2\n" <>
-        -- "    %3 = bitcast %Craig* %2 to i72*\n" <>
-        -- "    %4 = load i72, ptr %3\n" <>
-        -- "    call i32 (ptr, ...) @printf(ptr noundef @.str, i72 noundef %4)\n"
-
-        -- "%2 = alloca %Craig\n" <>
-        -- "    store %Craig %1, ptr %2\n" <>
-        -- "    %3 = bitcast %Craig* %2 to i72*\n" <>
-        -- "    %4 = load i72, ptr %3\n" <>
-        -- "    call i32 (ptr, ...) @printf(ptr noundef @.str, i72 noundef %4)\n"
         "call i32 (ptr, ...) @printf(ptr noundef @.str, i64 noundef " <> toIr var <> ")\n"
-    , -- , SetVariable (TIR.Ident "p") (Icmp LLEq I64 (VInteger 2) (VInteger 2))
-      -- , BrCond (VIdent (TIR.Ident "p")) (TIR.Ident "b_1") (TIR.Ident "b_2")
-      -- , Label (TIR.Ident "b_1")
-      -- , UnsafeRaw
-      --     "call i32 (ptr, ...) @printf(ptr noundef @.str, i64 noundef 1)\n"
-      -- , Br (TIR.Ident "end")
-      -- , Label (TIR.Ident "b_2")
-      -- , UnsafeRaw
-      --     "call i32 (ptr, ...) @printf(ptr noundef @.str, i64 noundef 2)\n"
-      -- , Br (TIR.Ident "end")
-      -- , Label (TIR.Ident "end")
-      Ret I64 (VInteger 0)
+    , Ret I64 (VInteger 0)
     ]
 
 defaultStart :: [LLVMIr]
@@ -305,6 +284,9 @@ defaultStart =
     , UnsafeRaw "@.non_exhaustive_patterns = private unnamed_addr constant [41 x i8] c\"Non-exhaustive patterns in case at %i:%i\n\"\n"
     , UnsafeRaw "declare i32 @printf(ptr noalias nocapture, ...)\n"
     , UnsafeRaw "declare i32 @exit(i32 noundef)\n"
+    , UnsafeRaw "declare i32 @_ZN2GC4Heap4initEv()\n"
+    , UnsafeRaw "declare i32 @_ZN2GC4Heap5allocEm()\n"
+    , UnsafeRaw "declare i32 @_ZN2GC4Heap7disposeEv()\n"
     ]
 
 compileExp :: ExpT -> CompilerState ()
@@ -398,7 +380,7 @@ emitECased t e cases = do
         emit $ Comment "Plit"
         let i' = case i of
                 (MIR.LInt i, _)  -> VInteger i
-                (MIR.LChar i, _) -> VChar i
+                (MIR.LChar i, _) -> VChar (ord i)
         ns <- getNewVar
         lbl_failPos <- (\x -> TIR.Ident $ "failed_" <> show x) <$> getNewLabel
         lbl_succPos <- (\x -> TIR.Ident $ "success_" <> show x) <$> getNewLabel
@@ -485,7 +467,7 @@ emitLit i = do
     -- !!this should never happen!!
     let (i', t) = case i of
             (MIR.LInt i'')  -> (VInteger i'', I64)
-            (MIR.LChar i'') -> (VChar i'', I8)
+            (MIR.LChar i'') -> (VChar $ ord i'', I8)
     varCount <- getNewVar
     emit $ Comment "This should not have happened!"
     emit $ SetVariable varCount (Add t i' (VInteger 0))
@@ -508,7 +490,7 @@ exprToValue :: ExpT -> CompilerState LLVMValue
 exprToValue = \case
     (MIR.ELit i, t) -> pure $ case i of
         (MIR.LInt i)  -> VInteger i
-        (MIR.LChar i) -> VChar i
+        (MIR.LChar i) -> VChar $ ord i
     (MIR.EVar name, t) -> do
         funcs <- gets functions
         cons <- gets constructors

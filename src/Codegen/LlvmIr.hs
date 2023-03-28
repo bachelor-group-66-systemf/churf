@@ -88,7 +88,7 @@ or a string contstant
 -}
 data LLVMValue
     = VInteger Integer
-    | VChar Char
+    | VChar Int
     | VIdent Ident LLVMType
     | VConstant String
     | VFunction Ident Visibility LLVMType
