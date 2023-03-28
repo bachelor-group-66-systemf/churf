@@ -1,34 +1,44 @@
 {-# LANGUAGE OverloadedRecordDot #-}
+
 module Main where
 
-import           Control.Monad               (when)
-import           Data.Bool                   (bool)
-import           Data.List.Extra             (isSuffixOf)
-import           Data.Maybe                  (fromJust, isNothing)
-import           GHC.IO.Handle.Text          (hPutStrLn)
-import           System.Console.GetOpt       (ArgDescr (NoArg, ReqArg),
-                                              ArgOrder (RequireOrder),
-                                              OptDescr (Option), getOpt,
-                                              usageInfo)
-import           System.Directory            (createDirectory, doesPathExist,
-                                              getDirectoryContents,
-                                              removeDirectoryRecursive,
-                                              setCurrentDirectory)
-import           System.Environment          (getArgs)
-import           System.Exit                 (ExitCode (ExitFailure),
-                                              exitFailure, exitSuccess,
-                                              exitWith)
-import           System.IO                   (stderr)
-import           Codegen.Codegen             (generateCode)
-import           Compiler                    (compile)
-import           Grammar.ErrM                (Err)
-import           Grammar.Par                 (myLexer, pProgram)
-import           Grammar.Print               (printTree)
-import           LambdaLifter                (lambdaLift)
-import           Monomorphizer.Monomorphizer (monomorphize)
-import           Renamer.Renamer             (rename)
-import           System.Process              (spawnCommand, waitForProcess)
-import           TypeChecker.TypeChecker     (TypeChecker (Bi, Hm), typecheck)
+import Codegen.Codegen (generateCode)
+import Compiler (compile)
+import Control.Monad (when)
+import Data.Bool (bool)
+import Data.List.Extra (isSuffixOf)
+import Data.Maybe (fromJust, isNothing)
+import GHC.IO.Handle.Text (hPutStrLn)
+import Grammar.ErrM (Err)
+import Grammar.Par (myLexer, pProgram)
+import Grammar.Print (printTree)
+import LambdaLifter (lambdaLift)
+import Monomorphizer.Monomorphizer (monomorphize)
+import Renamer.Renamer (rename)
+import System.Console.GetOpt (
+    ArgDescr (NoArg, ReqArg),
+    ArgOrder (RequireOrder),
+    OptDescr (Option),
+    getOpt,
+    usageInfo,
+ )
+import System.Directory (
+    createDirectory,
+    doesPathExist,
+    getDirectoryContents,
+    removeDirectoryRecursive,
+    setCurrentDirectory,
+ )
+import System.Environment (getArgs)
+import System.Exit (
+    ExitCode (ExitFailure),
+    exitFailure,
+    exitSuccess,
+    exitWith,
+ )
+import System.IO (stderr)
+import System.Process (spawnCommand, waitForProcess)
+import TypeChecker.TypeChecker (TypeChecker (Bi, Hm), typecheck)
 
 main :: IO ()
 main = getArgs >>= parseArgs >>= uncurry main'
@@ -75,11 +85,11 @@ chooseTypechecker s options = options{typechecker = tc}
     tc = case s of
         "hm" -> pure Hm
         "bi" -> pure Bi
-        _    -> Nothing
+        _ -> Nothing
 
 data Options = Options
-    { help        :: Bool
-    , debug       :: Bool
+    { help :: Bool
+    , debug :: Bool
     , typechecker :: Maybe TypeChecker
     }
 
@@ -100,46 +110,25 @@ main' opts s = do
     bool (printToErr $ printTree typechecked) (printToErr $ show typechecked) opts.debug
 
     printToErr "\n-- Lambda Lifter --"
-    --let lifted = lambdaLift typechecked
-    --printToErr $ printTree lifted
+    let lifted = lambdaLift typechecked
+    printToErr $ printTree lifted
 
     printToErr "\n -- Monomorphizer --"
-    let monomorphized = monomorphize typechecked
-    printToErr $ show monomorphized
+    let monomorphized = monomorphize lifted
+    printToErr $ printTree monomorphized
 
-    -- printToErr "\n-- Lambda Lifter --"
-    -- let lifted = lambdaLift typechecked
-    -- printToErr $ printTree lifted
-    --
     printToErr "\n -- Compiler --"
     generatedCode <- fromCompilerErr $ generateCode (monomorphize typechecked)
-    -- putStrLn generatedCode
 
     check <- doesPathExist "output"
     when check (removeDirectoryRecursive "output")
     createDirectory "output"
     when opts.debug $ do
-        _ <- writeFile "output/llvm.ll" generatedCode
+        writeFile "output/llvm.ll" generatedCode
         debugDotViz
 
     compile generatedCode
-    spawnWait "./output/hello_world"
-    --printToErr "\n -- Compiler --"
-    --generatedCode <- fromCompilerErr $ generateCode (monomorphize typechecked)
-    --putStrLn generatedCode
-
-    --check <- doesPathExist "output"
-    --when check (removeDirectoryRecursive "output")
-    --createDirectory "output"
-    --when debug $ do
-    --    writeFile "output/llvm.ll" generatedCode
-    --    debugDotViz
-
-    --compile generatedCode
-    --spawnWait "./hello_world"
-    -- interpred <- fromInterpreterErr $ interpret lifted
-    -- putStrLn "\n-- interpret"
-    -- print interpred
+    spawnWait "./hello_world"
 
     exitSuccess
 
