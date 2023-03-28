@@ -312,13 +312,13 @@ defaultStart =
     ]
 
 compileExp :: ExpT -> CompilerState ()
-compileExp (MIR.ELit lit, t) = emitLit lit
+compileExp (MIR.ELit lit, _t) = emitLit lit
 compileExp (MIR.EAdd e1 e2, t) = emitAdd t e1 e2
 -- compileExp (ESub t e1 e2)  = emitSub t e1 e2
-compileExp (MIR.EVar name, t) = emitIdent name
+compileExp (MIR.EVar name, _t) = emitIdent name
 compileExp (MIR.EApp e1 e2, t) = emitApp t e1 e2
 -- compileExp (EAbs t ti e)   = emitAbs t ti e
-compileExp (MIR.ELet binds e, t) = undefined -- emitLet binds (fst e)
+compileExp (MIR.ELet _binds _e, _t) = undefined -- emitLet binds (fst e)
 compileExp (MIR.ECase e cs, t) = emitECased t e (map (t,) cs)
 
 -- go (EMul e1 e2)  = emitMul e1 e2
@@ -348,7 +348,7 @@ emitECased t e cases = do
     emit $ SetVariable res (Load ty Ptr stackPtr)
   where
     emitCases :: LLVMType -> LLVMType -> TIR.Ident -> TIR.Ident -> LLVMValue -> Branch -> CompilerState ()
-    emitCases rt ty label stackPtr vs (Branch (MIR.PInj consId cs, t) exp) = do
+    emitCases rt ty label stackPtr vs (Branch (MIR.PInj consId cs, _t) exp) = do
         emit $ Comment "Inj"
         cons <- gets constructors
         let r = fromJust $ Map.lookup consId cons
@@ -376,10 +376,10 @@ emitECased t e cases = do
                     PVar x -> do
                         emit . Comment $ "ident " <> show x
                         emit $ SetVariable (fst x) (ExtractValue (CustomType (coerce consId)) (VIdent casted Ptr) i)
-                    PLit (l, t) -> undefined
-                    PInj id ps -> undefined
+                    PLit (_l, _t) -> undefined
+                    PInj _id _ps -> undefined
                     PCatch -> pure ()
-                    PEnum id -> undefined
+                    PEnum _id -> undefined
                     -- case c of
                     --    CIdent x -> do
                     --        emit . Comment $ "ident " <> show x
@@ -398,7 +398,7 @@ emitECased t e cases = do
         emit $ Store ty val Ptr stackPtr
         emit $ Br label
         emit $ Label lbl_failPos
-    emitCases rt ty label stackPtr vs (Branch (MIR.PLit i, _) exp) = do
+    emitCases _rt ty label stackPtr vs (Branch (MIR.PLit i, _) exp) = do
         emit $ Comment "Plit"
         let i' = case i of
                 (MIR.LInt i, _) -> VInteger i
@@ -425,7 +425,7 @@ emitECased t e cases = do
         emit $ Br label
         lbl_failPos <- (\x -> TIR.Ident $ "failed_" <> show x) <$> getNewLabel
         emit $ Label lbl_failPos
-    emitCases rt ty label stackPtr vs (Branch (MIR.PEnum id, _) exp) = do
+    emitCases _rt ty label stackPtr _vs (Branch (MIR.PEnum _id, _) exp) = do
         emit $ Comment "Penum"
         val <- exprToValue exp
         emit $ Store ty val Ptr stackPtr
@@ -439,18 +439,6 @@ emitECased t e cases = do
         emit $ Br label
         lbl_failPos <- (\x -> TIR.Ident $ "failed_" <> show x) <$> getNewLabel
         emit $ Label lbl_failPos
-
--- emitLet :: Bind -> Exp -> CompilerState ()
-emitLet xs e = do
-    emit $
-        Comment $
-            concat
-                [ "ELet ("
-                , show xs
-                , " = "
-                , show e
-                , ") is not implemented!"
-                ]
 
 emitApp :: MIR.Type -> ExpT -> ExpT -> CompilerState ()
 emitApp rt e1 e2 = appEmitter e1 e2 []
@@ -500,16 +488,9 @@ emitAdd t e1 e2 = do
     v <- getNewVar
     emit $ SetVariable v (Add (type2LlvmType t) v1 v2)
 
-emitSub :: MIR.Type -> ExpT -> ExpT -> CompilerState ()
-emitSub t e1 e2 = do
-    v1 <- exprToValue e1
-    v2 <- exprToValue e2
-    v <- getNewVar
-    emit $ SetVariable v (Sub (type2LlvmType t) v1 v2)
-
 exprToValue :: ExpT -> CompilerState LLVMValue
 exprToValue = \case
-    (MIR.ELit i, t) -> pure $ case i of
+    (MIR.ELit i, _t) -> pure $ case i of
         (MIR.LInt i) -> VInteger i
         (MIR.LChar i) -> VChar $ ord i
     (MIR.EVar name, t) -> do
