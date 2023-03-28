@@ -1,5 +1,2 @@
-id x = x;
-
+main = const 1 2 ;
 const x y = x ;
-
-main = const (id 0) (id 'a') ;

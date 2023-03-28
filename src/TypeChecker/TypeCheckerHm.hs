@@ -21,6 +21,7 @@ import Data.Map qualified as M
 import Data.Maybe (fromJust)
 import Data.Set (Set)
 import Data.Set qualified as S
+import Debug.Trace (trace)
 import Grammar.Abs
 import Grammar.Print (printTree)
 import TypeChecker.TypeCheckerIr qualified as T
@@ -96,7 +97,8 @@ checkBind (Bind name args e) = do
     s <- gets sigs
     case M.lookup (coerce name) s of
         Just (Just t') -> do
-            let fsig = apply sub0 t'
+            sab <- unify t' lambda_t
+            let fsig = apply (sab `compose` sub0) t'
             sub1 <- liftEither $ runIdentity $ runExceptT $ execStateT (typeEq fsig lambda_t) mempty
             sub2 <- liftEither $ runIdentity $ runExceptT $ execStateT (typeEq lambda_t fsig) mempty
             unless
@@ -314,6 +316,7 @@ algoW = \case
         (subst, injs, ret_t) <- checkCase t injs
         let comp = subst `compose` sub
         return (comp, apply comp (T.ECase (e', t) injs, ret_t))
+    EAppInf{} -> error "desugar phase failed"
 
 checkCase :: Type -> [Branch] -> Infer (Subst, [T.Branch' Type], Type)
 checkCase _ [] = catchableErr "Atleast one case required"
@@ -687,15 +690,42 @@ typeEq (TVar (MkTVar a)) t@(TVar _) = do
     st <- get
     case M.lookup (coerce a) st of
         Nothing -> put $ M.insert (coerce a) t st
-        Just t' -> unless (t == t') (catchableErr "TYPE MISMATCH")
+        Just t' ->
+            unless
+                (t == t')
+                ( catchableErr $ Aux.do
+                    quote $ printTree t
+                    "does not match with"
+                    quote $ printTree t'
+                )
 typeEq (TFun l r) (TFun l' r') = typeEq l l' *> typeEq r r'
 typeEq (TAll _ l) (TAll _ r) = typeEq l r
-typeEq (TLit a) (TLit b) = unless (a == b) (catchableErr "TYPE MISMATCH")
-typeEq (TData nameL tL) (TData nameR tR) = do
-    unless (nameL == nameR) (catchableErr "TYPE MISMATCH")
+typeEq t@(TLit a) t'@(TLit b) =
+    unless
+        (a == b)
+        ( catchableErr $ Aux.do
+            quote $ printTree t
+            "does not match with"
+            quote $ printTree t'
+        )
+typeEq t@(TData nameL tL) t'@(TData nameR tR) = do
+    unless
+        (nameL == nameR)
+        ( catchableErr $ Aux.do
+            quote $ printTree t
+            "does not match with"
+            quote $ printTree t'
+        )
     zipWithM_ typeEq tL tR
-typeEq (TEVar _) (TEVar _) = catchableErr "TYPE MISMATCH"
-typeEq _ _ = catchableErr "TYPE MISMATCH"
+typeEq t@(TEVar _) t'@(TEVar _) =
+    catchableErr $ Aux.do
+        quote $ printTree t
+        "does not match with"
+        quote $ printTree t'
+typeEq t t' = catchableErr $ Aux.do
+    quote $ printTree t
+    "does not match with"
+    quote $ printTree t'
 
 {- | Catch an error if possible and add the given
 expression as addition to the error message

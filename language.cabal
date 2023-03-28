@@ -44,9 +44,8 @@ executable language
       Codegen.LlvmIr
       Compiler
       Renamer.Renamer
-      --Codegen.Codegen
-      --Codegen.LlvmIr
       TreeConverter
+      Desugar.Desugar
 
     hs-source-dirs:   src
 

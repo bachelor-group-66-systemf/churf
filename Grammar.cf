@@ -48,6 +48,7 @@ EVar.  Exp3 ::= LIdent;
 EInj.  Exp3 ::= UIdent;
 ELit.  Exp3 ::= Lit;
 EApp.  Exp2 ::= Exp2 Exp3;
+EAppInf.  Exp2 ::= Exp3 "`" Exp3 "`";
 EAdd.  Exp1 ::= Exp1 "+" Exp2;
 ELet.  Exp  ::= "let" Bind "in" Exp; 
 EAbs.  Exp  ::= "\\" LIdent "." Exp;
