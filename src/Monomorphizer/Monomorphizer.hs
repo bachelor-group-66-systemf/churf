@@ -183,11 +183,14 @@ morphExp expectedType exp = case exp of
 
 -- Creates a new identifier for a function with an assigned type
 newName :: M.Type -> T.Bind -> Ident
-newName t (T.Bind (Ident bindName, _) _ _) = Ident (bindName ++ "$" ++ newName' t)
- where
-  newName' :: M.Type -> String
-  newName' (M.TLit (Ident str)) = str
-  newName' (M.TFun t1 t2)        = newName' t1 ++ "_" ++ newName' t2
+newName t (T.Bind (Ident bindName, _) _ _) = 
+ if bindName == "main" then
+   Ident bindName
+ else Ident (bindName ++ "$" ++ newName' t)
+  where
+   newName' :: M.Type -> String
+   newName' (M.TLit (Ident str)) = str
+   newName' (M.TFun t1 t2)       = newName' t1 ++ "_" ++ newName' t2
 
 -- Monomorphization step
 monomorphize :: T.Program -> M.Program
