@@ -64,8 +64,8 @@ instance RemoveTEVar a b => RemoveTEVar [a] [b] where
 instance RemoveTEVar Type T.Type where
     rmTEVar = \case
         TLit lit -> pure $ T.TLit (coerce lit)
-        TVar tvar -> pure $ T.TVar (coerce tvar)
+        TVar (MkTVar i) -> pure $ T.TVar (T.MkTVar $ coerce i)
         TData name typs -> T.TData (coerce name) <$> rmTEVar typs
         TFun t1 t2 -> liftA2 T.TFun (rmTEVar t1) (rmTEVar t2)
-        TAll tvar t -> T.TAll (coerce tvar) <$> rmTEVar t
+        TAll (MkTVar i) t -> T.TAll (T.MkTVar $ coerce i) <$> rmTEVar t
         TEVar _ -> throwError "NewType TEVar!"
