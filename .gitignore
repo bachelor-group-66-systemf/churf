@@ -6,3 +6,6 @@ src/Grammar
 language
 test_program_result
 output/
+*.o
+*.out
+*.a
