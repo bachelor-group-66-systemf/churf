@@ -7,7 +7,7 @@ module TypeChecker.TypeCheckerIr (
 ) where
 
 import           Data.String   (IsString)
-import           Grammar.Abs   (Lit (..), TVar (..))
+import           Grammar.Abs   (Lit (..))
 import           Grammar.Print
 import           Prelude
 import qualified Prelude       as C (Eq, Ord, Read, Show)
@@ -55,6 +55,9 @@ data Exp' t
     | EAbs Ident (ExpT' t)
     | ECase (ExpT' t) [Branch' t]
     deriving (C.Eq, C.Ord, C.Show, C.Read)
+
+data TVar = MkTVar Ident
+  deriving (C.Eq, C.Ord, C.Show, C.Read)
 
 type Id' t = (Ident, t)
 type ExpT' t = (Exp' t, t)

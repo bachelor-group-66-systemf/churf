@@ -1,0 +1,6 @@
+main : _Int ;
+main = (id : _Int -> _Int) 5 ;
+
+id : 'a -> 'a ;
+id x = (x : 'a);
+

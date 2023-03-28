@@ -1,4 +1,3 @@
-
 module Main where
 
 import           Test.Hspec
@@ -8,3 +7,4 @@ import           TestTypeCheckerHm    (testTypeCheckerHm)
 main = hspec $ do
   testTypeCheckerBidir
   testTypeCheckerHm
+
