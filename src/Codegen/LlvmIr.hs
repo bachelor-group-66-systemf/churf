@@ -11,15 +11,15 @@ module Codegen.LlvmIr (
     ToIr (..),
 ) where
 
-import           Data.List                 (intercalate)
-import           TypeChecker.TypeCheckerIr (Ident (..))
+import Data.List (intercalate)
+import TypeChecker.TypeCheckerIr (Ident (..))
 
 data CallingConvention = TailCC | FastCC | CCC | ColdCC deriving (Show, Eq, Ord)
 instance ToIr CallingConvention where
     toIr :: CallingConvention -> String
     toIr TailCC = "tailcc"
     toIr FastCC = "fastcc"
-    toIr CCC    = "ccc"
+    toIr CCC = "ccc"
     toIr ColdCC = "coldcc"
 
 -- | A datatype which represents some basic LLVM types
@@ -80,7 +80,7 @@ instance ToIr LLVMComp where
 data Visibility = Local | Global deriving (Show, Eq, Ord)
 instance ToIr Visibility where
     toIr :: Visibility -> String
-    toIr Local  = "%"
+    toIr Local = "%"
     toIr Global = "@"
 
 {- | Represents a LLVM "value", as in an integer, a register variable,
@@ -97,11 +97,11 @@ data LLVMValue
 instance ToIr LLVMValue where
     toIr :: LLVMValue -> String
     toIr v = case v of
-        VInteger i                -> show i
-        VChar i                   -> show i
-        VIdent (Ident n) _        -> "%" <> n
+        VInteger i -> show i
+        VChar i -> show i
+        VIdent (Ident n) _ -> "%" <> n
         VFunction (Ident n) vis _ -> toIr vis <> n
-        VConstant s               -> "c" <> show s
+        VConstant s -> "c" <> show s
 
 type Params = [(Ident, LLVMType)]
 type Args = [(LLVMType, LLVMValue)]
@@ -114,8 +114,7 @@ data LLVMIr
     | Declare LLVMType Ident Params
     | SetVariable Ident LLVMIr
     | Variable Ident
-    | -- extractvalue <aggregate type> <val>, <idx>{, <idx>}*
-      ExtractValue LLVMType LLVMValue Integer
+    | ExtractValue LLVMType LLVMValue Integer
     | GetElementPtr LLVMType LLVMType LLVMValue LLVMType LLVMValue LLVMType LLVMValue
     | GetElementPtrInbounds LLVMType LLVMType LLVMValue LLVMType LLVMValue LLVMType LLVMValue
     | Add LLVMType LLVMValue LLVMValue
@@ -134,6 +133,7 @@ data LLVMIr
     | Bitcast LLVMType LLVMValue LLVMType
     | Ret LLVMType LLVMValue
     | Comment String
+    | Malloca Integer
     | UnsafeRaw String -- This should generally be avoided, and proper
     -- instructions should be used in its place
     deriving (Show, Eq, Ord)
@@ -146,9 +146,9 @@ llvmIrToString = go 0
     go _ [] = mempty
     go i (x : xs) = do
         let (i', n) = case x of
-                Define{}  -> (i + 1, 0)
+                Define{} -> (i + 1, 0)
                 DefineEnd -> (i - 1, 0)
-                _         -> (i, i)
+                _ -> (i, i)
         insToString n x <> go i' xs
 
 -- \| Converts a LLVM inststruction to a String, allowing for printing etc.
@@ -223,6 +223,9 @@ llvmIrToString = go 0
                     , ")\n"
                     ]
             (Alloca t) -> unwords ["alloca", toIr t, "\n"]
+            (Malloca t) -> 
+                concat
+                    [ "call ptr @malloc(i32 ", show t, ")"]
             (Store t1 val t2 (Ident id2)) ->
                 concat
                     [ "store ", toIr t1, " ", toIr val

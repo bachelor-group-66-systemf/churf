@@ -1,6 +1,0 @@
-main : _Int ;
-main = double 3 ;
-
-double : _Int -> _Int ;
-double x = x + x ;
-
