@@ -54,8 +54,6 @@ checkPrg (Program bs) = do
     preRun bs
     bs <- checkDef bs
     sub <- solveUndecidable
-    dec <- gets toDecide
-    trace (printTree bs) pure ()
     bs <- mapM (mono sub) bs
     return $ T.Program bs
 
@@ -778,9 +776,13 @@ exprErr :: (Monad m, MonadError Error m) => m a -> Exp -> m a
 exprErr ma exp =
     catchError
         ma
-        ( \err -> if err.catchable
-                then throwError
-                        ( err { msg = err.msg
+        ( \err ->
+            if err.catchable
+                then
+                    throwError
+                        ( err
+                            { msg =
+                                err.msg
                                     <> " in expression: \n"
                                     <> printTree exp
                             , catchable = False
@@ -793,9 +795,13 @@ bindErr :: (Monad m, MonadError Error m) => m a -> Bind -> m a
 bindErr ma bind =
     catchError
         ma
-        ( \err -> if err.catchable
-                then throwError
-                        ( err { msg = err.msg
+        ( \err ->
+            if err.catchable
+                then
+                    throwError
+                        ( err
+                            { msg =
+                                err.msg
                                     <> " in function: \n"
                                     <> printTree bind
                             , catchable = False
