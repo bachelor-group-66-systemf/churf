@@ -76,13 +76,23 @@ static_lib:
 static_lib_test: static_lib
 	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -o tests/extern_lib.out tests/extern_lib.cpp lib/gcoll.a
 
+<<<<<<< HEAD
 static_lib_c:
 # remove old files
 	rm -f lib/event.o lib/profiler.o lib/heap.o lib/gcoll.a tests/extern_lib.out
 # compile object files
+=======
+wrapper: 
+	rm -f lib/event.o lib/profiler.o lib/heap.o lib/coll.a tests/wrapper.out
+>>>>>>> 12816ea (Wrapper works)
 	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -O3 -g -c -o lib/event.o lib/event.cpp -fPIC
 	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -O3 -g -c -o lib/profiler.o lib/profiler.cpp -fPIC
 	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -O3 -g -c -o lib/heap.o lib/heap.cpp -fPIC
 	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -O3 -g -c -o lib/cheap.o lib/cheap.cpp -fPIC
+<<<<<<< HEAD
 # create static library
 	ar r lib/gcoll.a lib/event.o lib/profiler.o lib/heap.o
+=======
+	ar rcs lib/gcoll.a lib/event.o lib/profiler.o lib/heap.o lib/cheap.o
+	clang -stdlib=libc++ $(WFLAGS) $(LIB_INCL) -o tests/wrapper.out tests/wrapper.c lib/gcoll.a -lstdc++
+>>>>>>> 12816ea (Wrapper works)
