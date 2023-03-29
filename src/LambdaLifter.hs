@@ -234,9 +234,10 @@ collectScsExp expT@(exp, typ) = case exp of
       where
         (scs, e') = collectScsExp e
 
-    ECase e branches -> (scs, (ECase e branches', typ))
+    ECase e branches -> (scs ++ scs_e, (ECase e' branches', typ))
       where
           (scs, branches') = mapAccumL f [] branches
+          (scs_e, e') = collectScsExp e
           f acc b = (acc ++ acc', b')
             where (acc', b') = collectScsBranch b
 
