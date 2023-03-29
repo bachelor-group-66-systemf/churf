@@ -10,12 +10,12 @@ import           Auxiliary                 (maybeToRightM, snoc)
 import           Control.Applicative       (Alternative, Applicative (liftA2),
                                             (<|>))
 import           Control.Monad.Except      (ExceptT, MonadError (throwError),
-                                            liftEither, runExceptT, unless,
-                                            zipWithM, zipWithM_)
+                                            runExceptT, unless, zipWithM,
+                                            zipWithM_)
 import           Control.Monad.State       (MonadState (get, put), State,
                                             evalState, gets, modify)
 import           Data.Coerce               (coerce)
-import           Data.Either.Combinators   (maybeToRight)
+import           Data.Foldable             (foldrM)
 import           Data.Function             (on)
 import           Data.List                 (intercalate)
 import           Data.Map                  (Map)
@@ -33,6 +33,11 @@ import qualified TypeChecker.TypeCheckerIr as T
 
 -- Implementation is derived from the paper (Dunfield and Krishnaswami 2013)
 -- https://doi.org/10.1145/2500365.2500582
+--
+-- TODO
+-- • Fix problems with types in Pattern/Branch in TypeCheckerIr
+-- • Use applyEnvExp consistently
+-- • Fix the different type getters functions (e.g. partitionType) functions
 
 data EnvElem = EnvVar         LIdent Type -- ^ Term variable typing. x : A
              | EnvTVar        TVar        -- ^ Universal type variable. α
@@ -51,7 +56,6 @@ data Cxt = Cxt
     , binds      :: Map LIdent Exp                       -- ^ Top-level binds x : e
     , next_tevar :: Int                                  -- ^ Counter to distinguish ά
     , data_injs  :: Map UIdent Type                      -- ^ Data injections (constructors) K/inj : A
-    , data_types :: Map UIdent (Type, [(UIdent, Type)])  -- ^ Data types (∀α. D (α), K₁:A₁ + ‥ + Kₙ:Aₙ)
     } deriving (Show, Eq)
 
 newtype Tc a = Tc { runTc :: ExceptT String (State Cxt) a }
@@ -71,17 +75,10 @@ typecheck (Program defs) = do
                                           | DBind' name vars rhs <- defs
                                           ]
             , next_tevar   = 0
-            , data_injs = Map.fromList [ (name, foldr ($) typ $ getForallsData typ)
+            , data_injs = Map.fromList [ (name, t)
                                        | Data _ injs <- datatypes
-                                       , Inj name typ <- injs
+                                       , Inj name t <- injs
                                        ]
-            , data_types = Map.fromList [ let
-                                            TData name _ = getTData typ
-                                            kts = [(k,t) | Inj k t <- injs ]
-                                          in
-                                            (name, (typ, kts))
-                                        | Data typ injs <- datatypes
-                                        ]
             }
 
     binds' <- evalState (runExceptT (runTc $ mapM typecheckBind binds)) initCxt;
@@ -149,7 +146,7 @@ typecheckInj (Inj inj_name inj_typ) name tvars
     , name'  == name
     , Right tvars' <- mapM toTVar typs
     , all (`elem` tvars) tvars'
-    = pure (Inj inj_name inj_typ)
+    = pure (Inj inj_name $ foldr TAll inj_typ tvars')
     | otherwise
     = throwError $ unwords
         ["Bad type constructor: ", show name
@@ -559,7 +556,9 @@ checkPattern patt t_patt = (, t_patt) <$> case patt of
         PVar x -> do
             insertEnv $ EnvVar x t_patt
             pure $ T.PVar (coerce x, t_patt)
+
         PCatch -> pure T.PCatch
+
         PLit lit | inferLit lit == t_patt -> pure $ T.PLit (lit, t_patt)
                  | otherwise -> throwError "Literal in pattern have wrong type"
 
@@ -570,64 +569,39 @@ checkPattern patt t_patt = (, t_patt) <$> case patt of
             pure $ T.PEnum (coerce name)
 
 
-
-        --                                          Θ₁ ⊢ p₁ ↑ [Θ₁]B₁ ⊣ Θ₂
-        --  Γ ⊢ (xₖ : B₁ → ‥ → Bₘ₊₁) ∈ Γ                     ...
-        --  Γ ⊢ B₁ → ‥ → Bₘ₊₁ <: A₁ + ‥ + Aₙ ⊣ Θ₁   Θₘ ⊢ pₘ ↑ [Θₘ₋₁]Bₘ ⊣ Δ
-        --  --------------------------------------------------------------
-        --  Γ ⊢ injₖ xₖ. p₁ ‥ pₘ ↑ A₁ + ‥ + Aₙ ⊣ Δ
         PInj name ps -> do
-            traceT "t_patt :" t_patt
-            (tdata, injs) <- maybeToRightM err1 =<< lookupDataType name_d
-            tinj <- liftEither . maybeToRight err2 $ lookup name injs
-            let foralls = getForallsData tdata
-            (tinj', tdata) <- substituteTVars foralls tinj tdata
-            let t = getTData $ getReturn tinj'
-            traceT "t :" t
-            let super = getTData tdata
-            traceT "super" super
-            subtype t super
-            t_inj'' <- applyEnv tinj'
-            tdata'  <- applyEnv tdata
-            pure $ T.PInj (coerce name) []
-            -- §ps' <- zipWithM (\p t -> checkPattern p =<< applyEnv t) ps t_ps
+            t_inj <- maybeToRightM "unknown constructor" =<< lookupInj name
+            t_inj' <- foldrM substitute' t_inj $ getInitForalls t_inj
+            subtype (getDataId t_inj') t_patt
+            t_inj'' <- applyEnv t_inj'
+            let ts_inj = getParams t_inj''
+            ps' <- zipWithM (\p t -> checkPattern p =<< applyEnv t) ps ts_inj
+            pure $ T.PInj (coerce name) (map fst ps')
           where
-            substituteTVars fas t1 t2 = case fas of
-                []      -> pure (t1, t2)
-                fa:fas' -> do
-                  (t1', t2') <- go fa (t1, t2)
-                  substituteTVars fas' t1' t2'
+            substitute' fa t = do
+                tevar <- fresh
+                pure $ substitute tvar tevar t
               where
-                go fa (t1, t2) = let TAll tvar _ = fa dummy in do
-                  tevar <- fresh
-                  insertEnv (EnvTEVar tevar)
-                  pure $ on (,) (substitute tvar tevar) t1 t2
+                TAll tvar _ = fa dummy
 
-            TData name_d _ = getTData t_patt
-            err1 = unwords ["Unknown data type", show name_d]
-            err2 = unwords ["No", show name, "constructor for data type", show name_d]
+            getParams = \case
+                TAll _ t -> getParams t
+                t        -> go [] t
+              where
+                go acc = \case
+                  TFun t1 t2 -> go (snoc t1 acc) t2
+                  _          -> acc
 
+            getDataId typ = case typ of
+              TAll _ t -> getDataId t
+              TFun _ t -> getDataId t
+              TData {} -> typ
 
-            -- §ps' <- zipWithM (\p t -> checkPattern p =<< applyEnv t) ps t_ps
-            -- let ps'' = map fst ps' -- TODO
-            -- pure $ T.PInj (coerce name) []
-
-
-    -- TAll tvar t -> do
-    --     tevar <- fresh
-    --     let -- env_marker = EnvMark tevar
-    --         env_tevar  = EnvTEVar tevar
-    --     -- insertEnv env_marker
-    --     insertEnv env_tevar
-    --     let a' = substitute tvar tevar a
-    --     subtype a' b
-    --     -- dropTrailing env_marker
-
-    -- TData name_d typs -> do
-    --
-    --     subtype t_k typ
-    --     undefined
-    --   where
+            getInitForalls = go []
+              where
+                go acc = \case
+                  TAll tvar t -> go (snoc (TAll tvar) acc) t
+                  _           -> acc
 
 ---------------------------------------------------------------------------
 -- * Auxiliary
@@ -816,6 +790,7 @@ partitionData = go . ([],)
     go (acc, typ) = case typ of
         TAll tvar t -> go (snoc (TAll tvar) acc, t)
         TData {}    -> (acc, typ)
+        TFun _ t    -> go (acc, t)
         _           -> error "Bad data type"
 
 
@@ -873,9 +848,6 @@ insertEnv x = modifyEnv (:|> x)
 
 lookupBind :: LIdent -> Tc (Maybe Exp)
 lookupBind x = gets (Map.lookup x . binds)
-
-lookupDataType :: UIdent -> Tc (Maybe (Type, [(UIdent, Type)]))
-lookupDataType x = gets (Map.lookup x . data_types)
 
 lookupSig :: LIdent -> Tc (Maybe Type)
 lookupSig x = gets (Map.lookup x . sig)
