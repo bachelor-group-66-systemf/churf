@@ -21,7 +21,6 @@ import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Maybe (fromJust, fromMaybe)
 import Data.Tuple.Extra (dupe, first, second)
-import Debug.Trace (trace)
 import Grammar.ErrM (Err)
 import Monomorphizer.MonomorphizerIr as MIR
 import TypeChecker.TypeCheckerIr qualified as TIR
@@ -188,7 +187,7 @@ test v =
 generateCode :: MIR.Program -> Err String
 generateCode (MIR.Program scs) = do
     let codegen = initCodeGenerator scs
-    llvmIrToString . instructions <$> execStateT (compileScs (trace (show scs) scs)) codegen
+    llvmIrToString . instructions <$> execStateT (compileScs scs) codegen
 
 compileScs :: [MIR.Def] -> CompilerState ()
 compileScs [] = do
