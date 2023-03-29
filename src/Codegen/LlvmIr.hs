@@ -225,7 +225,7 @@ llvmIrToString = go 0
             (Alloca t) -> unwords ["alloca", toIr t, "\n"]
             (Malloca t) -> 
                 concat
-                    [ "call ptr @malloc(i32 ", show t, ")"]
+                    [ "call ptr @malloc(i32 ", show t, ")\n"]
             (Store t1 val t2 (Ident id2)) ->
                 concat
                     [ "store ", toIr t1, " ", toIr val

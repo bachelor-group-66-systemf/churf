@@ -1,13 +1,24 @@
-id x = x;
-
-const x y = x ;
-
-data Maybe () where {
-    Just : Int -> Maybe ()
-    Nothing : Maybe ()
+-- a simple list data type containing ints
+data List () where {
+    Cons : Int -> List () -> List ()
+    Nil  : List ()
 };
 
-main = case (Just 5) of {
-    Just a => 10 ;
-    Nothing => 0 ;
-}; --const (id 0) (id 'a') ;
+main = sumlength (Cons 1 (Cons 2 (Cons 3 (Cons 4 (Cons 5 Nil))))); 
+
+-- take the length of a list
+length : List () -> Int ;
+length x = case x of {
+    Cons _ xs => 1 + length xs ;
+    Nil => 0 ;
+};
+-- sum a list
+sum : List () -> Int ;
+sum x = case x of {
+    Cons a xs => a + sum xs ;
+    Nil => 0 ;
+};
+
+-- sum + length of a list
+sumlength: List () -> Int ;
+sumlength x = sum x + length x ;
