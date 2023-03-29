@@ -328,7 +328,7 @@ compileExp (MIR.EAdd e1 e2, t) = emitAdd t e1 e2
 compileExp (MIR.EVar name, _t) = emitIdent name
 compileExp (MIR.EApp e1 e2, t) = emitApp t e1 e2
 -- compileExp (EAbs t ti e)   = emitAbs t ti e
-compileExp (MIR.ELet _binds _e, _t) = undefined -- emitLet binds (fst e)
+compileExp (MIR.ELet bind e, _) = emitLet bind e
 compileExp (MIR.ECase e cs, t) = emitECased t e (map (t,) cs)
 
 -- go (EMul e1 e2)  = emitMul e1 e2
@@ -336,6 +336,17 @@ compileExp (MIR.ECase e cs, t) = emitECased t e (map (t,) cs)
 -- go (EMod e1 e2)  = emitMod e1 e2
 
 --- aux functions ---
+emitLet :: MIR.Bind -> ExpT -> CompilerState ()
+emitLet (MIR.Bind id [] innerExp) e = do
+    evaled <- exprToValue innerExp
+    tempVar <- getNewVar
+    let t = type2LlvmType . snd $ innerExp
+    emit $ SetVariable tempVar (Alloca t)
+    emit $ Store (type2LlvmType . snd $ innerExp) evaled Ptr tempVar
+    emit $ SetVariable (fst id) (Load t Ptr tempVar)
+    compileExp e
+emitLet b _ = error $ "Non empty argument list in let-bind " <> show b
+
 emitECased :: MIR.Type -> ExpT -> [(MIR.Type, Branch)] -> CompilerState ()
 emitECased t e cases = do
     let cs = snd <$> cases
