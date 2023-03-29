@@ -133,6 +133,8 @@ main' opts s = do
         debugDotViz
 
     compile generatedCode
+    printToErr "Compilation done!"
+    printToErr "\n-- Program output --"
     spawnWait "./output/hello_world"
 
     exitSuccess
