@@ -1,20 +1,23 @@
-{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE PatternSynonyms   #-}
 {-# HLINT ignore "Use camelCase" #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
-module TestTypeCheckerBidir (testTypeCheckerBidir) where
+module TestTypeCheckerBidir (test, testTypeCheckerBidir) where
 
-import Test.Hspec
+import           Test.Hspec
 
-import Control.Monad ((<=<))
-import Grammar.ErrM (Err, pattern Bad, pattern Ok)
-import Grammar.Par (myLexer, pProgram)
-import Renamer.Renamer (rename)
-import TypeChecker.RemoveTEVar (RemoveTEVar (rmTEVar))
-import TypeChecker.TypeCheckerBidir (typecheck)
-import TypeChecker.TypeCheckerIr qualified as T
+import           Control.Monad                ((<=<))
+import           Grammar.ErrM                 (Err, pattern Bad, pattern Ok)
+import           Grammar.Par                  (myLexer, pProgram)
+import           Renamer.Renamer              (rename)
+import           TypeChecker.RemoveTEVar      (RemoveTEVar (rmTEVar))
+import           TypeChecker.TypeCheckerBidir (typecheck)
+import qualified TypeChecker.TypeCheckerIr    as T
+
+
+test = hspec testTypeCheckerBidir
 
 testTypeCheckerBidir = describe "Bidirectional type checker test" $ do
     tc_id
@@ -176,17 +179,23 @@ tc_mono_case = describe "Monomorphic pattern matching" $ do
         , "};"
         ]
 
-tc_pol_case = describe "Polymophic pattern matching" $ do
+tc_pol_case = describe "Polymophic and recursive pattern matching" $ do
     specify "First wrong case expression rejected" $
         run (fs ++ wrong1) `shouldNotSatisfy` ok
     specify "Second wrong case expression rejected" $
         run (fs ++ wrong2) `shouldNotSatisfy` ok
     specify "Third wrong case expression rejected" $
         run (fs ++ wrong3) `shouldNotSatisfy` ok
+    specify "Forth wrong case expression rejected" $
+        run (fs ++ wrong4) `shouldNotSatisfy` ok
     specify "First correct case expression accepted" $
         run (fs ++ correct1) `shouldSatisfy` ok
     specify "Second correct case expression accepted" $
         run (fs ++ correct2) `shouldSatisfy` ok
+    specify "Third correct case expression accepted" $
+        run (fs ++ correct3) `shouldSatisfy` ok
+    specify "Forth correct case expression accepted" $
+        run (fs ++ correct4) `shouldSatisfy` ok
   where
     fs =
         [ "data forall a. List (a) where {"
@@ -215,6 +224,15 @@ tc_pol_case = describe "Polymophic pattern matching" $ do
         , "  Cons x xs => 1 + length xs;"
         , "};"
         ]
+    wrong4 =
+        [ "elems : forall c. List (List(c)) -> Int;"
+        , "elems = \\list. case list of {"
+        , "  Nil                => 0;"
+        , "  Cons Nil Nil       => 0;"
+        , "  Cons Nil xs        => elems xs;"
+        , "  Cons (Cons Nil ys) xs => 1 + elems (Cons ys xs);"
+        , "};"
+        ]
     correct1 =
         [ "length : forall c. List (c) -> Int;"
         , "length = \\list. case list of {"
@@ -230,10 +248,27 @@ tc_pol_case = describe "Polymophic pattern matching" $ do
         , "  non_empty => 1;"
         , "};"
         ]
+    correct3 =
+        [ "length : List (Int) -> Int;"
+        , "length = \\list. case list of {"
+        , "  Nil                => 0;"
+        , "  Cons 1 Nil         => 1;"
+        , "  Cons x (Cons 2 xs) => 2 + length xs;"
+        , "};"
+        ]
+    correct4 =
+        [ "elems : forall c. List (List(c)) -> Int;"
+        , "elems = \\list. case list of {"
+        , "  Nil                => 0;"
+        , "  Cons Nil Nil       => 0;"
+        , "  Cons Nil xs        => elems xs;"
+        , "  Cons (Cons _ ys) xs => 1 + elems (Cons ys xs);"
+        , "};"
+        ]
 
 run :: [String] -> Err T.Program
 run = rmTEVar <=< typecheck <=< pProgram . myLexer . unlines
 
 ok = \case
-    Ok _ -> True
+    Ok _  -> True
     Bad _ -> False

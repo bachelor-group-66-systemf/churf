@@ -243,8 +243,6 @@ subtype t1 t2 = case (t1, t2) of
       , t1:t1s <- typs1
       , t2:t2s <- typs2
       -> do
-          traceT "t1" (TData name1 typs1)
-          traceT "t2" (TData name2 typs2)
           subtype t1 t2
           zipWithM_ go t1s t2s
      where
@@ -868,7 +866,7 @@ putEnv = modifyEnv . const
 
 modifyEnv :: (Env -> Env) -> Tc ()
 modifyEnv f =
-  modify $ \cxt -> trace (ppEnv (f cxt.env)) cxt { env = f cxt.env }
+  modify $ \cxt -> {- trace (ppEnv (f cxt.env)) -} cxt { env = f cxt.env }
 
 pattern DBind' name vars exp = DBind (Bind name vars exp)
 pattern DSig' name typ = DSig (Sig name typ)
