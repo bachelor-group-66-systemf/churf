@@ -390,7 +390,6 @@ emitECased t e cases = do
                         cTypes <- gets customTypes
                         if Map.member topT' cTypes
                             then do
-                                emit . Comment $ "tjabatjena"
                                 deref <- getNewVar
                                 emit $ SetVariable deref (ExtractValue botT' (VIdent casted Ptr) i)
                                 emit $ SetVariable x (Load topT' Ptr deref)
