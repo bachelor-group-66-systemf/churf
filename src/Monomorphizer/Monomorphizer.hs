@@ -180,12 +180,11 @@ morphExp expectedType exp = case exp of
   T.EAbs ident (exp, t) -> local (\env -> env { locals = Set.insert ident (locals env) }) $ do 
     t' <- getMonoFromPoly t
     morphExp t' exp
---  T.ECase (exp, t) bs -> do
---    t' <- getMonoFromPoly t
---    exp' <- morphExp t' exp
---    return M.ECase (exp', t')
---data Branch' t = Branch (Pattern' t, t) (ExpT' t)
---    deriving (C.Eq, C.Ord, C.Show, C.Read)
+  T.ECase (exp, t) bs -> do
+    t' <- getMonoFromPoly t
+    exp' <- morphExp t' exp
+    bs' <- mapM morphBranch bs
+    return $ M.ECase (exp', t') bs'
   T.EVar ident@(Ident str) -> do
     isLocal <- localExists ident
     if isLocal then do
@@ -202,7 +201,25 @@ morphExp expectedType exp = case exp of
 
   T.ELet (T.Bind {}) _ -> error "lets not possible yet"
 
-  _ -> error "Not implemented yet"
+-- Morphing case-of
+morphBranch :: T.Branch -> EnvM M.Branch
+morphBranch (T.Branch (p, pt) (e, et)) = do
+  pt' <- getMonoFromPoly pt
+  et' <- getMonoFromPoly et
+  e' <- morphExp et' e
+  p' <- morphPattern p
+  return $ M.Branch (p', pt') (e', et')
+
+morphPattern :: T.Pattern -> EnvM M.Pattern
+morphPattern = \case
+  T.PVar (ident, t) -> do t' <- getMonoFromPoly t
+                          return $ M.PVar (ident, t')
+  T.PLit (lit, t) -> do t' <- getMonoFromPoly t
+                        return $ M.PLit (convertLit lit, t')
+  T.PCatch -> return M.PCatch
+  T.PEnum v -> return $ M.PEnum v
+  T.PInj ident ps -> do ps' <- mapM morphPattern ps
+                        return $ M.PInj ident ps'
 
 -- Creates a new identifier for a function with an assigned type
 newName :: M.Type -> T.Bind -> Ident
