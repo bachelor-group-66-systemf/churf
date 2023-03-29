@@ -55,18 +55,6 @@ data Env = Env {
   locals :: Set.Set Ident
 }
 
-runEnvM :: Output -> Env -> EnvM () -> Output
-runEnvM o env (EnvM stateM) = snd $ runReader (runStateT stateM o) env
-
--- | Creates the environment based on the input binds.
-createEnv :: [T.Bind] -> Env
-createEnv binds = Env { input  = Map.fromList kvPairs, 
-                        polys  = Map.empty,
-                        locals = Set.empty }
- where
-   kvPairs :: [(Ident, T.Bind)]
-   kvPairs = map (\b@(T.Bind (ident, _) _ _) -> (ident, b)) binds
-
 localExists :: Ident -> EnvM Bool
 localExists ident = asks (Set.member ident . locals)
 
@@ -114,7 +102,10 @@ getMonoFromPoly t = do env <- ask
                          Just concrete -> concrete
                          Nothing       -> error $ 
                            "type not found! type: " ++ show ident ++ ", error in previous compilation steps"
-    _ -> error "Not implemented"
+    -- This is pretty ugly, could use a new type
+    (T.TData (Ident str) args)         -> let args' = map (getMono polys) args in
+      M.TLit $ Ident (str ++ "$" ++ show args')
+    (T.TAll _ t) -> getMono polys t
 
 -- | If ident not already in env's output, morphed bind to output
 -- (and all referenced binds within this bind).
@@ -171,6 +162,7 @@ convertLit (T.LChar v) = M.LChar v
 morphExp :: M.Type -> T.Exp -> EnvM M.Exp
 morphExp expectedType exp = case exp of
   T.ELit lit -> return $ M.ELit (convertLit lit)
+  -- Constructor
   T.EInj ident -> do
     return $ M.EVar ident
   T.EApp e1 e2 -> do
@@ -193,7 +185,8 @@ morphExp expectedType exp = case exp of
       bind <- getInputBind ident
       case bind of
         Nothing -> 
-          error $ "bind of name: " ++ str ++ " not found, bug in previous compilation steps"
+          -- This is a constructor
+          return $ M.EVar ident
         Just bind' -> do
           -- New bind to process
           newBindName <- morphBind expectedType bind'
@@ -235,7 +228,7 @@ newName t (T.Bind (Ident bindName, _) _ _) =
 -- Monomorphization step
 monomorphize :: T.Program -> M.Program
 monomorphize (T.Program defs) = M.Program $ (getDefsFromBinds . getBindsFromOutput)
-    (runEnvM Map.empty (createEnv $ getBindsFromDefs defs) monomorphize')
+    (runEnvM Map.empty (createEnv defs) monomorphize')
  where
   monomorphize' :: EnvM ()
   monomorphize' = do
@@ -243,6 +236,19 @@ monomorphize (T.Program defs) = M.Program $ (getDefsFromBinds . getBindsFromOutp
     morphBind (M.TLit $ Ident "Int") main
     return ()
 
+-- | Runs and gives the output binds
+runEnvM :: Output -> Env -> EnvM () -> Output
+runEnvM o env (EnvM stateM) = snd $ runReader (runStateT stateM o) env
+
+-- | Creates the environment based on the input binds.
+createEnv :: [T.Def] -> Env
+createEnv defs = Env { input  = Map.fromList bindPairs, 
+                       polys  = Map.empty,
+                       locals = Set.empty }
+ where
+   bindPairs = (map (\b -> (getBindName b, b)) . getBindsFromDefs) defs
+
+-- Helper functions
 getBindsFromOutput :: Output -> [M.Bind]
 getBindsFromOutput outputMap = (map snd . Map.toList) $ fmap 
                                  (\case
@@ -253,8 +259,11 @@ getBindsFromOutput outputMap = (map snd . Map.toList) $ fmap
 getBindsFromDefs :: [T.Def] -> [T.Bind]
 getBindsFromDefs = foldl (\bs -> \case
                                    T.DBind b -> b:bs
-                                   T.DData _ -> bs
-                         ) []
+                                   T.DData _ -> bs) []
+
 getDefsFromBinds :: [M.Bind] -> [M.Def]
 getDefsFromBinds = foldl (\ds b -> M.DBind b : ds) []
+
+getBindName :: T.Bind -> Ident
+getBindName (T.Bind (ident, _) _ _) = ident
 
