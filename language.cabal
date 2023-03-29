@@ -42,6 +42,9 @@ executable language
       Monomorphizer.MonomorphizerIr
       Codegen.Codegen
       Codegen.LlvmIr
+      Codegen.Auxillary
+      Codegen.CompilerState
+      Codegen.Emits
       Compiler
       Renamer.Renamer
       TreeConverter
