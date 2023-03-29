@@ -7,7 +7,7 @@
 extern "C" {
 #endif
 
-#define DEBUG
+// #define DEBUG
 
 #ifdef DEBUG
 typedef struct cheap
@@ -19,11 +19,11 @@ struct cheap;
 typedef struct cheap cheap_t;
 #endif
 
-cheap_t *cheap_the() noexcept;
-void cheap_init() noexcept;
-void cheap_dispose() noexcept;
-void *cheap_alloc(unsigned long size) noexcept;
-void cheap_set_profiler(cheap_t *cheap, bool mode) noexcept;
+cheap_t *cheap_the();
+void cheap_init();
+void cheap_dispose();
+void *cheap_alloc(unsigned long size);
+void cheap_set_profiler(cheap_t *cheap, bool mode);
 
 #ifdef __cplusplus
 }

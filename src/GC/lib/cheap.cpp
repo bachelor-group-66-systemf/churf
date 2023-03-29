@@ -1,12 +1,15 @@
 #include <stdlib.h>
+#include <stdio.h>
 
 #include "heap.hpp"
 #include "cheap.h"
 
+#ifndef DEBUG
 struct cheap
 {
     void *obj;
 };
+#endif
 
 cheap_t *cheap_the()
 {
@@ -27,7 +30,9 @@ void cheap_init()
 
 void cheap_dispose()
 {
+    std::cout << "In dispose\n";
     GC::Heap::dispose();
+    std::cout << "Out dispose" << std::endl;
 }
 
 void *cheap_alloc(unsigned long size)

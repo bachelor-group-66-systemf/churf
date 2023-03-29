@@ -64,3 +64,12 @@ static_lib:
 # create test program
 static_lib_test: static_lib
 	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -o tests/extern_lib.out tests/extern_lib.cpp lib/gcoll.a
+
+wrapper: 
+	rm -f lib/event.o lib/profiler.o lib/heap.o lib/coll.a tests/wrapper.out
+	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -O3 -g -c -o lib/event.o lib/event.cpp -fPIC
+	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -O3 -g -c -o lib/profiler.o lib/profiler.cpp -fPIC
+	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -O3 -g -c -o lib/heap.o lib/heap.cpp -fPIC
+	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -O3 -g -c -o lib/cheap.o lib/cheap.cpp -fPIC
+	ar rcs lib/gcoll.a lib/event.o lib/profiler.o lib/heap.o lib/cheap.o
+	clang -stdlib=libc++ $(WFLAGS) $(LIB_INCL) -o tests/wrapper.out tests/wrapper.c lib/gcoll.a -lstdc++
