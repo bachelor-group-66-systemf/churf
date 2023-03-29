@@ -27,8 +27,11 @@ import Grammar.Abs
 import Grammar.Print (printTree)
 import TypeChecker.TypeCheckerIr qualified as T
 
+-- TODO: Save all substition sets encountered in the program and apply
+--       to all top level functions in the end.
+
 initCtx = Ctx mempty
-initEnv = Env 0 'a' mempty mempty mempty "" mempty mempty
+initEnv = Env 0 'a' mempty mempty mempty "" mempty mempty mempty
 
 run :: Infer a -> Either Error a
 run = run' initEnv initCtx
@@ -53,8 +56,8 @@ checkPrg :: Program -> Infer (T.Program' Type)
 checkPrg (Program bs) = do
     preRun bs
     bs <- checkDef bs
-    sub <- solveUndecidable
-    bs <- mapM (mono sub) bs
+    sub0 <- solveUndecidable
+    bs <- mapM (mono sub0) bs
     return $ T.Program bs
 
 mono :: Subst -> T.Def' Type -> Infer (T.Def' Type)
@@ -74,11 +77,19 @@ preRun (x : xs) = case x of
             >>= flip
                 when
                 ( uncatchableErr $ Aux.do
-                    "Duplicate signatures for function"
+                    "Duplicate signatures of function"
                     quote $ printTree n
                 )
         insertSig (coerce n) (Just t) >> preRun xs
     DBind (Bind n _ e) -> do
+        binds <- gets declaredBinds
+        when
+            (coerce n `S.member` binds)
+            ( uncatchableErr $ Aux.do
+                "Duplicate declarations of function"
+                quote $ printTree n
+            )
+        modify (\st -> st{declaredBinds = S.insert (coerce n) st.declaredBinds})
         collect (collectTVars e)
         s <- gets sigs
         case M.lookup (coerce n) s of
@@ -105,12 +116,12 @@ checkBind :: Bind -> Infer (T.Bind' Type)
 checkBind bind@(Bind name args e) = do
     setCurrentBind $ coerce name
     let lambda = makeLambda e (reverse (coerce args))
-    (e, lambda_t) <- inferExp lambda
+    (sub0, (e, lambda_t)) <- inferExp lambda
     s <- gets sigs
     case M.lookup (coerce name) s of
         Just (Just t') -> do
             sub1 <- bindErr (unify lambda_t (skolemize t')) bind
-            return $ T.Bind (coerce name, apply sub1 t') [] (e, lambda_t)
+            return $ T.Bind (coerce name, apply (sub1 `compose` sub0) t') [] (e, lambda_t)
         _ -> do
             insertSig (coerce name) (Just lambda_t)
             return (T.Bind (coerce name, lambda_t) [] (e, lambda_t))
@@ -178,12 +189,12 @@ returnType :: Type -> Type
 returnType (TFun _ t2) = returnType t2
 returnType a = a
 
-inferExp :: Exp -> Infer (T.ExpT' Type)
+inferExp :: Exp -> Infer (Subst, T.ExpT' Type)
 inferExp e = do
     (s, (e', t)) <- algoW e
     let subbed = apply s t
     modify (\st -> st{undecidedSigs = apply s st.undecidedSigs})
-    return (e', subbed)
+    return (s, (e', subbed))
 
 class CollectTVars a where
     collectTVars :: a -> Set T.Ident
@@ -851,6 +862,7 @@ data Env = Env
     , currentBind :: T.Ident
     , undecidedSigs :: Map T.Ident Type
     , toDecide :: Set T.Ident
+    , declaredBinds :: Set T.Ident
     }
     deriving (Show)
 
