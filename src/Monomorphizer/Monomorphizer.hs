@@ -43,7 +43,7 @@ newtype EnvM a = EnvM (StateT Output (Reader Env) a)
 type Output = Map.Map Ident Outputted
 -- When a bind is being processed, it is Incomplete in the state, also
 -- called marked.
-data Outputted = Incomplete | Complete M.Bind
+data Outputted = Incomplete | Complete M.Bind | Data M.Data
 
 -- Static environment
 data Env = Env {
@@ -150,15 +150,6 @@ convertLit :: T.Lit -> M.Lit
 convertLit (T.LInt v) = M.LInt v
 convertLit (T.LChar v) = M.LChar v
 
--- | Conv
---data Pattern' t
---    = PVar (Id' t) -- TODO should be Ident
---    | PLit (Lit, t) -- TODO should be Lit
---    | PCatch
---    | PEnum Ident
---    | PInj Ident [Pattern' t] -- TODO should be (Pattern' t, t)
---    deriving (C.Eq, C.Ord, C.Show, C.Read)
-
 morphExp :: M.Type -> T.Exp -> EnvM M.Exp
 morphExp expectedType exp = case exp of
   T.ELit lit -> return $ M.ELit (convertLit lit)
@@ -214,7 +205,7 @@ morphPattern = \case
   T.PInj ident ps -> do ps' <- mapM morphPattern ps
                         return $ M.PInj ident ps'
 
--- Creates a new identifier for a function with an assigned type
+-- | Creates a new identifier for a function with an assigned type
 newName :: M.Type -> T.Bind -> Ident
 newName t (T.Bind (Ident bindName, _) _ _) = 
  if bindName == "main" then
@@ -227,7 +218,7 @@ newName t (T.Bind (Ident bindName, _) _ _) =
 
 -- Monomorphization step
 monomorphize :: T.Program -> M.Program
-monomorphize (T.Program defs) = M.Program $ (getDefsFromBinds . getBindsFromOutput)
+monomorphize (T.Program defs) = M.Program $ getDefsFromOutput
     (runEnvM Map.empty (createEnv defs) monomorphize')
  where
   monomorphize' :: EnvM ()
@@ -249,20 +240,18 @@ createEnv defs = Env { input  = Map.fromList bindPairs,
    bindPairs = (map (\b -> (getBindName b, b)) . getBindsFromDefs) defs
 
 -- Helper functions
-getBindsFromOutput :: Output -> [M.Bind]
-getBindsFromOutput outputMap = (map snd . Map.toList) $ fmap 
+getDefsFromOutput :: Output -> [M.Def]
+getDefsFromOutput outputMap = (map snd . Map.toList) $ fmap 
                                  (\case
                                     Incomplete -> error "Internal bug in monomorphizer"
-                                    Complete b -> b ) 
+                                    Complete b -> M.DBind b
+                                    Data     d -> M.DData d) 
                                   outputMap
 
 getBindsFromDefs :: [T.Def] -> [T.Bind]
 getBindsFromDefs = foldl (\bs -> \case
                                    T.DBind b -> b:bs
                                    T.DData _ -> bs) []
-
-getDefsFromBinds :: [M.Bind] -> [M.Def]
-getDefsFromBinds = foldl (\ds b -> M.DBind b : ds) []
 
 getBindName :: T.Bind -> Ident
 getBindName (T.Bind (ident, _) _ _) = ident
