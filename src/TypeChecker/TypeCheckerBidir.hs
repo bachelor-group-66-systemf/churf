@@ -100,7 +100,7 @@ typecheckBind (Bind name vars rhs) = do
         -- Γ ⊢ f xs = e ↓ Α → B ⊣ Δ
         Just t  -> do
             (rhs', _) <- check (foldr EAbs rhs vars) t
-            pure (T.Bind (coerce name, t) (coerce vars') (rhs', t))
+            pure (T.Bind (coerce name, t) [] (rhs', t))
           where
             vars' = zip vars $ getVars  t
 
@@ -111,9 +111,7 @@ typecheckBind (Bind name vars rhs) = do
             (e, t) <- infer $ foldr EAbs rhs vars
             t'     <- applyEnv t
             e'     <- applyEnvExp e
-            let rhs'  = skipLambdas (length vars) e'
-                vars' = zip vars  $ getVars t'
-            pure (T.Bind (coerce name, t') (coerce vars') (rhs', t'))
+            pure (T.Bind (coerce name, t') [] (e', t'))
     env <- gets env
     unless (isComplete env) err
     putEnv Empty
