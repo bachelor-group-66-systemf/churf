@@ -404,7 +404,7 @@ emitECased t e cases = do
         emit $ Store ty val Ptr stackPtr
         emit $ Br label
         emit $ Label lbl_failPos
-    emitCases _rt ty label stackPtr vs (Branch (MIR.PLit i, _) exp) = do
+    emitCases _rt ty label stackPtr vs (Branch (MIR.PLit i, t) exp) = do
         emit $ Comment "Plit"
         let i' = case i of
                 (MIR.LInt i, _) -> VInteger i
@@ -412,7 +412,7 @@ emitECased t e cases = do
         ns <- getNewVar
         lbl_failPos <- (\x -> TIR.Ident $ "failed_" <> show x) <$> getNewLabel
         lbl_succPos <- (\x -> TIR.Ident $ "success_" <> show x) <$> getNewLabel
-        emit $ SetVariable ns (Icmp LLEq ty vs i')
+        emit $ SetVariable ns (Icmp LLEq (type2LlvmType t) vs i')
         emit $ BrCond (VIdent ns ty) lbl_succPos lbl_failPos
         emit $ Label lbl_succPos
         val <- exprToValue exp
@@ -432,6 +432,7 @@ emitECased t e cases = do
         lbl_failPos <- (\x -> TIR.Ident $ "failed_" <> show x) <$> getNewLabel
         emit $ Label lbl_failPos
     emitCases _rt ty label stackPtr _vs (Branch (MIR.PEnum _id, _) exp) = do
+        -- //TODO Penum wrong, acts as a catch all
         emit $ Comment "Penum"
         val <- exprToValue exp
         emit $ Store ty val Ptr stackPtr
