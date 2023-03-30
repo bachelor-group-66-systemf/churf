@@ -8,7 +8,7 @@ import System.Process.Extra (
 -- spawnWait s = spawnCommand s >>= \s >>= waitForProcess
 
 optimize :: String -> IO String
-optimize = readCreateProcess (shell "opt --O3 -S")
+optimize = readCreateProcess (shell "opt --O3 --tailcallopt -S")
 
 compileClang :: String -> IO String
 compileClang =
@@ -20,7 +20,7 @@ compileClang =
             , "src/GC/lib/event.cpp"
             , "src/GC/lib/heap.cpp"
             , "src/GC/lib/profiler.cpp"
-            , "-Wall -Wextra -g -std=gnu++20 -stdlib=libstdc++"
+            , "-Wall -Wextra -g -std=gnu++20 -stdlib=libstdc++ -O3"
             , "-Isrc/GC/include"
             , "-x"
             , "ir" -- , "-Lsrc/GC/lib -l:gcoll.a"
