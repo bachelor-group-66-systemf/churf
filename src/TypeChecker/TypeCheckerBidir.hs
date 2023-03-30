@@ -6,7 +6,7 @@
 
 module TypeChecker.TypeCheckerBidir (typecheck, getVars) where
 
-import           Auxiliary                 (maybeToRightM, snoc)
+import           Auxiliary                 (maybeToRightM, snoc, int, char)
 import           Control.Applicative       (Alternative, Applicative (liftA2),
                                             (<|>))
 import           Control.Monad.Except      (ExceptT, MonadError (throwError),
@@ -484,7 +484,7 @@ infer = \case
     --  Γ ⊢ e₁ + e₂ ↓ Int ⊣ Δ
     EAdd e1 e2 -> do
         cxt <- get
-        let t = TLit "Int"
+        let t = int
         e1' <- check e1 t
         put cxt
         e2' <- check e2 t

@@ -6,7 +6,7 @@
 -- | A module for type checking and inference using algorithm W, Hindley-Milner
 module TypeChecker.TypeCheckerHm where
 
-import Auxiliary (maybeToRightM)
+import Auxiliary (int, litType, maybeToRightM, tupSequence, unzip4)
 import Auxiliary qualified as Aux
 import Control.Monad.Except
 import Control.Monad.Identity (Identity, runIdentity)
@@ -706,9 +706,6 @@ solveUndecidable = do
             )
     composeAll <$> mapM (uncurry unify) ys
 
-tupSequence :: Monad m => (m a, b) -> m (a, b)
-tupSequence (ma, b) = (,b) <$> ma
-
 getOriginal :: T.Ident -> T.Ident
 getOriginal (T.Ident i) = coerce $ takeWhile (/= delim) $ drop 1 i
 
@@ -724,13 +721,6 @@ flattenType a = [a]
 typeLength :: Type -> Int
 typeLength (TFun _ b) = 1 + typeLength b
 typeLength _ = 1
-
-litType :: Lit -> Type
-litType (LInt _) = int
-litType (LChar _) = char
-
-int = TLit "Int"
-char = TLit "Char"
 
 {- | Catch an error if possible and add the given
 expression as addition to the error message
@@ -794,14 +784,6 @@ dataErr ma d =
                 else throwError (err{catchable = False})
         )
 
-unzip4 :: [(a, b, c, d)] -> ([a], [b], [c], [d])
-unzip4 =
-    foldl'
-        ( \(as, bs, cs, ds) (a, b, c, d) ->
-            (as ++ [a], bs ++ [b], cs ++ [c], ds ++ [d])
-        )
-        ([], [], [], [])
-
 initCtx = Ctx mempty
 initEnv = Env 0 'a' mempty mempty mempty "" mempty mempty mempty
 
@@ -816,7 +798,7 @@ run' e c =
         . flip evalStateT e
         . runInfer
 
-data Ctx = Ctx {vars :: Map T.Ident Type}
+newtype Ctx = Ctx {vars :: Map T.Ident Type}
     deriving (Show)
 
 data Env = Env

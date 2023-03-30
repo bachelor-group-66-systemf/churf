@@ -1,11 +1,13 @@
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Auxiliary (module Auxiliary) where
 
 import Control.Monad.Error.Class (liftEither)
 import Control.Monad.Except (MonadError)
 import Data.Either.Combinators (maybeToRight)
-import TypeChecker.TypeCheckerIr (Type (TFun))
+import Data.List (foldl')
+import Grammar.Abs
 import Prelude hiding ((>>), (>>=))
 
 (>>) a b = a ++ " " ++ b
@@ -26,3 +28,21 @@ mapAccumM f = go
             (acc', x') <- f acc x
             (acc'', xs') <- go acc' xs
             pure (acc'', x' : xs')
+
+unzip4 :: [(a, b, c, d)] -> ([a], [b], [c], [d])
+unzip4 =
+    foldl'
+        ( \(as, bs, cs, ds) (a, b, c, d) ->
+            (as ++ [a], bs ++ [b], cs ++ [c], ds ++ [d])
+        )
+        ([], [], [], [])
+
+litType :: Lit -> Type
+litType (LInt _) = int
+litType (LChar _) = char
+
+int = TLit "Int"
+char = TLit "Char"
+
+tupSequence :: Monad m => (m a, b) -> m (a, b)
+tupSequence (ma, b) = (,b) <$> ma
