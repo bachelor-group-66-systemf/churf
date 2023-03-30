@@ -135,7 +135,7 @@ defaultStart =
     , UnsafeRaw "declare i32 @printf(ptr noalias nocapture, ...)\n"
     , UnsafeRaw "declare i32 @exit(i32 noundef)\n"
     , UnsafeRaw "declare ptr @malloc(i32 noundef)\n"
-    , UnsafeRaw "declare void @_ZN2GC4Heap4initEv()\n"
-    , UnsafeRaw "declare void @_ZN2GC4Heap5allocEm()\n"
-    , UnsafeRaw "declare void @_ZN2GC4Heap7disposeEv()\n"
+    , UnsafeRaw "declare external void @cheap_init()\n"
+    , UnsafeRaw "declare external ptr @cheap_alloc(i64)\n"
+    , UnsafeRaw "declare external void @cheap_dispose()\n"
     ]

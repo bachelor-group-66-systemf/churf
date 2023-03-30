@@ -1,9 +1,9 @@
--- main = head (Cons (sum (repeat 10 5)) Nil);  
+main = head (Cons (sum (repeat 5 9223372036854775807)) Nil);  --9223372036854775807
 
-main = case (bind (fmap (\s . s + 1) (Just 5)) (\s . pure (s + 10))) of {
-    Just a => a ;
-    Nothing => minusOne ;
-};
+-- main = case (bind (fmap (\s . s + 1) (Just 5)) (\s . pure (s + 10))) of {
+--     Just a => a ;
+--     Nothing => minusOne ;
+-- };
 
 ---- MAYBE MONAD ----
 data Maybe () where {

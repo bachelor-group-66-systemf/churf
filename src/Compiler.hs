@@ -15,8 +15,15 @@ compileClang =
     readCreateProcess . shell $
         unwords
             [ "clang++" -- , "-Lsrc/GC/lib/", "-l:libgcoll.a"
-            , "-fno-exceptions -x"
-            , "ir"
+            , "-fno-rtti"
+            , "src/GC/lib/cheap.cpp"
+            , "src/GC/lib/event.cpp"
+            , "src/GC/lib/heap.cpp"
+            , "src/GC/lib/profiler.cpp"
+            , "-Wall -Wextra -g -std=gnu++20 -stdlib=libstdc++"
+            , "-Isrc/GC/include"
+            , "-x"
+            , "ir" -- , "-Lsrc/GC/lib -l:gcoll.a"
             , "-o"
             , "output/hello_world"
             , "-"

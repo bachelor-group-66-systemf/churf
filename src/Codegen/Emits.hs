@@ -127,12 +127,13 @@ compileScs (MIR.DData (MIR.Data typ ts) : xs) = do
     compileScs xs
 
 firstMainContent :: [LLVMIr]
-firstMainContent = []
+firstMainContent = [UnsafeRaw "call void @cheap_init()\n"]
 
 lastMainContent :: LLVMValue -> [LLVMIr]
 lastMainContent var =
     [ UnsafeRaw $
         "call i32 (ptr, ...) @printf(ptr noundef @.str, i64 noundef " <> toIr var <> ")\n"
+    , UnsafeRaw "call void @cheap_dispose()\n"
     , Ret I64 (VInteger 0)
     ]
 
@@ -169,6 +170,7 @@ emitECased t e cases = do
     -- crashLbl <- TIR.Ident . ("crash_" <>) . show <$> getNewLabel
     -- emit $ Label crashLbl
     emit . UnsafeRaw $ "call i32 (ptr, ...) @printf(ptr noundef @.non_exhaustive_patterns, i64 noundef 6, i64 noundef 6)\n"
+    emit . UnsafeRaw $ "call void @cheap_dispose()\n"
     emit . UnsafeRaw $ "call i32 @exit(i32 noundef 1)\n"
     mapM_ (const increaseVarCount) [0 .. 1]
     emit $ Br label
