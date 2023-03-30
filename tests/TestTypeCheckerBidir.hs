@@ -32,6 +32,8 @@ testTypeCheckerBidir = describe "Bidirectional type checker test" $ do
     tc_mono_case
     tc_pol_case
     tc_infer_case
+    tc_rec1
+    tc_rec2
 
 tc_id =
     specify "Basic identity function polymorphism" $
@@ -294,6 +296,21 @@ tc_infer_case = describe "Infer case expression" $ do
         , "    _ => 1;"
         , "};"
         ]
+
+tc_rec1 = specify "Infer simple recursive definition" $
+              run ["test x = 1 + test (x + 1);"] `shouldSatisfy` ok
+
+tc_rec2 = specify "Infer recursive definition with pattern matching" $ run
+    [ "data Bool () where {"
+    , "  False : Bool ()"
+    , "  True  : Bool ()"
+    , "};"
+
+    , "test = \\x. case x of {"
+    , "  10 => True;"
+    , "  _  => test (x+1);"
+    , "};"
+    ] `shouldSatisfy` ok
 
 
 run :: [String] -> Err T.Program
