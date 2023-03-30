@@ -58,15 +58,18 @@ preRun [] = return ()
 preRun (x : xs) = case x of
     DSig (Sig n t) -> do
         collect (collectTVars t)
-        duplicateDecl n $ Aux.do
+        s <- gets (M.keys . sigs)
+        duplicateDecl n s $ Aux.do
             "Multiple signatures of function"
             quote $ printTree n
         insertSig (coerce n) (Just t) >> preRun xs
     DBind (Bind n _ e) -> do
-        duplicateDecl n $ Aux.do
+        s <- gets (S.toList . declaredBinds)
+        duplicateDecl n s $ Aux.do
             "Multiple declarations of function"
             quote $ printTree n
         collect (collectTVars e)
+        insertBind $ coerce n
         s <- gets sigs
         case M.lookup (coerce n) s of
             Nothing -> insertSig (coerce n) Nothing >> preRun xs
@@ -74,7 +77,7 @@ preRun (x : xs) = case x of
     DData d@(Data t _) -> let collected = collect (collectTVars t) in checkData d collected >> preRun xs
   where
     -- Check if function body / signature has been declared already
-    duplicateDecl n msg = gets (M.member (coerce n) . sigs) >>= flip when (uncatchableErr msg)
+    duplicateDecl n env msg = when (coerce n `elem` env) (uncatchableErr msg)
 
 checkDef :: [Def] -> Infer [T.Def' Type]
 checkDef [] = return []
@@ -671,6 +674,9 @@ withPattern p ma = case p of
 insertSig :: T.Ident -> Maybe Type -> Infer ()
 insertSig i t = modify (\st -> st{sigs = M.insert i t (sigs st)})
 
+insertBind :: T.Ident -> Infer ()
+insertBind i = modify (\st -> st{declaredBinds = S.insert i st.declaredBinds})
+
 -- | Insert a constructor into the start with its type
 insertInj :: (Monad m, MonadReader Ctx m) => T.Ident -> Type -> m a -> m a
 insertInj i t =
@@ -797,7 +803,7 @@ unzip4 =
         ([], [], [], [])
 
 initCtx = Ctx mempty mempty
-initEnv = Env 0 'a' mempty mempty "" mempty mempty
+initEnv = Env 0 'a' mempty mempty "" mempty mempty mempty
 
 run :: Infer a -> Either Error a
 run = run' initEnv initCtx
@@ -821,6 +827,7 @@ data Env = Env
     , currentBind :: T.Ident
     , undecidedSigs :: Map T.Ident Type
     , toDecide :: Set T.Ident
+    , declaredBinds :: Set T.Ident
     }
     deriving (Show)
 
