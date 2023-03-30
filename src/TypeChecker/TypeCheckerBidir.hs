@@ -548,21 +548,24 @@ checkBranch (Branch patt exp) t_patt t_exp = do
     pure (T.Branch patt' (exp, t_exp))
 
 checkPattern :: Pattern -> Type -> Tc (T.Pattern' Type, Type)
-checkPattern patt t_patt = (, t_patt) <$> case patt of
+checkPattern patt t_patt = case patt of
         PVar x -> do
             insertEnv $ EnvVar x t_patt
-            pure $ T.PVar (coerce x, t_patt)
+            pure (T.PVar (coerce x, t_patt), t_patt)
 
-        PCatch -> pure T.PCatch
+        PCatch -> pure (T.PCatch, t_patt)
 
-        PLit lit | inferLit lit == t_patt -> pure $ T.PLit (lit, t_patt)
-                 | otherwise -> throwError "Literal in pattern have wrong type"
+        PLit lit -> do
+          subtype (inferLit lit) t_patt
+          t_patt' <- applyEnv t_patt
+          pure (T.PLit (lit, t_patt), t_patt')
 
         PEnum name -> do
             t <- maybeToRightM ("Unknown constructor " ++ show name)
                      =<< lookupInj name
             subtype t t_patt
-            pure $ T.PEnum (coerce name)
+            t_patt' <- applyEnv t_patt
+            pure (T.PEnum (coerce name), t_patt')
 
 
         PInj name ps -> do
@@ -570,9 +573,10 @@ checkPattern patt t_patt = (, t_patt) <$> case patt of
             t_inj' <- foldrM substitute' t_inj $ getInitForalls t_inj
             subtype (getDataId t_inj') t_patt
             t_inj'' <- applyEnv t_inj'
+            t_patt' <- applyEnv t_patt
             let ts_inj = getParams t_inj''
             ps' <- zipWithM (\p t -> checkPattern p =<< applyEnv t) ps ts_inj
-            pure $ T.PInj (coerce name) (map fst ps')
+            pure (T.PInj (coerce name) (map fst ps'), t_patt')
           where
             substitute' fa t = do
                 tevar <- fresh
