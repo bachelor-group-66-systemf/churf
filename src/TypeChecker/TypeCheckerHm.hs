@@ -74,7 +74,7 @@ preRun (x : xs) = case x of
         case M.lookup (coerce n) s of
             Nothing -> insertSig (coerce n) Nothing >> preRun xs
             Just _ -> preRun xs
-    DData d@(Data t _) -> let collected = collect (collectTVars t) in checkData d collected >> preRun xs
+    DData d@(Data t _) -> collect (collectTVars t) >> checkData d >> preRun xs
   where
     -- Check if function body / signature has been declared already
     duplicateDecl n env msg = when (coerce n `elem` env) (uncatchableErr msg)
@@ -108,10 +108,10 @@ checkBind bind@(Bind name args e) = do
             insertSig (coerce name) (Just lambda_t)
             return (T.Bind (coerce name, lambda_t) [] (e, lambda_t))
 
-checkData :: (MonadReader Ctx m, Monad m, MonadError Error m) => Data -> m () -> m ()
-checkData err@(Data typ injs) ma = do
+checkData :: (MonadState Env m, Monad m, MonadError Error m) => Data -> m ()
+checkData err@(Data typ injs) = do
     (name, tvars) <- go typ
-    dataErr (mapM_ (\i -> checkInj i name tvars ma) injs) err
+    dataErr (mapM_ (\i -> checkInj i name tvars) injs) err
   where
     go = \case
         TData name typs
@@ -122,8 +122,8 @@ checkData err@(Data typ injs) ma = do
             uncatchableErr $
                 unwords ["Bad data type definition: ", printTree typ]
 
-checkInj :: (MonadError Error m, MonadReader Ctx m, Monad m) => Inj -> UIdent -> [TVar] -> m a -> m a
-checkInj (Inj c inj_typ) name tvars ma
+checkInj :: (MonadError Error m, MonadState Env m, Monad m) => Inj -> UIdent -> [TVar] -> m ()
+checkInj (Inj c inj_typ) name tvars
     | Right False <- boundTVars tvars inj_typ =
         catchableErr "Unbound type variables"
     | TData name' typs <- returnType inj_typ
@@ -138,7 +138,7 @@ checkInj (Inj c inj_typ) name tvars ma
                 "with type"
                 quote $ printTree t
                 "already exist"
-            Nothing -> insertInj (coerce c) inj_typ ma
+            Nothing -> insertInj (coerce c) inj_typ
     | otherwise =
         uncatchableErr $
             unwords
@@ -240,7 +240,7 @@ algoW = \case
                             "Unbound variable: "
                                 <> printTree i
     EInj i -> do
-        constr <- asks injections
+        constr <- gets injections
         case M.lookup (coerce i) constr of
             Just t -> return (nullSubst, (T.EVar $ coerce i, t))
             Nothing ->
@@ -358,7 +358,7 @@ inferPattern = \case
         let pvar = T.PVar (coerce x, fr)
         return (pvar, fr)
     PEnum p -> do
-        t <- asks (M.lookup (coerce p) . injections)
+        t <- gets (M.lookup (coerce p) . injections)
         t <-
             maybeToRightM
                 ( Error
@@ -383,7 +383,7 @@ inferPattern = \case
         frs <- mapM (const fresh) _ts
         return (T.PEnum $ coerce p, TData _data frs)
     PInj constr patterns -> do
-        t <- asks (M.lookup (coerce constr) . injections)
+        t <- gets (M.lookup (coerce constr) . injections)
         t <-
             maybeToRightM
                 ( Error
@@ -678,9 +678,9 @@ insertBind :: T.Ident -> Infer ()
 insertBind i = modify (\st -> st{declaredBinds = S.insert i st.declaredBinds})
 
 -- | Insert a constructor into the start with its type
-insertInj :: (Monad m, MonadReader Ctx m) => T.Ident -> Type -> m a -> m a
+insertInj :: (Monad m, MonadState Env m) => T.Ident -> Type -> m ()
 insertInj i t =
-    local (\st -> st{injections = M.insert i t (injections st)})
+    modify (\st -> st{injections = M.insert i t (injections st)})
 
 applySt :: Subst -> Infer a -> Infer a
 applySt s = local (\st -> st{vars = apply s st.vars})
@@ -688,8 +688,8 @@ applySt s = local (\st -> st{vars = apply s st.vars})
 {- | Check if an injection (constructor of data type)
 with an equivalent name has been declared already
 -}
-existInj :: (Monad m, MonadReader Ctx m) => T.Ident -> m (Maybe Type)
-existInj n = asks (M.lookup n . injections)
+existInj :: (Monad m, MonadState Env m) => T.Ident -> m (Maybe Type)
+existInj n = gets (M.lookup n . injections)
 
 setCurrentBind :: T.Ident -> Infer ()
 setCurrentBind i = modify (\st -> st{currentBind = i})
@@ -802,8 +802,8 @@ unzip4 =
         )
         ([], [], [], [])
 
-initCtx = Ctx mempty mempty
-initEnv = Env 0 'a' mempty mempty "" mempty mempty mempty
+initCtx = Ctx mempty
+initEnv = Env 0 'a' mempty mempty mempty "" mempty mempty mempty
 
 run :: Infer a -> Either Error a
 run = run' initEnv initCtx
@@ -816,7 +816,7 @@ run' e c =
         . flip evalStateT e
         . runInfer
 
-data Ctx = Ctx {vars :: Map T.Ident Type, injections :: Map T.Ident Type}
+data Ctx = Ctx {vars :: Map T.Ident Type}
     deriving (Show)
 
 data Env = Env
@@ -824,6 +824,7 @@ data Env = Env
     , nextChar :: Char
     , sigs :: Map T.Ident (Maybe Type)
     , takenTypeVars :: Set T.Ident
+    , injections :: Map T.Ident Type
     , currentBind :: T.Ident
     , undecidedSigs :: Map T.Ident Type
     , toDecide :: Set T.Ident
