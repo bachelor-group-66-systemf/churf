@@ -1,9 +1,9 @@
-data True() where {
-    True: True()
+data Bool () where {
+    True : Bool ()
+    False : Bool ()
 };
-main: Int;
-main =
-    case True of {
-        True => 1;
-        _ => 0;
-    };
+
+toBool = case 0 of {
+    0 => False;
+    _ => True;
+};

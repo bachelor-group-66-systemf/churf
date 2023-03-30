@@ -1,15 +1,20 @@
-data forall a. List (a) where {
-  Nil  : List (a)
-  Cons : a -> List (a) -> List (a)
+data Bool () where {
+    True : Bool ()
+    False : Bool ()
 };
 
-length : forall c. List (List (c)) -> Int;
-length = \list. case list of {
-  Cons x xs           => 1 + length xs;
---  Nil                 => 0;
---  Cons x (Cons y Nil) => 2;
+even : Int -> Bool ();
+even x = not (odd x) ;
+
+odd x = not (even x) ;
+
+not x = case x of {
+    True => False;
+    False => True;
 };
 
+f = g;
+g = f;
 
 
 

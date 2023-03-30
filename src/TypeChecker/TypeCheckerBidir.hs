@@ -6,18 +6,19 @@
 
 module TypeChecker.TypeCheckerBidir (typecheck, getVars) where
 
-import           Auxiliary                 (maybeToRightM, snoc, int, char)
+import           Auxiliary                 (char, int, maybeToRightM, snoc)
 import           Control.Applicative       (Alternative, Applicative (liftA2),
                                             (<|>))
 import           Control.Monad.Except      (ExceptT, MonadError (throwError),
-                                            runExceptT, unless, zipWithM,
-                                            zipWithM_)
+                                            mapAndUnzipM, runExceptT, unless,
+                                            zipWithM, zipWithM_)
 import           Control.Monad.State       (MonadState (get, put), State,
                                             evalState, gets, modify)
 import           Data.Coerce               (coerce)
 import           Data.Foldable             (foldrM)
 import           Data.Function             (on)
 import           Data.List                 (intercalate)
+import           Data.List.Extra           (allSame)
 import           Data.Map                  (Map)
 import qualified Data.Map                  as Map
 import           Data.Maybe                (fromMaybe, isNothing)
@@ -92,7 +93,7 @@ typecheck (Program defs) = do
 
 typecheckBind :: Bind -> Tc (T.Bind' Type)
 typecheckBind (Bind name vars rhs) = do
-    bind' <- lookupSig name >>= \case
+    bind'@(T.Bind (name, typ) _ _) <- lookupSig name >>= \case
         -- TODO These Judgment aren't accurate
         -- (f:A → B) ∈ Γ
         -- Γ,(xs:A) ⊢ e ↑ Β ⊣ Δ
@@ -101,8 +102,6 @@ typecheckBind (Bind name vars rhs) = do
         Just t  -> do
             (rhs', _) <- check (foldr EAbs rhs vars) t
             pure (T.Bind (coerce name, t) [] (rhs', t))
-          where
-            vars' = zip vars $ getVars  t
 
         --  Γ ⊢ (λxs. e) ↓ A → B ⊣ Δ
         --  ------------------------------
@@ -114,6 +113,7 @@ typecheckBind (Bind name vars rhs) = do
             pure (T.Bind (coerce name, t') [] (e', t'))
     env <- gets env
     unless (isComplete env) err
+    insertSig (coerce name) typ
     putEnv Empty
     pure bind'
   where
@@ -389,12 +389,13 @@ check exp typ
     --  Γ ⊢ e ↓ A ⊣ Θ   Δ ⊢ Π covers [Δ]A TODO
     --  ---------------------------------------
     --  Γ ⊢ case e of Π ↑ C ⊣ Δ
-      | ECase scrut branches <- exp = do
-          (scrut', t_scrut) <- infer scrut
-          t_scrut'  <- applyEnv t_scrut
-          typ'      <- applyEnv typ
-          branches' <- mapM (\b -> checkBranch b t_scrut' typ') branches
-          pure (T.ECase (scrut', t_scrut') branches', typ')
+    --  TODO maybe remove only use infer rule
+    | ECase scrut branches <- exp = do
+        (scrut', t_scrut) <- infer scrut
+        t_scrut'  <- applyEnv t_scrut
+        typ'      <- applyEnv typ
+        branches' <- mapM (\b -> checkBranch b t_scrut' typ') branches
+        pure (T.ECase (scrut', t_scrut') branches', typ')
 
     | otherwise = subsumption
   where
@@ -490,6 +491,18 @@ infer = \case
         e2' <- check e2 t
         pure (T.EAdd e1' e2', t)
 
+
+    --                  Θ ⊢ Π ∷ [Θ]A ↑ [Θ]C ⊣ Δ
+    --  Γ ⊢ e ↓ A ⊣ Θ   Δ ⊢ Π covers [Δ]A TODO
+    --  ---------------------------------------
+    --  Γ ⊢ case e of Π ↓ C ⊣ Δ
+    ECase scrut branches -> do
+      (scrut', t_scrut) <- infer scrut
+      t_scrut'  <- applyEnv t_scrut
+      (branches', ts) <- mapAndUnzipM (`inferBranch` t_scrut') branches
+      unless (allSame ts) $ throwError "Branches have different return types"
+      pure (T.ECase (scrut', t_scrut') branches', head ts)
+
 -- | Γ ⊢ A • e ⇓ C ⊣ Δ
 -- Under input context Γ , applying a function of type A to e infers type C, with output context ∆
 -- Instantiate existential type variables until there is an arrow type.
@@ -533,6 +546,19 @@ apply typ exp = case typ of
 ---------------------------------------------------------------------------
 -- * Pattern matching
 ---------------------------------------------------------------------------
+
+-- | Γ ⊢ p ⇒ e ∷ A ↓ C
+-- Under context Γ, check pattern in branch p ⇒ e of type A and infer bodies of type C
+inferBranch :: Branch -> Type -> Tc (T.Branch' Type, Type)
+inferBranch (Branch patt exp) t_patt = do
+    env_marker <- EnvMark <$> fresh
+    insertEnv env_marker
+    patt' <- checkPattern patt t_patt
+    (exp', t_exp) <- infer exp
+    (env_l, _) <- gets (splitOn env_marker . env)
+    putEnv env_l
+    pure (T.Branch patt' (exp', t_exp), t_exp)
+
 
 -- | Γ ⊢ p ⇒ e ∷ A ↑ C
 -- Under context Γ, check branch p ⇒ e of type A and bodies of type C
@@ -851,6 +877,10 @@ lookupBind x = gets (Map.lookup x . binds)
 
 lookupSig :: LIdent -> Tc (Maybe Type)
 lookupSig x = gets (Map.lookup x . sig)
+
+insertSig :: LIdent -> Type -> Tc ()
+insertSig name t = modify $ \cxt -> cxt { sig = Map.insert name t cxt.sig }
+
 
 lookupEnv :: LIdent -> Tc (Maybe Type)
 lookupEnv x = gets (findId . env)

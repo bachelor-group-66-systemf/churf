@@ -31,6 +31,8 @@ testTypeCheckerBidir = describe "Bidirectional type checker test" $ do
     tc_tree
     tc_mono_case
     tc_pol_case
+    tc_mut_rec
+    tc_infer_case
 
 tc_id =
     specify "Basic identity function polymorphism" $
@@ -265,6 +267,52 @@ tc_pol_case = describe "Polymophic and recursive pattern matching" $ do
         , "  Cons (Cons _ ys) xs => 1 + elems (Cons ys xs);"
         , "};"
         ]
+
+
+tc_mut_rec = specify "Feasible mutuable recursive definitions" $ run
+    [ "data Bool () where {"
+    , "    True : Bool ()"
+    , "    False : Bool ()"
+    , "};"
+
+    , "even : Int -> Bool ();"
+    , "even x = not (odd x);"
+
+    , "odd x = not (even x);"
+
+    , "not x = case x of {"
+    , "    True => False;"
+    , "    False => True;"
+    , "};"
+    ] `shouldSatisfy` ok
+
+tc_infer_case = describe "Infer case expression" $ do
+    specify "Wrong case expression rejected" $
+        run (fs ++ wrong) `shouldNotSatisfy` ok
+    specify "Correct case expression accepted" $
+        run (fs ++ correct) `shouldSatisfy` ok
+  where
+    fs =
+        [ "data Bool () where {"
+        , "    True : Bool ()"
+        , "    False : Bool ()"
+        , "};"
+        ]
+
+    correct =
+        [ "toBool = case 0 of {"
+        , "    0 => False;"
+        , "    _ => True;"
+        , "};"
+        ]
+
+    wrong =
+        [ "toBool = case 0 of {"
+        , "    0 => False;"
+        , "    _ => 1;"
+        , "};"
+        ]
+
 
 run :: [String] -> Err T.Program
 run = rmTEVar <=< typecheck <=< pProgram . myLexer . unlines
