@@ -40,6 +40,17 @@ game:
 	rm -f tests/game.out
 	$(CC) $(WFLAGS) $(STDFLAGS) $(LIB_INCL) tests/game.cpp lib/heap.cpp lib/profiler.cpp lib/event.cpp -o tests/game.out	
 
+wrapper_test:
+	rm -f lib/event.o lib/profiler.o lib/heap.o lib/coll.a tests/wrapper_test.out
+# compile object files
+	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -O3 -g -c -o lib/event.o lib/event.cpp -fPIC
+	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -O3 -g -c -o lib/profiler.o lib/profiler.cpp -fPIC
+	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -O3 -g -c -o lib/heap.o lib/heap.cpp -fPIC
+	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -O3 -g -c -o lib/cheap.o lib/cheap.cpp -fPIC
+# compile object files into library
+	ar rcs lib/gcoll.a lib/event.o lib/profiler.o lib/heap.o lib/cheap.o
+	clang -stdlib=libc++ $(WFLAGS) $(LIB_INCL) -o tests/wrapper_test.out tests/wrapper_test.c lib/gcoll.a -lstdc++
+
 extern_lib:
 # remove old files
 	rm -f lib/heap.o lib/libheap.so tests/extern_lib.out
@@ -55,12 +66,25 @@ static_lib:
 # remove old files
 	rm -f lib/event.o lib/profiler.o lib/heap.o lib/gcoll.a tests/extern_lib.out
 # compile object files
-	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -O3 -g -c -o lib/event.o lib/event.cpp -fPIC
-	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -O3 -g -c -o lib/profiler.o lib/profiler.cpp -fPIC
-	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -O3 -g -c -o lib/heap.o lib/heap.cpp -fPIC
+	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -O3 -c -o lib/event.o lib/event.cpp -fPIC
+	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -O3 -c -o lib/profiler.o lib/profiler.cpp -fPIC
+	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -O3 -c -o lib/heap.o lib/heap.cpp -fPIC
 # create static library
 	ar r lib/gcoll.a lib/event.o lib/profiler.o lib/heap.o
 
 # create test program
 static_lib_test: static_lib
 	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -o tests/extern_lib.out tests/extern_lib.cpp lib/gcoll.a
+
+wrapper:
+# remove old files 
+	rm -f lib/event.o lib/profiler.o lib/heap.o lib/coll.a tests/wrapper.out
+# compile object files
+	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -O3 -c -o lib/event.o lib/event.cpp -fPIC
+	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -O3 -c -o lib/profiler.o lib/profiler.cpp -fPIC
+	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -O3 -c -o lib/heap.o lib/heap.cpp -fPIC
+	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -O3 -c -o lib/cheap.o lib/cheap.cpp -fPIC
+# compile object files into library
+	ar rcs lib/gcoll.a lib/event.o lib/profiler.o lib/heap.o lib/cheap.o
+# compile test program wrapper.c with normal clang
+	clang -stdlib=libc++ $(WFLAGS) $(LIB_INCL) -o tests/wrapper.out tests/wrapper.c lib/gcoll.a -lstdc++
