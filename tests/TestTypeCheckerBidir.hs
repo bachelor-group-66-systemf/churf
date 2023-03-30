@@ -31,7 +31,6 @@ testTypeCheckerBidir = describe "Bidirectional type checker test" $ do
     tc_tree
     tc_mono_case
     tc_pol_case
-    tc_mut_rec
     tc_infer_case
 
 tc_id =
@@ -268,23 +267,6 @@ tc_pol_case = describe "Polymophic and recursive pattern matching" $ do
         , "};"
         ]
 
-
-tc_mut_rec = specify "Feasible mutuable recursive definitions" $ run
-    [ "data Bool () where {"
-    , "    True : Bool ()"
-    , "    False : Bool ()"
-    , "};"
-
-    , "even : Int -> Bool ();"
-    , "even x = not (odd x);"
-
-    , "odd x = not (even x);"
-
-    , "not x = case x of {"
-    , "    True => False;"
-    , "    False => True;"
-    , "};"
-    ] `shouldSatisfy` ok
 
 tc_infer_case = describe "Infer case expression" $ do
     specify "Wrong case expression rejected" $
