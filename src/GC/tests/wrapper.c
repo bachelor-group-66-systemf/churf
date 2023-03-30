@@ -1,5 +1,6 @@
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "cheap.h"
 
@@ -18,23 +19,25 @@ void test_init()
     printf("----- EXIT TEST_INIT --------------------------\n");
 }
 
-cheap_t *test_the()
-{
-    printf("----- IN TEST_THE -----------------------------\n");
+/* Uncomment ONLY if run with DEBUG defined in cheap.h */
 
-    cheap_t *fst_heap = cheap_the();
+// cheap_t *test_the()
+// {
+//     printf("----- IN TEST_THE -----------------------------\n");
 
-    printf("Heap 1:\t%p\n", fst_heap->obj);
+//     cheap_t *fst_heap = cheap_the();
 
-    cheap_t *snd_heap = cheap_the();
+//     printf("Heap 1:\t%p\n", fst_heap->obj);
 
-    printf("Heap 2:\t%p\n", snd_heap->obj);
+//     cheap_t *snd_heap = cheap_the();
 
-    printf("----- EXIT TEST_THE ---------------------------\n");
+//     printf("Heap 2:\t%p\n", snd_heap->obj);
 
-    free(snd_heap);
-    return fst_heap;
-}
+//     printf("----- EXIT TEST_THE ---------------------------\n");
+
+//     free(snd_heap);
+//     return fst_heap;
+// }
 
 void test_profiler(cheap_t *heap)
 {
@@ -71,20 +74,22 @@ void test_dispose()
     printf("----- EXIT TEST_DISPOSE -----------------------\n");
 }
 
-int main(int argc, char **argv)
+int main()
 {
     test_init();
 
-    cheap_t *heap = test_the();
-
-    test_profiler(heap);
+    /* Uncomment ONLY if run with DEBUG defined in cheap.h */
+    // cheap_t *heap = test_the();
+    // test_profiler(heap);
 
     Object *o = test_alloc();
+    printf("Object size: %lu\n", sizeof(Object));
     printf("Object:\n\tx: %d\n\ty: %d\n\tz: %d\n\tvel: %f\n", o->x, o->y, o->z, o->velocity);
 
     test_dispose();
 
-    free(heap);
-    free(o);
+    /* Sefault I don't understand, don't uncomment */
+    // free(heap);
+    // free(o);
     return 0;
 }
