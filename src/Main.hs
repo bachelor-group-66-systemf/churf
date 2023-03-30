@@ -135,7 +135,7 @@ main' opts s = do
     compile generatedCode
     printToErr "Compilation done!"
     printToErr "\n-- Program output --"
-    spawnWait "./output/hello_world"
+    print =<< spawnWait "./output/hello_world"
 
     exitSuccess
 
