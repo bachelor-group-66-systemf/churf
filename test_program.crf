@@ -1,2 +1,16 @@
-main = id 0 ;
+-- data Bool () where {
+--     True : Bool ()
+--     False : Bool ()
+-- };
+
+-- odd x = not (even x) ;
+-- even x = not (odd x) ;
+
+-- not x = case x of {
+--     True => False ;
+--     False => True ;
+-- };
+
+a = id 0 ;
+b = id 'a' ;
 id x = x ;
