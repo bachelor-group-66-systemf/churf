@@ -235,21 +235,24 @@ morphBranch :: T.Branch -> EnvM M.Branch
 morphBranch (T.Branch (p, pt) (e, et)) = do
   pt' <- getMonoFromPoly pt
   et' <- getMonoFromPoly et
-  e' <- morphExp et' e
-  p' <- morphPattern p
-  return $ M.Branch (p', pt') (e', et')
+  env <- ask
+  (p', newLocals)  <- morphPattern (locals env) p
+  local (const env { locals = Set.union newLocals (locals env) }) $ do
+    e' <- morphExp et' e
+    return $ M.Branch (p', pt') (e', et')
 
-morphPattern :: T.Pattern -> EnvM M.Pattern
-morphPattern = \case
+-- Morphs pattern (patter -> expression), gives the newly bound local variables.
+morphPattern :: Set.Set Ident -> T.Pattern -> EnvM (M.Pattern, Set.Set Ident)
+morphPattern ls = \case
   T.PVar (ident, t) -> do t' <- getMonoFromPoly t
-                          return $ M.PVar (ident, t')
-  T.PLit (lit, t) -> do t' <- getMonoFromPoly t
-                        return $ M.PLit (convertLit lit, t')
-  T.PCatch -> return M.PCatch
+                          return (M.PVar (ident, t'), Set.insert ident ls)
+  T.PLit (lit, t) ->   do t' <- getMonoFromPoly t
+                          return (M.PLit (convertLit lit, t'), ls)
+  T.PCatch -> return (M.PCatch, ls)
   -- Constructor ident
-  T.PEnum ident -> return $ M.PEnum ident
-  T.PInj ident ps -> do ps' <- mapM morphPattern ps
-                        return $ M.PInj ident ps'
+  T.PEnum ident   -> return (M.PEnum ident, ls)
+  T.PInj ident ps -> do pairs <- mapM (morphPattern ls) ps
+                        return (M.PInj ident (map fst pairs), Set.unions (map snd pairs))
 
 -- | Creates a new identifier for a function with an assigned type
 newName :: M.Type -> T.Bind -> Ident
@@ -261,7 +264,7 @@ newName t (T.Bind (Ident bindName, _) _ _) =
    newName' :: M.Type -> String
    newName' (M.TLit (Ident str))     = str
    newName' (M.TFun t1 t2)           = newName' t1 ++ "_" ++ newName' t2
-   newName' (M.TData (Ident str) ts) = str ++ "." ++ foldl (\s t -> s ++ "," ++ newName' t) "" ts
+   newName' (M.TData (Ident str) ts) = str ++ foldl (\s t -> s ++ "." ++ newName' t) "" ts
 
 -- Monomorphization step
 monomorphize :: T.Program -> O.Program
