@@ -119,7 +119,7 @@ getMonoFromPoly t = do env <- ask
 -- Returns the annotated bind name.
 -- TODO: Redundancy? btype and t should always be the same.
 morphBind :: M.Type -> T.Bind -> EnvM Ident
-morphBind expectedType b@(T.Bind (Ident _, btype) args (exp, t)) =
+morphBind expectedType b@(T.Bind (Ident _, btype) args (exp, expt)) =
     local (\env -> env { locals = Set.fromList (map fst args),
                          polys  = Map.fromList (mapTypes btype expectedType)
                        }) $ do
@@ -131,7 +131,8 @@ morphBind expectedType b@(T.Bind (Ident _, btype) args (exp, t)) =
         -- Mark so that this bind will not be processed in recursive or cyclic 
         -- function calls
         markBind (coerce name')
-        exp' <- morphExp expectedType exp
+        expt' <- getMonoFromPoly expt
+        exp' <- morphExp expt' exp
         -- Get monomorphic type sof args
         args' <- mapM convertArg args
         addOutputBind $ M.Bind (coerce name', expectedType) 
@@ -145,11 +146,10 @@ convertArg (ident, t) = do t' <- getMonoFromPoly t
 -- Morphs function applications, such as EApp and EAdd
 morphApp :: M.Type -> T.ExpT -> T.ExpT -> EnvM M.Exp
 morphApp expectedType (e1, t1) (e2, t2)= do
-    t1' <- getMonoFromPoly t1
     t2' <- getMonoFromPoly t2
     e2' <- morphExp t2' e2
     e1' <- morphExp (M.TFun t2' expectedType) e1
-    return $ M.EApp (e1', t1') (e2', t2')
+    return $ M.EApp (e1', M.TFun t2' expectedType) (e2', t2')
 
 addOutputData :: M.Data -> EnvM ()
 addOutputData d@(M.Data (M.TData ident _) _) = modify $ Map.insert ident (Data d)
@@ -209,10 +209,10 @@ morphExp expectedType exp = case exp of
     morphExp t' exp
   T.ECase (exp, t) bs -> do
     t' <- getMonoFromPoly t
-    exp' <- morphExp t' exp
     bs' <- mapM morphBranch bs
+    exp' <- morphExp t' exp
     return $ M.ECase (exp', t') bs'
-  T.EVar ident@(Ident str) -> do
+  T.EVar ident -> do
     isLocal <- localExists ident
     if isLocal then do
       return $ M.EVar (coerce ident)
@@ -246,7 +246,8 @@ morphPattern = \case
   T.PLit (lit, t) -> do t' <- getMonoFromPoly t
                         return $ M.PLit (convertLit lit, t')
   T.PCatch -> return M.PCatch
-  T.PEnum v -> return $ M.PEnum v
+  -- Constructor ident
+  T.PEnum ident -> return $ M.PEnum ident
   T.PInj ident ps -> do ps' <- mapM morphPattern ps
                         return $ M.PInj ident ps'
 
@@ -258,8 +259,9 @@ newName t (T.Bind (Ident bindName, _) _ _) =
  else Ident (bindName ++ "$" ++ newName' t)
   where
    newName' :: M.Type -> String
-   newName' (M.TLit (Ident str)) = str
-   newName' (M.TFun t1 t2)       = newName' t1 ++ "_" ++ newName' t2
+   newName' (M.TLit (Ident str))     = str
+   newName' (M.TFun t1 t2)           = newName' t1 ++ "_" ++ newName' t2
+   newName' (M.TData (Ident str) ts) = str ++ "." ++ foldl (\s t -> s ++ "," ++ newName' t) "" ts
 
 -- Monomorphization step
 monomorphize :: T.Program -> O.Program

@@ -1,5 +1,7 @@
 const x y = x;
 
-f x = (const x 'c');
+id x = x;
+
+f x = (id 5);
 
 main = f 5;
