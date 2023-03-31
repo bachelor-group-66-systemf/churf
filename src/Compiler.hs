@@ -30,4 +30,4 @@ compileClang =
             ]
 
 compile :: String -> IO String
-compile s = pure s -- optimize s >>= compileClang
+compile s = optimize s >>= compileClang
