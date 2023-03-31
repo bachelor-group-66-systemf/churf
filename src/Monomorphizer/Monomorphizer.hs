@@ -26,15 +26,18 @@ module Monomorphizer.Monomorphizer (monomorphize, morphExp, morphBind) where
 
 import qualified TypeChecker.TypeCheckerIr as T
 import TypeChecker.TypeCheckerIr (Ident (Ident))
-import qualified Monomorphizer.MonomorphizerIr as M
+import qualified Monomorphizer.MorbIr as M
+import qualified Monomorphizer.MonomorphizerIr as O
+import Monomorphizer.DataTypeRemover (removeDataTypes)
 
 import Debug.Trace
-import Control.Monad.State (MonadState, gets, modify, StateT (runStateT))
+import Control.Monad.State (MonadState (get), gets, modify, StateT (runStateT))
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Data.Maybe (fromJust)
 import Control.Monad.Reader (Reader, MonadReader (local, ask), asks, runReader)
 import Data.Coerce (coerce)
+import Grammar.Print (printTree)
 
 -- | State Monad wrapper for "Env".
 newtype EnvM a = EnvM (StateT Output (Reader Env) a)
@@ -48,11 +51,13 @@ data Outputted = Incomplete | Complete M.Bind | Data M.Data
 -- Static environment
 data Env = Env {
   -- | All binds in the program.
-  input :: Map.Map Ident T.Bind,
+  input    :: Map.Map Ident T.Bind,
+  -- | All constructors and their respective data def.
+  dataDefs ::  Map.Map Ident T.Data,
   -- | Maps polymorphic identifiers with concrete types.
-  polys :: Map.Map Ident M.Type,
-  -- | Local variables
-  locals :: Set.Set Ident
+  polys    :: Map.Map Ident M.Type,
+  -- | Local variables.
+  locals   :: Set.Set Ident
 }
 
 localExists :: Ident -> EnvM Bool
@@ -85,8 +90,11 @@ getMain = asks (\env -> fromJust $ Map.lookup (T.Ident "main") (input env))
 mapTypes :: T.Type -> M.Type -> [(Ident, M.Type)]
 mapTypes (T.TLit _)              (M.TLit _) = []
 mapTypes (T.TVar (T.MkTVar i1))  tm         = [(i1, tm)]
-mapTypes (T.TFun pt1 pt2)          (M.TFun mt1 mt2)  = mapTypes pt1 mt1 ++ 
-                                                       mapTypes pt2 mt2
+mapTypes (T.TFun pt1 pt2)        (M.TFun mt1 mt2)  = mapTypes pt1 mt1 ++ 
+                                                     mapTypes pt2 mt2
+mapTypes (T.TData tIdent pTs)    (M.TData mIdent mTs) = if tIdent /= mIdent 
+  then error "Nuh uh"
+  else foldl (\xs (p, m) -> mapTypes p m ++ xs) [] (zip pTs mTs)
 mapTypes _ _ = error "structure of types not the same!"
 
 -- | Gets the mapped monomorphic type of a polymorphic type in the current context.
@@ -100,11 +108,10 @@ getMonoFromPoly t = do env <- ask
     (T.TFun t1 t2)            -> M.TFun (getMono polys t1) (getMono polys t2)
     (T.TVar (T.MkTVar ident)) -> case Map.lookup ident polys of
                          Just concrete -> concrete
-                         Nothing       -> error $ 
-                           "type not found! type: " ++ show ident ++ ", error in previous compilation steps"
-    -- This is pretty ugly, could use a new type
-    (T.TData (Ident str) args)         -> let args' = map (getMono polys) args in
-      M.TLit $ Ident (str ++ "$" ++ show args')
+                         Nothing       -> M.TLit (Ident "void")
+                         --error $ "type not found! type: " ++ show ident ++ ", error in previous compilation steps"
+    (T.TData ident args)         -> M.TData ident (map (getMono polys) args)
+    -- TODO: TAll should work different/should not exist in this tree
     (T.TAll _ t) -> getMono polys t
 
 -- | If ident not already in env's output, morphed bind to output
@@ -144,6 +151,43 @@ morphApp expectedType (e1, t1) (e2, t2)= do
     e1' <- morphExp (M.TFun t2' expectedType) e1
     return $ M.EApp (e1', t1') (e2', t2')
 
+addOutputData :: M.Data -> EnvM ()
+addOutputData d@(M.Data (M.TData ident _) _) = modify $ Map.insert ident (Data d)
+
+-- Gets data bind from the name of a constructor
+getInputData :: Ident -> EnvM (Maybe T.Data)
+getInputData ident = do env <- ask
+                        return $ Map.lookup ident (dataDefs env)
+
+-- | Expects polymorphic types in data definition to be mapped
+-- in environment.
+morphData :: T.Data -> EnvM ()
+morphData (T.Data t cs) = do 
+  t' <- getMonoFromPoly t
+  output <- get
+  cs' <- mapM (\(T.Inj ident t) -> do t' <- getMonoFromPoly t
+                                      return (M.Inj ident t')) cs
+  addOutputData $ M.Data t' cs'
+
+morphCons :: M.Type -> Ident -> EnvM ()
+morphCons expectedType ident = do 
+  maybeD <- getInputData ident
+  case maybeD of
+    Nothing -> error $ "identifier '" ++ show ident ++ "' not found"
+    Just d -> do
+      -- Find the polymorphic type of cons
+      case findConsType d ident of
+        Nothing -> error "didn't find constructor"
+        Just consType -> do
+          -- Map polymorphic types
+          local (\env -> env {
+            polys = Map.fromList (mapTypes consType expectedType) }) $ do
+              morphData d
+
+-- TODO: detect internal errors here
+findConsType :: T.Data -> Ident -> Maybe T.Type
+findConsType (T.Data _ cs) name1 = foldl (\maybe (T.Inj name2 t) -> if name2 == name1 then Just t else maybe) Nothing cs
+
 -- TODO: Change in tree so that these are the same.
 -- Converts Lit
 convertLit :: T.Lit -> M.Lit
@@ -175,8 +219,9 @@ morphExp expectedType exp = case exp of
     else do
       bind <- getInputBind ident
       case bind of
-        Nothing -> 
+        Nothing -> do
           -- This is a constructor
+          morphCons expectedType ident
           return $ M.EVar ident
         Just bind' -> do
           -- New bind to process
@@ -217,9 +262,9 @@ newName t (T.Bind (Ident bindName, _) _ _) =
    newName' (M.TFun t1 t2)       = newName' t1 ++ "_" ++ newName' t2
 
 -- Monomorphization step
-monomorphize :: T.Program -> M.Program
-monomorphize (T.Program defs) = M.Program $ getDefsFromOutput
-    (runEnvM Map.empty (createEnv defs) monomorphize')
+monomorphize :: T.Program -> O.Program
+monomorphize (T.Program defs) = removeDataTypes $ M.Program (getDefsFromOutput
+    (runEnvM Map.empty (createEnv defs) monomorphize'))
  where
   monomorphize' :: EnvM ()
   monomorphize' = do
@@ -233,13 +278,30 @@ runEnvM o env (EnvM stateM) = snd $ runReader (runStateT stateM o) env
 
 -- | Creates the environment based on the input binds.
 createEnv :: [T.Def] -> Env
-createEnv defs = Env { input  = Map.fromList bindPairs, 
-                       polys  = Map.empty,
-                       locals = Set.empty }
+createEnv defs = Env { input    = Map.fromList bindPairs, 
+                       dataDefs = Map.fromList dataPairs,
+                       polys    = Map.empty,
+                       locals   = Set.empty }
  where
    bindPairs = (map (\b -> (getBindName b, b)) . getBindsFromDefs) defs
+   dataPairs :: [(Ident, T.Data)]
+   dataPairs = (foldl (\acc d@(T.Data _ cs) -> map ((,d) . getConsName) cs ++ acc) [] . getDataFromDefs) defs
 
 -- Helper functions
+-- Gets custom data declarations form defs.
+getDataFromDefs :: [T.Def] -> [T.Data]
+getDataFromDefs = foldl (\bs -> \case
+                                   T.DBind _ -> bs
+                                   T.DData d -> d:bs) []
+
+getConsName :: T.Inj -> Ident
+getConsName (T.Inj ident _) = ident
+
+getBindsFromDefs :: [T.Def] -> [T.Bind]
+getBindsFromDefs = foldl (\bs -> \case
+                                   T.DBind b -> b:bs
+                                   T.DData _ -> bs) []
+
 getDefsFromOutput :: Output -> [M.Def]
 getDefsFromOutput outputMap = (map snd . Map.toList) $ fmap 
                                  (\case
@@ -247,11 +309,6 @@ getDefsFromOutput outputMap = (map snd . Map.toList) $ fmap
                                     Complete b -> M.DBind b
                                     Data     d -> M.DData d) 
                                   outputMap
-
-getBindsFromDefs :: [T.Def] -> [T.Bind]
-getBindsFromDefs = foldl (\bs -> \case
-                                   T.DBind b -> b:bs
-                                   T.DData _ -> bs) []
 
 getBindName :: T.Bind -> Ident
 getBindName (T.Bind (ident, _) _ _) = ident
