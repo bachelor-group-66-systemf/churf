@@ -51,6 +51,7 @@ executable language
       Renamer.Renamer
       TreeConverter
       Desugar.Desugar
+      Postlude
 
     hs-source-dirs:   src
 

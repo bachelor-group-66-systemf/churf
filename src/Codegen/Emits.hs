@@ -271,6 +271,7 @@ emitApp :: MIR.Type -> ExpT -> ExpT -> CompilerState ()
 emitApp rt e1 e2 = appEmitter e1 e2 []
   where
     appEmitter :: ExpT -> ExpT -> [ExpT] -> CompilerState ()
+    appEmitter ((MIR.EApp ((MIR.EVar (TIR.Ident "$add$Int_Int_Int")), _) e1), _) e2 _ = emitAdd rt e1 e2
     appEmitter e1 e2 stack = do
         let newStack = e2 : stack
         case e1 of

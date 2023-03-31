@@ -46,10 +46,14 @@ newtype Rn a = Rn {runRn :: ExceptT String (State Cxt) a}
 -- | Maps old to new name
 type Names = Map String String
 
+toStr :: VarName -> String
+toStr (VarNameLIdent (LIdent i)) = i
+toStr (VarNameSymbol (Symbol i)) = i
+
 renameDefs :: [Def] -> Err [Def]
 renameDefs defs = evalState (runExceptT (runRn $ mapM renameDef defs)) initCxt
   where
-    initNames = Map.fromList [dupe s | DBind (Bind (LIdent s) _ _) <- defs]
+    initNames = Map.fromList [dupe (toStr n) | DBind (Bind n _ _) <- defs]
 
     renameDef :: Def -> Rn Def
     renameDef = \case
@@ -96,7 +100,7 @@ substituteTVar new_names typ = case typ of
 
 renameExp :: Names -> Exp -> Rn (Names, Exp)
 renameExp old_names = \case
-    EVar (LIdent n) -> pure (old_names, EVar . LIdent . fromMaybe n $ Map.lookup n old_names)
+    EVar n -> pure (old_names, EVar . VarNameLIdent . LIdent . fromMaybe (toStr n) $ Map.lookup (toStr n) old_names)
     EInj (UIdent n) -> pure (old_names, EInj . UIdent . fromMaybe n $ Map.lookup n old_names)
     ELit lit -> pure (old_names, ELit lit)
     EApp e1 e2 -> do
@@ -110,11 +114,11 @@ renameExp old_names = \case
 
     -- TODO fix shadowing
     ELet (Bind name vars rhs) e -> do
-        (new_names, name') <- newNameL old_names name
+        (new_names, name') <- newNameL old_names (LIdent $ toStr name)
         (new_names', vars') <- newNamesL new_names vars
         (new_names'', rhs') <- renameExp new_names' rhs
         (new_names''', e') <- renameExp new_names'' e
-        pure (new_names''', ELet (Bind name' vars' rhs') e')
+        pure (new_names''', ELet (Bind (VarNameLIdent name') vars' rhs') e')
     EAbs par e -> do
         (new_names, par') <- newNameL old_names par
         (new_names', e') <- renameExp new_names e

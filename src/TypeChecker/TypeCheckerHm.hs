@@ -43,7 +43,9 @@ substPrg (T.DBind (T.Bind (name, t) args e)) = do
     (bu, sub) <- gets (bindUsages &&& bindSubs)
     let uses = fromMaybe [] $ M.lookup name bu
     let subs = mapMaybe (`M.lookup` sub) (name : uses)
-    sub <- foldM composey nullSubst (reverse subs)
+    (Subst sub0) <- foldM composey nullSubst (reverse subs)
+    (Subst sub1) <- foldM composey nullSubst subs
+    let sub = Subst $ sub1 `M.union` sub0
     return . T.DBind $ T.Bind (name, apply sub t) (apply sub args) (apply sub e)
 substPrg d = return d
 
@@ -53,29 +55,29 @@ preRun (x : xs) = case x of
     DSig (Sig n t) -> do
         collect (collectTVars t)
         s <- gets (M.keys . sigs)
-        duplicateDecl n s $ Aux.do
+        duplicateDecl (toIdent n) s $ Aux.do
             "Multiple signatures of function"
             quote $ printTree n
-        insertSig (coerce n) (Instantiated t)
+        insertSig (toIdent n) (Instantiated t)
         preRun xs
     DBind (Bind n _ e) -> do
         s <- gets (S.toList . declaredBinds)
-        duplicateDecl n s $ Aux.do
+        duplicateDecl (toIdent n) s $ Aux.do
             "Multiple declarations of function"
             quote $ printTree n
         collect (collectTVars e)
-        insertBind $ coerce n
+        insertBind $ toIdent n
         sigs <- gets sigs
-        case M.lookup (coerce n) sigs of
+        case M.lookup (toIdent n) sigs of
             Nothing -> do
                 fr <- fresh
-                insertSig (coerce n) (Generalized fr)
+                insertSig (toIdent n) (Generalized fr)
                 preRun xs
             Just _ -> preRun xs
     DData d@(Data t _) -> collect (collectTVars t) >> checkData d >> preRun xs
   where
     -- Check if function body / signature has been declared already
-    duplicateDecl :: (Monad m, MonadError Error m) => LIdent -> [T.Ident] -> String -> m ()
+    duplicateDecl :: (Monad m, MonadError Error m) => T.Ident -> [T.Ident] -> String -> m ()
     duplicateDecl n env msg = when (coerce n `elem` env) (uncatchableErr msg)
 
 checkDef :: [Def] -> Infer [T.Def' Type]
@@ -95,19 +97,19 @@ checkDef (x : xs) = case x of
 
 checkBind :: Bind -> Infer (T.Bind' Type)
 checkBind bind@(Bind name args e) = do
-    setCurrentBind $ coerce name
+    setCurrentBind $ toIdent name
     let lambda = makeLambda e (reverse (coerce args))
     (sub0, (e, lambda_t)) <- inferExp lambda
     s <- gets sigs
-    case M.lookup (coerce name) s of
+    case M.lookup (toIdent name) s of
         Just t -> do
             let t' = case t of
                     Instantiated a -> skolemize a
                     Generalized a -> a
             sub1 <- bindErr (unify t' lambda_t) bind
             comp <- sub1 `composey` sub0
-            insertBindSubst (coerce name) comp
-            return (T.Bind (coerce name, apply comp t') [] (e, lambda_t))
+            insertBindSubst (toIdent name) comp
+            return (T.Bind (toIdent name, apply comp t') [] (e, lambda_t))
         _ -> do
             uncatchableErr $ "Undeclared function: " ++ printTree name
 
@@ -222,19 +224,20 @@ algoW = \case
     -- \| x : σ ∈ Γ   τ = inst(σ)
     -- \| ----------------------
     -- \|     Γ ⊢ x : τ, ∅
-    EVar (LIdent i) -> do
+    EVar i -> do
+        let iden = toIdent i
         var <- asks vars
-        case M.lookup (coerce i) var of
+        case M.lookup iden var of
             Just t ->
                 inst t >>= \x ->
-                    return (nullSubst, (T.EVar $ coerce i, x))
+                    return (nullSubst, (T.EVar $ iden, x))
             Nothing -> do
                 sig <- gets sigs
                 cb <- gets currentBind
-                case M.lookup (coerce i) sig of
+                case M.lookup iden sig of
                     Just t -> do
-                        insertBindUsage cb (coerce i)
-                        return (nullSubst, (T.EVar $ coerce i, unlevel t))
+                        insertBindUsage cb iden
+                        return (nullSubst, (T.EVar $ iden, unlevel t))
                     Nothing ->
                         uncatchableErr $
                             "Unbound variable: "
@@ -297,15 +300,18 @@ algoW = \case
     -- The bar over S₀ and Γ means "generalize"
 
     (ELet (Bind name args e) e1) -> do
+        let iden = case name of
+                VarNameLIdent (LIdent i) -> T.Ident i
+                VarNameSymbol (Symbol i) -> T.Ident i
         (s1, (e, t0)) <- algoW (makeLambda e (coerce args))
         env <- asks vars
         let t' = generalize (apply s1 env) t0
-        withBinding (coerce name) t' $ do
+        withBinding iden t' $ do
             (s2, (e1', t2)) <- algoW e1
             let comp = s2 `compose` s1
             return
                 ( comp
-                , (T.ELet (T.Bind (coerce name, t0) [] (e, t0)) (e1', t2), t2)
+                , (T.ELet (T.Bind (iden, t0) [] (e, t0)) (e1', t2), t2)
                 )
     ECase caseExpr injs -> do
         (sub, (e', t)) <- algoW caseExpr
@@ -313,7 +319,11 @@ algoW = \case
         let comp = subst `compose` sub
         -- return (comp, apply comp (T.ECase (e', t) injs, ret_t))
         return (comp, (T.ECase (e', t) injs, ret_t))
-    EAppInf{} -> error "desugar phase failed"
+
+toIdent :: VarName -> T.Ident
+toIdent = \case
+    VarNameLIdent (LIdent i) -> T.Ident i
+    VarNameSymbol (Symbol i) -> T.Ident i
 
 checkCase :: Type -> [Branch] -> Infer (Subst, [T.Branch' Type], Type)
 checkCase _ [] = catchableErr "Atleast one case required"

@@ -15,6 +15,7 @@ import Grammar.Par (myLexer, pProgram)
 import Grammar.Print (printTree)
 import LambdaLifter (lambdaLift)
 import Monomorphizer.Monomorphizer (monomorphize)
+import Postlude (postlude)
 import Renamer.Renamer (rename)
 import System.Console.GetOpt (
     ArgDescr (NoArg, ReqArg),
@@ -102,8 +103,10 @@ main' opts s = do
     parsed <- fromSyntaxErr . pProgram $ myLexer file
     bool (printToErr $ printTree parsed) (printToErr $ show parsed) opts.debug
 
+    let preluded = postlude parsed
+
     printToErr "-- Desugar --"
-    let desugared = desugar parsed
+    let desugared = desugar preluded
     bool (printToErr $ printTree desugared) (printToErr $ show desugared) opts.debug
 
     printToErr "\n-- Renamer --"
@@ -130,7 +133,7 @@ main' opts s = do
     createDirectory "output"
     when opts.debug $ do
         writeFile "output/llvm.ll" generatedCode
-        debugDotViz
+    -- debugDotViz
 
     compile generatedCode
     printToErr "Compilation done!"

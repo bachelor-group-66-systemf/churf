@@ -13,8 +13,8 @@ DBind. Def ::= Bind;
 DSig.  Def ::= Sig;
 DData. Def ::= Data; 
 
-Sig.   Sig ::= VarName ":" Type;
-Bind. Bind ::= VarName [LIdent] "=" Exp;
+Sig.   Sig ::= LIdent ":" Type;
+Bind. Bind ::= LIdent [LIdent] "=" Exp;
 
 -------------------------------------------------------------------------------
 -- * Types
@@ -44,23 +44,17 @@ separator nonempty Inj " " ;
 -------------------------------------------------------------------------------
 
 EAnn.  Exp4 ::= "(" Exp ":" Type ")";
-EVar.  Exp3 ::= VarName;
+EVar.  Exp3 ::= LIdent;
 EInj.  Exp3 ::= UIdent;
 ELit.  Exp3 ::= Lit;
 EApp.  Exp2 ::= Exp2 Exp3;
-EAdd.  Exp1 ::= Exp1 "$$+$$" Exp2;
+EAdd.  Exp1 ::= Exp1 "+" Exp2;
 ELet.  Exp  ::= "let" Bind "in" Exp; 
 EAbs.  Exp  ::= "\\" LIdent "." Exp;
 ECase. Exp  ::= "case" Exp "of" "{" [Branch] "}";
 
-VarNameSymbol. VarName ::= "(" Symbol ")" ;
-VarNameLIdent. VarName ::= LIdent ;
-
-infixSymbol. Exp2 ::= Exp2 Symbol Exp3 ;
-define infixSymbol e1 vn e3 = EApp (EApp (EVar (VarNameSymbol vn)) e1) e3 ;
-infixTick. Exp2 ::= Exp2 "`" Exp3 "`" Exp3 ;
-define infixTick e1 e2 e3 = EApp (EApp e2 e1) e3 ;
-
+infix. Exp2 ::= Exp2 "`" Exp3 "`" Exp3 ;
+define infix e1 e2 e3 = EApp (EApp e2 e1) e3 ;
 -------------------------------------------------------------------------------
 -- * LITERALS
 -------------------------------------------------------------------------------
@@ -98,7 +92,6 @@ coercions Type 1 ;
 
 token UIdent (upper (letter | digit | '_')*) ;
 token LIdent (lower (letter | digit | '_')*) ;
-token Symbol (["@#%^&*_-+=|?/<>,•"]+) ;
 
 comment "--";
 comment "{-" "-}";
