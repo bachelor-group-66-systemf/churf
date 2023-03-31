@@ -17,9 +17,14 @@ pCons :: M1.Inj -> M2.Inj
 pCons (M1.Inj ident t) = M2.Inj ident (pType t)
 
 pType :: M1.Type -> M2.Type
-pType (M1.TLit ident) = M2.TLit ident
-pType (M1.TFun t1 t2) = M2.TFun (pType t1) (pType t2)
-pType (M1.TData (Ident str) args) = M2.TLit (Ident (str ++ show args))  -- This is the step
+pType   (M1.TLit ident) = M2.TLit ident
+pType   (M1.TFun t1 t2) = M2.TFun (pType t1) (pType t2)
+pType   d               = M2.TLit (Ident (newName d)) -- This is the step
+
+newName :: M1.Type -> String
+newName (M1.TLit (Ident str)) = str
+newName (M1.TFun t1 t2) = newName t1 ++ newName t2
+newName (M1.TData (Ident str) args) = str ++ concatMap newName args
 
 pBind :: M1.Bind -> M2.Bind
 pBind (M1.Bind id argIds expt) = M2.Bind (pId id) (map pId argIds) (pExpT expt)
