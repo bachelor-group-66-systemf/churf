@@ -188,6 +188,11 @@ instance Print t => Print (Inj' t) where
     prt i = \case
         Inj uident type_ -> prPrec i 0 (concatD [prt 0 uident, doc (showString ":"), prt 0 type_])
 
+instance Print t => Print [Inj' t] where
+    prt _ [] = concatD []
+    prt i [x] = prt i x
+    prt i (x : xs) = prPrec i 0 $ concatD [prt i x, doc $ showString "\n  ", prt i xs]
+
 instance Print t => Print (Pattern' t) where
     prt i = \case
         PVar name -> prPrec i 1 (concatD [prt 0 name])
