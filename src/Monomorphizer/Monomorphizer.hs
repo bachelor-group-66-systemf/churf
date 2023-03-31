@@ -93,9 +93,9 @@ mapTypes (T.TVar (T.MkTVar i1))  tm         = [(i1, tm)]
 mapTypes (T.TFun pt1 pt2)        (M.TFun mt1 mt2)  = mapTypes pt1 mt1 ++ 
                                                      mapTypes pt2 mt2
 mapTypes (T.TData tIdent pTs)    (M.TData mIdent mTs) = if tIdent /= mIdent 
-  then error "Nuh uh"
+  then error "nuh uh"
   else foldl (\xs (p, m) -> mapTypes p m ++ xs) [] (zip pTs mTs)
-mapTypes _ _ = error "structure of types not the same!"
+mapTypes t1 t2 = error $ "structure of types not the same: '" ++ printTree t1 ++ "', '" ++ printTree t2 ++ "'"
 
 -- | Gets the mapped monomorphic type of a polymorphic type in the current context.
 getMonoFromPoly :: T.Type -> EnvM M.Type
@@ -144,12 +144,12 @@ convertArg (ident, t) = do t' <- getMonoFromPoly t
                            return (ident,  t')
 
 -- Morphs function applications, such as EApp and EAdd
-morphApp :: M.Type -> T.ExpT -> T.ExpT -> EnvM M.Exp
-morphApp expectedType (e1, t1) (e2, t2)= do
+morphApp :: (M.ExpT -> M.ExpT -> M.Exp) ->  M.Type -> T.ExpT -> T.ExpT -> EnvM M.Exp
+morphApp node expectedType (e1, t1) (e2, t2)= do
     t2' <- getMonoFromPoly t2
     e2' <- morphExp t2' e2
     e1' <- morphExp (M.TFun t2' expectedType) e1
-    return $ M.EApp (e1', M.TFun t2' expectedType) (e2', t2')
+    return $ node (e1', M.TFun t2' expectedType) (e2', t2')
 
 addOutputData :: M.Data -> EnvM ()
 addOutputData d@(M.Data (M.TData ident _) _) = modify $ Map.insert ident (Data d)
@@ -201,9 +201,9 @@ morphExp expectedType exp = case exp of
   T.EInj ident -> do
     return $ M.EVar ident
   T.EApp e1 e2 -> do
-    morphApp expectedType e1 e2
+    morphApp M.EApp expectedType e1 e2
   T.EAdd e1 e2 -> do
-    morphApp expectedType e1 e2
+    morphApp M.EAdd expectedType e1 e2
   T.EAbs ident (exp, t) -> local (\env -> env { locals = Set.insert ident (locals env) }) $ do 
     t' <- getMonoFromPoly t
     morphExp t' exp
