@@ -40,6 +40,8 @@ executable language
       LambdaLifter
       Monomorphizer.Monomorphizer
       Monomorphizer.MonomorphizerIr
+      Monomorphizer.MorbIr
+      Monomorphizer.DataTypeRemover
       Codegen.Codegen
       Codegen.LlvmIr
       Codegen.Auxillary
