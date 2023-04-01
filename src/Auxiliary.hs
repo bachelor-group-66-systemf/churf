@@ -46,3 +46,10 @@ char = TLit "Char"
 
 tupSequence :: Monad m => (m a, b) -> m (a, b)
 tupSequence (ma, b) = (,b) <$> ma
+
+fst_ :: (a, b, c) -> a
+snd_ :: (a, b, c) -> b
+trd_ :: (a, b, c) -> c
+snd_ (_, a, _) = a
+fst_ (a, _, _) = a
+trd_ (_, _, a) = a

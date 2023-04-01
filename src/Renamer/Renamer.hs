@@ -5,23 +5,31 @@ module Renamer.Renamer (rename) where
 
 import Auxiliary (mapAccumM)
 import Control.Applicative (Applicative (liftA2))
+import Control.Monad (when)
 import Control.Monad.Except (
     ExceptT,
-    MonadError (throwError),
+    MonadError (catchError, throwError),
     runExceptT,
  )
 import Control.Monad.State (
     MonadState,
     State,
+    StateT,
     evalState,
+    evalStateT,
+    get,
     gets,
+    lift,
     mapAndUnzipM,
     modify,
+    put,
  )
 import Data.Function (on)
 import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Maybe (fromMaybe)
+import Data.Set (Set)
+import Data.Set qualified as Set
 import Data.Tuple.Extra (dupe, second)
 import Grammar.Abs
 import Grammar.ErrM (Err)
@@ -134,17 +142,22 @@ renameBranches ns xs = do
     if null new_names then return (mempty, xs') else return (head new_names, xs')
 
 renameBranch :: Names -> Branch -> Rn (Names, Branch)
-renameBranch ns (Branch patt e) = do
-    (new_names, patt') <- renamePattern ns patt
+renameBranch ns b@(Branch patt e) = do
+    (new_names, patt') <- catchError (evalStateT (renamePattern ns patt) mempty) (\x -> throwError $ x ++ " in pattern '" ++ printTree b ++ "'")
     (new_names', e') <- renameExp new_names e
     return (new_names', Branch patt' e')
 
-renamePattern :: Names -> Pattern -> Rn (Names, Pattern)
+renamePattern :: Names -> Pattern -> StateT (Set LIdent) Rn (Names, Pattern)
 renamePattern ns p = case p of
     PInj cs ps -> do
         (ns_new, ps') <- mapAccumM renamePattern ns ps
         return (ns_new, PInj cs ps')
-    PVar name -> second PVar <$> newNameL ns name
+    PVar name -> do
+        vs <- get
+        when (name `Set.member` vs) (throwError $ "Conflicting definitions of '" ++ printTree name ++ "'")
+        put (Set.insert name vs)
+        nn <- lift $ newNameL ns name
+        return $ second PVar nn
     _ -> return (ns, p)
 
 renameTVars :: Type -> Rn Type
