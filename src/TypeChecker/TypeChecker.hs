@@ -15,4 +15,4 @@ typecheck tc = rmTEVar <=< f
   where
     f = case tc of
         Bi -> Bi.typecheck
-        Hm -> Hm.typecheck
+        Hm -> fmap fst . Hm.typecheck

@@ -12,6 +12,7 @@ import Control.Monad.Except
 import Control.Monad.Identity (Identity, runIdentity)
 import Control.Monad.Reader
 import Control.Monad.State
+import Control.Monad.Writer
 import Data.Coerce (coerce)
 import Data.Function (on)
 import Data.List (foldl', nub, sortOn)
@@ -29,7 +30,7 @@ import TypeChecker.TypeCheckerIr qualified as T
 -- TODO: Disallow mutual recursion
 
 -- | Type check a program
-typecheck :: Program -> Either String (T.Program' Type)
+typecheck :: Program -> Either String (T.Program' Type, [Warning])
 typecheck = onLeft msg . run . checkPrg
   where
     onLeft :: (Error -> String) -> Either Error a -> Either String a
@@ -863,13 +864,14 @@ dataErr ma d =
 initCtx = Ctx mempty
 initEnv = Env 0 'a' mempty mempty mempty mempty
 
-run :: Infer a -> Either Error a
+run :: Infer a -> Either Error (a, [Warning])
 run = run' initEnv initCtx
 
-run' :: Env -> Ctx -> Infer a -> Either Error a
+run' :: Env -> Ctx -> Infer a -> Either Error (a, [Warning])
 run' e c =
     runIdentity
         . runExceptT
+        . runWriterT
         . flip runReaderT c
         . flip evalStateT e
         . runInfer
@@ -891,7 +893,9 @@ data Error = Error {msg :: String, catchable :: Bool}
     deriving (Show)
 type Subst = Map T.Ident Type
 
-newtype Infer a = Infer {runInfer :: StateT Env (ReaderT Ctx (ExceptT Error Identity)) a}
+newtype Warning = NonExhaustive String
+
+newtype Infer a = Infer {runInfer :: StateT Env (ReaderT Ctx (WriterT [Warning] (ExceptT Error Identity))) a}
     deriving (Functor, Applicative, Monad, MonadReader Ctx, MonadError Error, MonadState Env)
 
 catchableErr :: MonadError Error m => String -> m a
