@@ -1,28 +1,23 @@
-main = head (Cons (sum (repeat 5 9223372036854775807)) Nil);  --9223372036854775807
-
--- main = case (bind (fmap (\s . s + 1) (Just 5)) (\s . pure (s + 10))) of {
---     Just a => a ;
---     Nothing => minusOne ;
--- };
-
----- MAYBE MONAD ----
-data Maybe () where {
-    Just : Int -> Maybe ()
-    Nothing : Maybe ()
+data List (a) where {
+    Nil : List (a)
+    Cons : a -> List (a) -> List (a)
 };
 
-fmap : (Int -> Int) -> Maybe () -> Maybe () ;
-fmap f m = case m of {
-    Just a => pure (f a) ;
-    Nothing => Nothing ;
+main = length (Cons 1 (Cons 2 Nil)) ;
+id x = x;
+const x y = x ;
+
+map : (o -> g) -> List (o) -> List (g) ;
+map f xs = case xs of {
+    Nil => Nil ;
+    Cons x xs => Cons (f x) (map f xs) ;
 };
 
-pure : Int -> Maybe () ;
-pure x = Just x;
+length : List (Int) -> Int ;
+length xs = case xs of {
+    Nil => 0 ;
+    Cons _ xs => 1 + length xs ;
+};
 
--- scombinator not working yet :)
-
-bind : Maybe () -> (Int -> Maybe ()) -> Maybe () ;
-bind x f = case x of {
-    Just x => f x ;
-    Nothing => Nothing ;
+id_int : a -> b ;
+id_int x = (x : a) ;

@@ -13,12 +13,12 @@ import Prelude
 import Prelude qualified as C (Eq, Ord, Read, Show)
 
 newtype Program' t = Program [Def' t]
-    deriving (C.Eq, C.Ord, C.Show, C.Read)
+    deriving (C.Eq, C.Ord, C.Show, C.Read, Functor)
 
 data Def' t
     = DBind (Bind' t)
     | DData (Data' t)
-    deriving (C.Eq, C.Ord, C.Show, C.Read)
+    deriving (C.Eq, C.Ord, C.Show, C.Read, Functor)
 
 data Type
     = TLit Ident
@@ -29,10 +29,10 @@ data Type
     deriving (C.Eq, C.Ord, C.Show, C.Read)
 
 data Data' t = Data t [Inj' t]
-    deriving (C.Eq, C.Ord, C.Show, C.Read)
+    deriving (C.Eq, C.Ord, C.Show, C.Read, Functor)
 
 data Inj' t = Inj Ident t
-    deriving (C.Eq, C.Ord, C.Show, C.Read)
+    deriving (C.Eq, C.Ord, C.Show, C.Read, Functor)
 
 newtype Ident = Ident String
     deriving (C.Eq, C.Ord, C.Show, C.Read, IsString)
@@ -43,7 +43,7 @@ data Pattern' t
     | PCatch
     | PEnum Ident
     | PInj Ident [Pattern' t] -- TODO should be (Pattern' t, t)
-    deriving (C.Eq, C.Ord, C.Show, C.Read)
+    deriving (C.Eq, C.Ord, C.Show, C.Read, Functor)
 
 data Exp' t
     = EVar Ident
@@ -54,7 +54,7 @@ data Exp' t
     | EAdd (ExpT' t) (ExpT' t)
     | EAbs Ident (ExpT' t)
     | ECase (ExpT' t) [Branch' t]
-    deriving (C.Eq, C.Ord, C.Show, C.Read)
+    deriving (C.Eq, C.Ord, C.Show, C.Read, Functor)
 
 newtype TVar = MkTVar Ident
     deriving (C.Eq, C.Ord, C.Show, C.Read)
@@ -63,10 +63,10 @@ type Id' t = (Ident, t)
 type ExpT' t = (Exp' t, t)
 
 data Bind' t = Bind (Id' t) [Id' t] (ExpT' t)
-    deriving (C.Eq, C.Ord, C.Show, C.Read)
+    deriving (C.Eq, C.Ord, C.Show, C.Read, Functor)
 
 data Branch' t = Branch (Pattern' t, t) (ExpT' t)
-    deriving (C.Eq, C.Ord, C.Show, C.Read)
+    deriving (C.Eq, C.Ord, C.Show, C.Read, Functor)
 
 instance Print Ident where
     prt _ (Ident s) = doc $ showString s
