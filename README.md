@@ -13,6 +13,7 @@ Using the Hindley-Milner type checker: `./language -t hm example.crf`
 
 Using the bidirectional type checker: `./language -t bi example.crf`
 
+The program to compile has to have the file extension `.crf`
 # Syntax and quirks
 
 The syntactic requirements differ a bit using the different type checkers.
