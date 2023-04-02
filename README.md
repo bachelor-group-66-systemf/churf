@@ -5,7 +5,7 @@ this is done using the command `bnfc -o src -d Grammar.cf`
 Churf can then be built using `cabal install`
 
 Using the tool [make](https://www.gnu.org/software/make/) the entire thing can be built by running `make`
-If [just](https://github.com/casey/just) is preferred then run `just build`
+or using [just](https://github.com/casey/just), `just build`
 
 # Compiling a program
 
