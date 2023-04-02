@@ -19,7 +19,6 @@ desugarBind (Bind name args e) = Bind name args (desugarExp e)
 
 desugarExp :: Exp -> Exp
 desugarExp = \case
-    EAppInf e2 e1 -> (EApp `on` desugarExp) e1 e2
     EApp e1 e2 -> (EApp `on` desugarExp) e1 e2
     EAdd e1 e2 -> (EAdd `on` desugarExp) e1 e2
     EAbs i e -> EAbs i (desugarExp e)

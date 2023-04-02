@@ -159,10 +159,6 @@ checkBind (Bind name args e) = do
             let m1 = M.fromList $ zip fvs1 letters
             let t0 = replace m0 t'
             let t1 = replace m1 lambda_t
-            ctrace "lambda" lambda_t
-            ctrace "t'" t'
-            ctrace "t0" t0
-            ctrace "t1" t1
             unless
                 (t1 <<= t0)
                 ( throwError $
@@ -388,7 +384,6 @@ algoW = \case
         (subst, injs, ret_t) <- checkCase t injs
         let comp = subst `compose` sub
         return (comp, apply comp (T.ECase (e', t) injs, ret_t))
-    EAppInf{} -> error "desugar phase failed"
 
 checkCase :: Type -> [Branch] -> Infer (Subst, [T.Branch' Type], Type)
 checkCase _ [] = catchableErr "Atleast one case required"
