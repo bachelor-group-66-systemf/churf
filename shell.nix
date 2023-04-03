@@ -6,15 +6,19 @@ pkgs.haskellPackages.developPackage {
   withHoogle = true;
   modifier = drv:
   pkgs.haskell.lib.addBuildTools drv (
-    (with pkgs; [ hlint haskell-language-server ghc jasmin llvmPackages_15.libllvm])
+    (with pkgs; [ hlint 
+                  haskell-language-server 
+                  ghc 
+                  jasmin 
+                  llvmPackages_15.libllvm 
+                  texlive.combined.scheme-full
+                ])
     ++
-    (with pkgs.haskellPackages; [ 
-      cabal-install
-      stylish-haskell 
-      BNFC 
-      alex
-      happy
-    ])
-  );
+    (with pkgs.haskellPackages; [ cabal-install
+                                  stylish-haskell 
+                                  BNFC 
+                                  alex
+                                  happy
+                                ]));
 }
 

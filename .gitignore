@@ -9,3 +9,5 @@ test_program_result
 output/
 *.o
 *.out
+*.aux
+*.log
