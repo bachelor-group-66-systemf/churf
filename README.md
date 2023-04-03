@@ -16,6 +16,8 @@ Using the bidirectional type checker: `./language -t bi example.crf`
 The program to compile has to have the file extension `.crf`
 # Syntax and quirks
 
+See Grammar.pdf for the full syntax.
+
 The syntactic requirements differ a bit using the different type checkers.
 The bidirectional type checker require explicit `forall` everywhere a type
 forall quantified type variable is declared. In the Hindley-Milner type checker
@@ -28,17 +30,18 @@ or inferrable.
 Single line comments are written using `--`
 Multi line comments are written using `{-` and `-}`
 
+Braches and semicolons are optional.
+
 ## Program
 
 A program is a list of defs separated by semicolons, which in turn is either a bind, a signature, or a data types
 `Program ::= [Def]`
 
 ```hs
-data Test () where {
+data Test () where 
     Test : Test ()
-};
-test : Int ;
-test = 0 ;
+test : Int
+test = 0
 ```
 
 ## Bind
@@ -49,7 +52,7 @@ Both name and arguments have to start with lower case letters
 `Bind ::= LIdent [LIdent] "=" Exp`
 
 ```hs
-example x y = x + y ;
+example x y = x + y
 ```
 
 ## Signature
@@ -59,7 +62,7 @@ The name has to start with a lowe case letter
 `Sig ::= LIdent ":" Type`
 
 ```hs
-const : a -> b -> a ;
+const : a -> b -> a
 ```
 
 ## Data type
@@ -72,12 +75,10 @@ The type can be any type for parsing, but only `TData` will type check.
 
 The list of Inj is separated by white space. Using new lines is recommended for ones own sanity.
 
-
 ```hs
-data Maybe (a) where {
+data Maybe (a) where
     Nothing : Maybe (a)
-    Just : a -> Maybe (a)
-};
+    Just    : a -> Maybe (a)
 ```
 The parens are necessary for every data type to make the grammar unambiguous.
 Thus in `data Bool () where ...` the parens *do* *not* represent Unit
@@ -108,11 +109,11 @@ and foralls take one type variable followed by a type.
 `TAll ::= "forall" LIdent "." Type`
 
 ```hs
-exampleLit : Int ;
-exampleVar : a ;
-exampleData : Maybe (a) ;
-exampleFun : Int -> a ;
-exampleAll : forall a. forall b. a -> b ;
+exampleLit : Int
+exampleVar : a
+exampleData : Maybe (a)
+exampleFun : Int -> a
+exampleAll : forall a. forall b. a -> b
 ```
 
 ## Expressions
@@ -177,10 +178,9 @@ Case expression consist of a list semicolon separated list of Branches
 `ECase ::= "case" Exp "of" "{" [Branch] "}"`
 
 ```hs
-case xs of {
-    Cons x xs => 1;
-    Nil => 0;
-};
+case xs of
+    Cons x xs => 1
+    Nil => 0
 ```
 
 ### Branch
