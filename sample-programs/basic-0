@@ -1,20 +1,15 @@
-data Bool () where {
-    True : Bool ()
+data Bool () where
+    True  : Bool ()
     False : Bool ()
-};
 
-even : Int -> Bool ();
-even x = not (odd x) ;
+not x = case x of
+    True => False
+    False => True
 
-odd x = not (even x) ;
+even : Int -> Bool ()
+even x = not (odd x)
+odd x = not (even x)
 
-not x = case x of {
-    True => False;
-    False => True;
-};
-
-f = g;
-g = f;
 
 
 
