@@ -12,18 +12,18 @@ import           Control.Applicative       (Alternative, Applicative (liftA2),
 import           Control.Monad.Except      (ExceptT, MonadError (throwError),
                                             liftEither, runExceptT, unless,
                                             zipWithM, zipWithM_)
-import           Control.Monad.State       (MonadState (get, put), State,
-                                            evalState, gets, modify)
+import           Control.Monad.State       (MonadState, State, evalState, gets,
+                                            modify)
 import           Data.Coerce               (coerce)
 import           Data.Foldable             (foldrM)
 import           Data.Function             (on)
 import           Data.List                 (intercalate, partition)
-import           Data.List.Extra           (allSame)
 import           Data.Map                  (Map)
 import qualified Data.Map                  as Map
 import           Data.Maybe                (fromMaybe, isNothing)
 import           Data.Sequence             (Seq (..))
 import qualified Data.Sequence             as S
+import qualified Data.Set                  as Set
 import           Data.Tuple.Extra          (second, secondM)
 import           Debug.Trace               (trace)
 import           Grammar.Abs
@@ -72,11 +72,20 @@ initCxt defs = Cxt
                                         | DBind' name vars rhs <- defs
                                         ]
             , next_tevar = 0
-            , data_injs  = Map.fromList [ (name, t)
+            , data_injs  = Map.fromList [ (name, foldr TAll t $ unboundedTVars t)
                                         | DData (Data _ injs) <- defs
                                         , Inj name t <- injs
                                         ]
             }
+  where
+    unboundedTVars = uncurry (Set.\\)  . go (mempty, mempty)
+      where
+        go (unbounded, bounded) = \case
+          TAll tvar t  -> go (unbounded, Set.insert tvar bounded) t
+          TVar tvar    -> (Set.insert tvar unbounded, bounded)
+          TFun t1 t2   -> foldl go (unbounded, bounded) [t1, t2]
+          TData _ typs -> foldl go (unbounded, bounded) typs
+          _            -> (unbounded, bounded)
 
 typecheck :: Program -> Err (T.Program' Type)
 typecheck (Program defs) = do
