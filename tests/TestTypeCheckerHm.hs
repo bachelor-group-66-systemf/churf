@@ -1,26 +1,18 @@
-{-# LANGUAGE QualifiedDo #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE QualifiedDo       #-}
 
 module TestTypeCheckerHm where
 
-import Control.Monad ((<=<))
-import DoStrings qualified as D
-import Grammar.Par (myLexer, pProgram)
-import Grammar.Print (printTree)
-import Test.Hspec
-import Prelude (
-    Bool (..),
-    Either (..),
-    fmap,
-    foldl1,
-    not,
-    ($),
-    (.),
-    (>>),
- )
+import           Control.Monad             ((<=<))
+import qualified DoStrings                 as D
+import           Grammar.Par               (myLexer, pProgram)
+import           Grammar.Print             (printTree)
+import           Prelude                   (Bool (..), Either (..), fmap,
+                                            foldl1, fst, not, ($), (.), (>>))
+import           Test.Hspec
 
 -- import Test.QuickCheck
-import TypeChecker.TypeCheckerHm (typecheck)
+import           TypeChecker.TypeCheckerHm (typecheck)
 
 testTypeCheckerHm = describe "Hindley-Milner type checker test" $ do
     foldl1 (>>) goods
@@ -217,10 +209,10 @@ bes =
 testSatisfy desc test satisfaction = specify desc $ run test `shouldSatisfy` satisfaction
 testBe desc test shouldbe = specify desc $ run test `shouldBe` run shouldbe
 
-run = fmap printTree . typecheck <=< pProgram . myLexer
+run = fmap (printTree . fst) . typecheck <=< pProgram . myLexer
 
 ok (Right _) = True
-ok (Left _) = False
+ok (Left _)  = False
 
 bad = not . ok
 
@@ -232,7 +224,7 @@ _const = D.do
 _List = D.do
     "data List (a) where"
     "  {"
-    "    Nil : List (a)"
+    "    Nil : List (a);"
     "    Cons : a -> List (a) -> List (a)"
     "  };"
 
