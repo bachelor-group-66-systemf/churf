@@ -178,26 +178,13 @@ abstractExp (free, (exp, typ)) = case exp of
         names = snoc parm freeList
         applyVars (e, t) name = (EApp (e, t) (EVar name, t_var), t_return)
           where
-            (t_var, t_return) = applyVarType t
+            (t_var, t_return) = case t of
+                                  TFun t1 t2 -> (t1, t2)
+
 
 
 abstractBranch :: AnnBranch -> State Int Branch
 abstractBranch (_, AnnBranch patt exp) = Branch patt <$> abstractExp exp
-
-applyVarType :: Type -> (Type, Type)
-applyVarType typ = (t1, foldr ($) t2 foralls)
-
-  where
-    (t1, t2) = case typ' of
-      TFun t1 t2 -> (t1, t2)
-      _          -> error "Not a function!"
-
-    (foralls, typ') = skipForalls [] typ
-
-
-    skipForalls acc = \case
-      TAll tvar t -> skipForalls (snoc (TAll tvar) acc) t
-      t           -> (acc, t)
 
 nextNumber :: State Int Int
 nextNumber = do
@@ -270,20 +257,9 @@ getVars :: Type -> [Type]
 getVars = fst . partitionType
 
 partitionType :: Type -> ([Type], Type)
-partitionType = go [] . skipForalls'
+partitionType = go []
   where
-
     go acc t = case t of
         TFun t1 t2 -> go (snoc t1 acc) t2
         _          -> (acc, t)
-
-skipForalls' :: Type -> Type
-skipForalls' = snd . skipForalls
-
-skipForalls :: Type -> ([Type -> Type], Type)
-skipForalls = go []
-  where
-    go acc typ = case typ of
-        TAll tvar t -> go (snoc (TAll tvar) acc) t
-        _           -> (acc, typ)
 

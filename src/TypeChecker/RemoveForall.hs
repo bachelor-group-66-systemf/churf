@@ -1,0 +1,48 @@
+{-# LANGUAGE LambdaCase #-}
+
+module TypeChecker.RemoveForall (removeForall) where
+
+import           Auxiliary                 (onM)
+import           Control.Applicative       (Applicative (liftA2))
+import           Data.Function             (on)
+import           Data.List                 (partition)
+import           Data.Tuple.Extra          (second)
+import           Grammar.ErrM              (Err)
+import qualified TypeChecker.ReportTEVar   as R
+import           TypeChecker.TypeCheckerIr
+
+removeForall :: Program' R.Type -> Program
+removeForall (Program defs) = Program $ map (DData . rfData) ds
+                                     ++ map (DBind . rfBind) bs
+  where
+    (ds, bs) = ([d | DData d <- defs ], [ b | DBind b <- defs ])
+    rfData (Data typ injs) = Data (rfType typ) (map rfInj injs)
+    rfInj (Inj name typ) = Inj name (rfType typ)
+    rfBind (Bind name vars rhs) = Bind (rfId name) (map rfId vars) (rfExpT rhs)
+    rfId = second rfType
+    rfExpT (e, t) = (rfExp e, rfType t)
+    rfExp = \case
+        EApp e1 e2  -> on EApp rfExpT e1 e2
+        EAdd e1 e2  -> on EAdd rfExpT e1 e2
+        ELet bind e -> ELet (rfBind bind) (rfExpT e)
+        EAbs name e -> EAbs name (rfExpT e)
+        ECase e bs  -> ECase (rfExpT e) (map rfBranch bs)
+        ELit lit    -> ELit lit
+        EVar name   -> EVar name
+        EInj name   -> EInj name
+    rfBranch (Branch (p, t) e) = Branch (rfPattern p, rfType t) (rfExpT e)
+    rfPattern = \case
+        PVar id       -> PVar (rfId id)
+        PLit (lit, t) -> PLit (lit, rfType t)
+        PCatch        -> PCatch
+        PEnum name    -> PEnum name
+        PInj name ps  -> PInj name (map rfPattern ps)
+
+rfType :: R.Type -> Type
+rfType = \case
+  R.TAll _ t      -> rfType t
+  R.TFun t1 t2    -> on TFun rfType t1 t2
+  R.TData name ts -> TData name (map rfType ts)
+  R.TLit lit      -> TLit lit
+  R.TVar tvar     -> TVar tvar
+

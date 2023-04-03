@@ -121,6 +121,7 @@ typecheckBind (Bind name vars rhs) = do
         , "Did you forget to add type annotation to a polymorphic function?"
         ]
 
+-- TODO remove some checks
 typecheckDataType :: Data -> Err (T.Data' Type)
 typecheckDataType (Data typ injs) = do
     (name, tvars) <- go [] typ
@@ -135,6 +136,7 @@ typecheckDataType (Data typ injs) = do
           -> pure (name, tvars')
       _ -> throwError $ unwords ["Bad data type definition: ", ppT typ]
 
+-- TODO remove some checks
 typecheckInj :: Inj -> UIdent -> [TVar] -> Err (T.Inj' Type)
 typecheckInj (Inj inj_name inj_typ) name tvars
     | not $ boundTVars tvars inj_typ
@@ -878,18 +880,18 @@ traceTs s xs = trace (s ++ " [ " ++ intercalate ", " (map ppT xs) ++ " ]") pure 
 
 ppT = \case
     TLit (UIdent s)            -> s
-    TVar (MkTVar (LIdent s))   -> "α_" ++ s
-    TFun t1 t2                 -> ppT t1 ++ "→" ++ ppT t2
+    TVar (MkTVar (LIdent s))   -> "a_" ++ s
+    TFun t1 t2                 -> ppT t1 ++ "->" ++ ppT t2
     TAll (MkTVar (LIdent s)) t -> "forall " ++ s ++ ". " ++ ppT t
-    TEVar (MkTEVar (LIdent s)) -> "ά_" ++ s
+    TEVar (MkTEVar (LIdent s)) -> "a^_" ++ s
     TData (UIdent name) typs   -> name ++ " (" ++ unwords (map ppT typs)
                                        ++ " )"
 ppEnvElem = \case
    EnvVar         (LIdent s) t           -> s ++ ":" ++ ppT t
-   EnvTVar        (MkTVar  (LIdent s))   -> "α_" ++ s
-   EnvTEVar       (MkTEVar (LIdent s))   -> "ά_" ++ s
-   EnvTEVarSolved (MkTEVar (LIdent s)) t -> "ά_" ++ s ++ "=" ++ ppT t
-   EnvMark        (MkTEVar (LIdent s))   -> "▶" ++ "ά_" ++ s
+   EnvTVar        (MkTVar  (LIdent s))   -> "a_" ++ s
+   EnvTEVar       (MkTEVar (LIdent s))   -> "a^_" ++ s
+   EnvTEVarSolved (MkTEVar (LIdent s)) t -> "_" ++ s ++ "=" ++ ppT t
+   EnvMark        (MkTEVar (LIdent s))   -> "▶" ++ "a^_" ++ s
 
 ppEnv = \case
     Empty      -> "·"

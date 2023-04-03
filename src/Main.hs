@@ -1,11 +1,12 @@
 {-# LANGUAGE OverloadedRecordDot #-}
 
+
 module Main where
 
+import           AnnForall                   (annotateForall)
 import           Codegen.Codegen             (generateCode)
 import           Compiler                    (compile)
-import           Control.Monad               (when)
-import           Data.Bool                   (bool)
+import           Control.Monad               (when, (<=<))
 import           Data.List.Extra             (isSuffixOf)
 import           Data.Maybe                  (fromJust, isNothing)
 import           Desugar.Desugar             (desugar)
@@ -13,10 +14,11 @@ import           GHC.IO.Handle.Text          (hPutStrLn)
 import           Grammar.ErrM                (Err)
 import           Grammar.Layout              (resolveLayout)
 import           Grammar.Par                 (myLexer, pProgram)
-import           Grammar.Print               (printTree)
+import           Grammar.Print               (Print, printTree)
 import           LambdaLifter                (lambdaLift)
 import           Monomorphizer.Monomorphizer (monomorphize)
 import           Renamer.Renamer             (rename)
+import           ReportForall                (reportForall)
 import           System.Console.GetOpt       (ArgDescr (NoArg, ReqArg),
                                               ArgOrder (RequireOrder),
                                               OptDescr (Option), getOpt,
@@ -87,35 +89,40 @@ data Options = Options
     }
 
 main' :: Options -> String -> IO ()
-main' opts s = do
+main' opts s =
+  let
+    log :: (Print a, Show a) => a -> IO ()
+    log = printToErr . if opts.debug then show else printTree
+  in do
     file <- readFile s
 
     printToErr "-- Parse Tree -- "
-    parsed <- fromSyntaxErr . pProgram . resolveLayout True $ myLexer file
-    bool (printToErr $ printTree parsed) (printToErr $ show parsed) opts.debug
+    parsed <- fromErr . pProgram . resolveLayout True $ myLexer file
+    log parsed
 
     printToErr "-- Desugar --"
     let desugared = desugar parsed
-    bool (printToErr $ printTree desugared) (printToErr $ show desugared) opts.debug
+    log desugared
 
     printToErr "\n-- Renamer --"
-    renamed <- fromRenamerErr . rename $ desugared
-    bool (printToErr $ printTree renamed) (printToErr $ show renamed) opts.debug
+    _ <- fromErr $ reportForall (fromJust opts.typechecker) desugared
+    renamed <- fromErr $ (rename <=< annotateForall) desugared
+    log renamed
 
     printToErr "\n-- TypeChecker --"
-    typechecked <- fromTypeCheckerErr $ typecheck (fromJust opts.typechecker) renamed
-    bool (printToErr $ printTree typechecked) (printToErr $ show typechecked) opts.debug
+    typechecked <- fromErr $ typecheck (fromJust opts.typechecker) renamed
+    log typechecked
 
     printToErr "\n-- Lambda Lifter --"
     let lifted = lambdaLift typechecked
-    bool (printToErr $ printTree lifted) (printToErr $ show lifted) opts.debug
+    log lifted
 
     printToErr "\n -- Monomorphizer --"
     let monomorphized = monomorphize lifted
-    bool (printToErr $ printTree monomorphized) (printToErr $ show monomorphized) opts.debug
+    log lifted
 
     printToErr "\n -- Compiler --"
-    generatedCode <- fromCompilerErr $ generateCode monomorphized
+    generatedCode <- fromErr $ generateCode monomorphized
 
     check <- doesPathExist "output"
     when check (removeDirectoryRecursive "output")
@@ -143,55 +150,9 @@ debugDotViz = do
 
 spawnWait :: String -> IO ExitCode
 spawnWait s = spawnCommand s >>= waitForProcess
+
 printToErr :: String -> IO ()
 printToErr = hPutStrLn stderr
 
-fromCompilerErr :: Err a -> IO a
-fromCompilerErr =
-    either
-        ( \err -> do
-            putStrLn "\nCOMPILER ERROR"
-            putStrLn err
-            exitFailure
-        )
-        pure
-
-fromSyntaxErr :: Err a -> IO a
-fromSyntaxErr =
-    either
-        ( \err -> do
-            putStrLn "\nSYNTAX ERROR"
-            putStrLn err
-            exitFailure
-        )
-        pure
-
-fromTypeCheckerErr :: Err a -> IO a
-fromTypeCheckerErr =
-    either
-        ( \err -> do
-            putStrLn "\nTYPECHECKER ERROR"
-            putStrLn err
-            exitFailure
-        )
-        pure
-
-fromRenamerErr :: Err a -> IO a
-fromRenamerErr =
-    either
-        ( \err -> do
-            putStrLn "\nRENAMER ERROR"
-            putStrLn err
-            exitFailure
-        )
-        pure
-
-fromInterpreterErr :: Err a -> IO a
-fromInterpreterErr =
-    either
-        ( \err -> do
-            putStrLn "\nINTERPRETER ERROR"
-            putStrLn err
-            exitFailure
-        )
-        pure
+fromErr :: Err a -> IO a
+fromErr = either (\s -> printToErr s >> exitFailure) pure

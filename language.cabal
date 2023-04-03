@@ -35,10 +35,12 @@ executable language
       Auxiliary
       Renamer.Renamer
       TypeChecker.TypeChecker
+      AnnForall
       TypeChecker.TypeCheckerHm
       TypeChecker.TypeCheckerBidir
       TypeChecker.TypeCheckerIr
-      TypeChecker.RemoveTEVar
+      TypeChecker.ReportTEVar
+      TypeChecker.RemoveForall
       LambdaLifter
       Monomorphizer.Monomorphizer
       Monomorphizer.MonomorphizerIr
@@ -72,11 +74,14 @@ executable language
 
 Test-suite language-testsuite
     type: exitcode-stdio-1.0
-    main-is: Tests.hs
+    main-is: Main.hs
 
     other-modules:
       TestTypeCheckerBidir
       TestTypeCheckerHm
+      TestAnnForall
+      TestReportForall
+      TestRenamer
 
       Grammar.Abs
       Grammar.Lex
@@ -90,13 +95,16 @@ Test-suite language-testsuite
       Monomorphizer.MonomorphizerIr
       Renamer.Renamer
       TypeChecker.TypeChecker
+      AnnForall
+      ReportForall
       TypeChecker.TypeCheckerHm
       TypeChecker.TypeCheckerBidir
-      TypeChecker.RemoveTEVar
+      TypeChecker.ReportTEVar
+      TypeChecker.RemoveForall
       TypeChecker.TypeCheckerIr
       Compiler
 
-    hs-source-dirs: src, tests, tests/TypecheckingHM
+    hs-source-dirs: src, tests
 
     build-depends: 
         base >=4.16
@@ -110,6 +118,7 @@ Test-suite language-testsuite
       , process
       , bytestring
       , hspec
+      , directory
 
     default-language: GHC2021
 

@@ -1,9 +1,13 @@
-data Bool () where {
-    True : Bool ()
+data Bool () where 
+    True  : Bool ()
     False : Bool ()
-};
 
-toBool = case 0 of {
-    0 => False;
-    _ => True;
-};
+toBool x = case x of
+    0 => False
+    _ => True
+
+fromBool b = case b of
+    False => 0
+    True => 1
+
+main = fromBool (toBool 10)

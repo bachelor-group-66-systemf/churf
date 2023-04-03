@@ -10,6 +10,10 @@ even : Int -> Bool ()
 even x = not (odd x)
 odd x = not (even x)
 
+main = case even 64 of
+    True  => 1
+    False => 0
+
 
 
 

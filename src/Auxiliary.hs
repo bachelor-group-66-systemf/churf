@@ -1,14 +1,16 @@
-{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE Rank2Types        #-}
 
 module Auxiliary (module Auxiliary) where
 
-import Control.Monad.Error.Class (liftEither)
-import Control.Monad.Except (MonadError)
-import Data.Either.Combinators (maybeToRight)
-import Data.List (foldl')
-import Grammar.Abs
-import Prelude hiding ((>>), (>>=))
+import           Control.Applicative       (Applicative (liftA2))
+import           Control.Monad.Error.Class (liftEither)
+import           Control.Monad.Except      (MonadError)
+import           Data.Either.Combinators   (maybeToRight)
+import           Data.List                 (foldl')
+import           Grammar.Abs
+import           Prelude                   hiding ((>>), (>>=))
 
 (>>) a b = a ++ " " ++ b
 (>>=) a f = f a
@@ -29,6 +31,9 @@ mapAccumM f = go
             (acc'', xs') <- go acc' xs
             pure (acc'', x' : xs')
 
+onM :: Monad m => (b -> b -> c) -> (a -> m b) -> a -> a -> m c
+onM f g x y = liftA2 f (g x) (g y)
+
 unzip4 :: [(a, b, c, d)] -> ([a], [b], [c], [d])
 unzip4 =
     foldl'
@@ -38,7 +43,7 @@ unzip4 =
         ([], [], [], [])
 
 litType :: Lit -> Type
-litType (LInt _) = int
+litType (LInt _)  = int
 litType (LChar _) = char
 
 int = TLit "Int"
@@ -53,3 +58,10 @@ trd_ :: (a, b, c) -> c
 snd_ (_, a, _) = a
 fst_ (a, _, _) = a
 trd_ (_, _, a) = a
+
+partitionDefs :: [Def] -> ([Data], [Sig], [Bind])
+partitionDefs defs = (datas, sigs, binds)
+  where
+    datas = [ d | DData d <- defs ]
+    sigs  = [ s | DSig s  <- defs ]
+    binds = [ b | DBind b <- defs ]

@@ -7,37 +7,40 @@
 -- monomorphic bindings will be part of this compilation step.
 -- Apply the following monomorphization function on all monomorphic binds, with
 -- their type as an additional argument.
--- 
+--
 -- The function that transforms Binds operates on both monomorphic and
 -- polymorphic functions, creates a context in which all possible polymorphic types
 -- are mapped to concrete types, created using the additional argument.
 -- Expressions are then recursively processed. The type of these expressions
 -- are changed to using the mapped generic types. The expected type provided
 -- in the recursion is changed depending on the different nodes.
--- 
+--
 -- When an external bind is encountered (with EId), it is checked whether it
 -- exists in outputed binds or not. If it does, nothing further is evaluated.
 -- If not, the bind transformer function is called on it with the
--- expected type in this context. The result of this computation (a monomorphic 
+-- expected type in this context. The result of this computation (a monomorphic
 -- bind) is added to the resulting set of binds.
-    
+
 {-# LANGUAGE LambdaCase #-}
 module Monomorphizer.Monomorphizer (monomorphize, morphExp, morphBind) where
 
-import qualified TypeChecker.TypeCheckerIr as T
-import TypeChecker.TypeCheckerIr (Ident (Ident))
-import qualified Monomorphizer.MorbIr as M
+import           Monomorphizer.DataTypeRemover (removeDataTypes)
 import qualified Monomorphizer.MonomorphizerIr as O
-import Monomorphizer.DataTypeRemover (removeDataTypes)
+import qualified Monomorphizer.MorbIr          as M
+import qualified TypeChecker.TypeCheckerIr     as T
+import           TypeChecker.TypeCheckerIr     (Ident (Ident))
 
-import Debug.Trace
-import Control.Monad.State (MonadState (get), gets, modify, StateT (runStateT))
-import qualified Data.Map as Map
-import qualified Data.Set as Set
-import Data.Maybe (fromJust)
-import Control.Monad.Reader (Reader, MonadReader (local, ask), asks, runReader)
-import Data.Coerce (coerce)
-import Grammar.Print (printTree)
+import           Control.Monad.Reader          (MonadReader (ask, local),
+                                                Reader, asks, runReader)
+import           Control.Monad.State           (MonadState (get),
+                                                StateT (runStateT), gets,
+                                                modify)
+import           Data.Coerce                   (coerce)
+import qualified Data.Map                      as Map
+import           Data.Maybe                    (fromJust)
+import qualified Data.Set                      as Set
+import           Debug.Trace
+import           Grammar.Print                 (printTree)
 
 -- | State Monad wrapper for "Env".
 newtype EnvM a = EnvM (StateT Output (Reader Env) a)
@@ -90,9 +93,9 @@ getMain = asks (\env -> fromJust $ Map.lookup (T.Ident "main") (input env))
 mapTypes :: T.Type -> M.Type -> [(Ident, M.Type)]
 mapTypes (T.TLit _)              (M.TLit _) = []
 mapTypes (T.TVar (T.MkTVar i1))  tm         = [(i1, tm)]
-mapTypes (T.TFun pt1 pt2)        (M.TFun mt1 mt2)  = mapTypes pt1 mt1 ++ 
+mapTypes (T.TFun pt1 pt2)        (M.TFun mt1 mt2)  = mapTypes pt1 mt1 ++
                                                      mapTypes pt2 mt2
-mapTypes (T.TData tIdent pTs)    (M.TData mIdent mTs) = if tIdent /= mIdent 
+mapTypes (T.TData tIdent pTs)    (M.TData mIdent mTs) = if tIdent /= mIdent
   then error "nuh uh"
   else foldl (\xs (p, m) -> mapTypes p m ++ xs) [] (zip pTs mTs)
 mapTypes t1 t2 = error $ "structure of types not the same: '" ++ printTree t1 ++ "', '" ++ printTree t2 ++ "'"
@@ -111,8 +114,6 @@ getMonoFromPoly t = do env <- ask
                          Nothing       -> M.TLit (Ident "void")
                          --error $ "type not found! type: " ++ show ident ++ ", error in previous compilation steps"
     (T.TData ident args)         -> M.TData ident (map (getMono polys) args)
-    -- TODO: TAll should work different/should not exist in this tree
-    (T.TAll _ t) -> getMono polys t
 
 -- | If ident not already in env's output, morphed bind to output
 -- (and all referenced binds within this bind).
@@ -128,14 +129,14 @@ morphBind expectedType b@(T.Bind (Ident _, btype) args (exp, expt)) =
       bindMarked <- isBindMarked (coerce name')
       -- Return with right name if already marked
       if bindMarked then return name' else do
-        -- Mark so that this bind will not be processed in recursive or cyclic 
+        -- Mark so that this bind will not be processed in recursive or cyclic
         -- function calls
         markBind (coerce name')
         expt' <- getMonoFromPoly expt
         exp' <- morphExp expt' exp
         -- Get monomorphic type sof args
         args' <- mapM convertArg args
-        addOutputBind $ M.Bind (coerce name', expectedType) 
+        addOutputBind $ M.Bind (coerce name', expectedType)
             args' (exp', expectedType)
         return name'
 
@@ -162,7 +163,7 @@ getInputData ident = do env <- ask
 -- | Expects polymorphic types in data definition to be mapped
 -- in environment.
 --morphData :: T.Data -> EnvM ()
---morphData (T.Data t cs) = do 
+--morphData (T.Data t cs) = do
 --  t' <- getMonoFromPoly t
 --  output <- get
 --  cs' <- mapM (\(T.Inj ident t) -> do t' <- getMonoFromPoly t
@@ -170,7 +171,7 @@ getInputData ident = do env <- ask
 --  addOutputData $ M.Data t' cs'
 
 morphCons :: M.Type -> Ident -> EnvM ()
-morphCons expectedType ident = do 
+morphCons expectedType ident = do
   maybeD <- getInputData ident
   case maybeD of
     Nothing -> error $ "identifier '" ++ show ident ++ "' not found"
@@ -191,7 +192,7 @@ morphCons expectedType ident = do
 -- TODO: Change in tree so that these are the same.
 -- Converts Lit
 convertLit :: T.Lit -> M.Lit
-convertLit (T.LInt v) = M.LInt v
+convertLit (T.LInt v)  = M.LInt v
 convertLit (T.LChar v) = M.LChar v
 
 morphExp :: M.Type -> T.Exp -> EnvM M.Exp
@@ -204,7 +205,7 @@ morphExp expectedType exp = case exp of
     morphApp M.EApp expectedType e1 e2
   T.EAdd e1 e2 -> do
     morphApp M.EAdd expectedType e1 e2
-  T.EAbs ident (exp, t) -> local (\env -> env { locals = Set.insert ident (locals env) }) $ do 
+  T.EAbs ident (exp, t) -> local (\env -> env { locals = Set.insert ident (locals env) }) $ do
     t' <- getMonoFromPoly t
     morphExp t' exp
   T.ECase (exp, t) bs -> do
@@ -256,7 +257,7 @@ morphPattern ls = \case
 
 -- | Creates a new identifier for a function with an assigned type
 newFuncName :: M.Type -> T.Bind -> Ident
-newFuncName t (T.Bind (ident@(Ident bindName), _) _ _) = 
+newFuncName t (T.Bind (ident@(Ident bindName), _) _ _) =
  if bindName == "main"
   then Ident bindName
   else newName t ident
@@ -286,7 +287,7 @@ runEnvM o env (EnvM stateM) = snd $ runReader (runStateT stateM o) env
 
 -- | Creates the environment based on the input binds.
 createEnv :: [T.Def] -> Env
-createEnv defs = Env { input    = Map.fromList bindPairs, 
+createEnv defs = Env { input    = Map.fromList bindPairs,
                        dataDefs = Map.fromList dataPairs,
                        polys    = Map.empty,
                        locals   = Set.empty }
@@ -312,7 +313,7 @@ getBindsFromDefs = foldl (\bs -> \case
 
 getDefsFromOutput :: Output -> [M.Def]
 getDefsFromOutput o =
-  map M.DBind binds ++ 
+  map M.DBind binds ++
   (map (M.DData . snd) . Map.toList) (createNewData dataInput Map.empty)
  where
    (binds, dataInput) = splitBindsAndData o
@@ -323,7 +324,7 @@ splitBindsAndData output = foldl
   (\(oBinds, oData) (ident, o) -> case o of
                                     Incomplete -> error "internal bug in monomorphizer"
                                     Complete b   -> (b:oBinds, oData)
-                                    Data     t d -> (oBinds, (ident, t, d):oData)) 
+                                    Data     t d -> (oBinds, (ident, t, d):oData))
   ([], [])
   (Map.toList output)
 
@@ -339,7 +340,7 @@ createNewData ((consIdent, consType, polyData):input) o =
   newDataType = getDataType consType
   newDataName = newName newDataType polyDataIdent
   newCons     = M.Inj consIdent consType
-      
+
 getDataType :: M.Type -> M.Type
 getDataType       (M.TFun t1 t2) = getDataType t2
 getDataType tData@(M.TData _ _)  = tData
@@ -356,7 +357,7 @@ getDataType _                    = error "???"
 --      Nothing -> do
 --        createNewData cs $ Map.insert ident (M.Data (M.TLit $ Ident "void") [newCons]) o
 --      Just _ -> do
---        createNewData cs $ Map.adjust (\(M.Data _ pcs') -> 
+--        createNewData cs $ Map.adjust (\(M.Data _ pcs') ->
 --          M.Data expectedType (newCons : pcs')) ident o
 --  _ -> error "internal bug in monomorphizer"
 

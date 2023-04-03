@@ -1,10 +1,8 @@
-data Bool () where {
-    True : Bool ()
+data Bool () where 
+    True  : Bool ()
     False : Bool ()
-};
 
-main : Bool () -> a -> Int ;
-main b = case b of {
-    False => (\x. 1);
-    True => \x. 0;
-};
+main : Bool () -> a -> Int
+main b = case b of
+    False => (\x. 1)
+    True  => (\x. 0)
