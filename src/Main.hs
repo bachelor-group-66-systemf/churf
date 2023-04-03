@@ -2,44 +2,36 @@
 
 module Main where
 
-import Codegen.Codegen (generateCode)
-import Compiler (compile)
-import Control.Monad (when)
-import Data.Bool (bool)
-import Data.List.Extra (isSuffixOf)
-import Data.Maybe (fromJust, isNothing)
-import Desugar.Desugar (desugar)
-import GHC.IO.Handle.Text (hPutStrLn)
-import Grammar.ErrM (Err)
-import Grammar.Par (myLexer, pProgram)
-import Grammar.Print (printTree)
-import LambdaLifter (lambdaLift)
-import Monomorphizer.Monomorphizer (monomorphize)
-import Renamer.Renamer (rename)
-import System.Console.GetOpt (
-    ArgDescr (NoArg, ReqArg),
-    ArgOrder (RequireOrder),
-    OptDescr (Option),
-    getOpt,
-    usageInfo,
- )
-import System.Directory (
-    createDirectory,
-    doesPathExist,
-    getDirectoryContents,
-    removeDirectoryRecursive,
-    setCurrentDirectory,
- )
-import System.Environment (getArgs)
-import System.Exit (
-    ExitCode (ExitFailure),
-    exitFailure,
-    exitSuccess,
-    exitWith,
- )
-import System.IO (stderr)
-import System.Process (spawnCommand, waitForProcess)
-import TypeChecker.TypeChecker (TypeChecker (Bi, Hm), typecheck)
+import           Codegen.Codegen             (generateCode)
+import           Compiler                    (compile)
+import           Control.Monad               (when)
+import           Data.Bool                   (bool)
+import           Data.List.Extra             (isSuffixOf)
+import           Data.Maybe                  (fromJust, isNothing)
+import           Desugar.Desugar             (desugar)
+import           GHC.IO.Handle.Text          (hPutStrLn)
+import           Grammar.ErrM                (Err)
+import           Grammar.Layout              (resolveLayout)
+import           Grammar.Par                 (myLexer, pProgram)
+import           Grammar.Print               (printTree)
+import           LambdaLifter                (lambdaLift)
+import           Monomorphizer.Monomorphizer (monomorphize)
+import           Renamer.Renamer             (rename)
+import           System.Console.GetOpt       (ArgDescr (NoArg, ReqArg),
+                                              ArgOrder (RequireOrder),
+                                              OptDescr (Option), getOpt,
+                                              usageInfo)
+import           System.Directory            (createDirectory, doesPathExist,
+                                              getDirectoryContents,
+                                              removeDirectoryRecursive,
+                                              setCurrentDirectory)
+import           System.Environment          (getArgs)
+import           System.Exit                 (ExitCode (ExitFailure),
+                                              exitFailure, exitSuccess,
+                                              exitWith)
+import           System.IO                   (stderr)
+import           System.Process              (spawnCommand, waitForProcess)
+import           TypeChecker.TypeChecker     (TypeChecker (Bi, Hm), typecheck)
 
 main :: IO ()
 main = getArgs >>= parseArgs >>= uncurry main'
@@ -86,11 +78,11 @@ chooseTypechecker s options = options{typechecker = tc}
     tc = case s of
         "hm" -> pure Hm
         "bi" -> pure Bi
-        _ -> Nothing
+        _    -> Nothing
 
 data Options = Options
-    { help :: Bool
-    , debug :: Bool
+    { help        :: Bool
+    , debug       :: Bool
     , typechecker :: Maybe TypeChecker
     }
 
@@ -99,7 +91,7 @@ main' opts s = do
     file <- readFile s
 
     printToErr "-- Parse Tree -- "
-    parsed <- fromSyntaxErr . pProgram $ myLexer file
+    parsed <- fromSyntaxErr . pProgram . resolveLayout True $ myLexer file
     bool (printToErr $ printTree parsed) (printToErr $ show parsed) opts.debug
 
     printToErr "-- Desugar --"

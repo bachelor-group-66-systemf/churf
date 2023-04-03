@@ -3,7 +3,7 @@
 language : src/Grammar/Test
 	cabal install --installdir=. --overwrite-policy=always
 
-src/Grammar/Test.hs src/Grammar/Lex.x src/Grammar/Par.y : Grammar.cf
+src/Grammar/Test.hs src/Grammar/Lex.x src/Grammar/Par.y src/Grammar/Layout : Grammar.cf
 	bnfc -o src -d $<
 
 src/Grammar/Par.hs : src/Grammar/Par.y
@@ -15,8 +15,8 @@ src/Grammar/Lex.hs : src/Grammar/Lex.x
 src/Grammar/%.y : Grammar.cf
 	bnfc -o src -d $<
 
-src/Grammar/Test : src/Grammar/Test.hs src/Grammar/Par.hs src/Grammar/Lex.hs
-	ghc src/Grammar/Test.hs src/Grammar/Par.hs src/Grammar/Lex.hs src/Grammar/Abs.hs src/Grammar/Skel.hs src/Grammar/Print.hs -o src/Grammar/test
+src/Grammar/Test : src/Grammar/Test.hs src/Grammar/Par.hs src/Grammar/Lex.hs src/Grammar/Layout
+	ghc src/Grammar/Test.hs src/Grammar/Par.hs src/Grammar/Lex.hs src/Grammar/Abs.hs src/Grammar/Skel.hs src/Grammar/Print.hs src/Grammar/Layout -o src/Grammar/test
 
 clean :
 	rm -r src/Grammar

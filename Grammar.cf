@@ -37,7 +37,6 @@ internal MkTEVar. TEVar ::= LIdent;
 Data. Data ::= "data" Type "where" "{" [Inj] "}" ;
 
 Inj. Inj ::= UIdent ":" Type ;
-separator nonempty Inj " " ;
 
 -------------------------------------------------------------------------------
 -- * Expressions
@@ -76,8 +75,13 @@ PInj.        Pattern  ::= UIdent [Pattern1];
 -- * AUX
 -------------------------------------------------------------------------------
 
-terminator Def ";";
-terminator Branch ";" ;
+layout "of", "where", "let";
+layout stop "in";
+layout toplevel;
+
+separator Def ";";
+separator Branch ";" ;
+separator Inj ";";
 
 separator LIdent "";
 separator Type " ";

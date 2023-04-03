@@ -30,6 +30,8 @@ executable language
       Grammar.Print
       Grammar.Skel
       Grammar.ErrM
+      Grammar.ErrM
+      Grammar.Layout
       Auxiliary
       Renamer.Renamer
       TypeChecker.TypeChecker
@@ -82,6 +84,7 @@ Test-suite language-testsuite
       Grammar.Print
       Grammar.Skel
       Grammar.ErrM
+      Grammar.Layout
       Auxiliary
       Monomorphizer.Monomorphizer
       Monomorphizer.MonomorphizerIr
