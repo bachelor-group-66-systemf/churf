@@ -2,6 +2,7 @@ dist-newstyle
 *.y
 *.x
 *.bak
+Grammar.tex
 src/Grammar
 language
 test_program_result

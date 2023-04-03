@@ -1,6 +1,6 @@
 .PHONY : sdist clean
 
-language : src/Grammar/Test Grammar.tex
+language : src/Grammar/Test Grammar.pdf
 	cabal install --installdir=. --overwrite-policy=always
 
 src/Grammar/Test.hs src/Grammar/Lex.x src/Grammar/Par.y src/Grammar/Layout : Grammar.cf
@@ -20,6 +20,10 @@ src/Grammar/Test : src/Grammar/Test.hs src/Grammar/Par.hs src/Grammar/Lex.hs src
 
 Grammar.tex : 
 	bnfc --latex Grammar.cf
+
+Grammar.pdf : Grammar.tex
+	pdflatex Grammar.tex
+	rm Grammar.aux Grammar.dvi Grammar.fdb_latexmk Grammar.fls Grammar.log
 
 clean :
 	rm -r src/Grammar
