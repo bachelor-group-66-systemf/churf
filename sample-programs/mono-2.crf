@@ -1,13 +1,11 @@
-data Either(a b) where {
+data Either(a b) where
     Left: a -> Either (a b)
     Right: b -> Either (a b)
-};
 
-unwrapLeft x = case x of {
-    Left y => y;
-};
+unwrapLeft x = case x of
+    Left y => y
 
-wow = Left 5;
+wow = Left 5
 
-main = unwrapLeft wow;
+main = unwrapLeft wow
 

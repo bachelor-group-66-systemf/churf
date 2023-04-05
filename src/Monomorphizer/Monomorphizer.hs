@@ -46,7 +46,7 @@ newtype EnvM a = EnvM (StateT Output (Reader Env) a)
 type Output = Map.Map Ident Outputted
 -- When a bind is being processed, it is Incomplete in the state, also
 -- called marked.
-data Outputted = Incomplete | Complete M.Bind | Data M.Data
+data Outputted = Incomplete | Complete M.Bind | Data M.Type T.Data
 
 -- Static environment
 data Env = Env {
@@ -124,7 +124,7 @@ morphBind expectedType b@(T.Bind (Ident _, btype) args (exp, expt)) =
                          polys  = Map.fromList (mapTypes btype expectedType)
                        }) $ do
       -- The "new name" is used to find out if it is already marked or not.
-      let name' = newName expectedType b
+      let name' = newFuncName expectedType b
       bindMarked <- isBindMarked (coerce name')
       -- Return with right name if already marked
       if bindMarked then return name' else do
@@ -151,8 +151,8 @@ morphApp node expectedType (e1, t1) (e2, t2)= do
     e1' <- morphExp (M.TFun t2' expectedType) e1
     return $ node (e1', M.TFun t2' expectedType) (e2', t2')
 
-addOutputData :: M.Data -> EnvM ()
-addOutputData d@(M.Data (M.TData ident _) _) = modify $ Map.insert ident (Data d)
+--addOutputData :: M.Data -> EnvM ()
+--addOutputData d@(M.Data (M.TData ident _) _) = modify $ Map.insert ident (Data d)
 
 -- Gets data bind from the name of a constructor
 getInputData :: Ident -> EnvM (Maybe T.Data)
@@ -161,13 +161,13 @@ getInputData ident = do env <- ask
 
 -- | Expects polymorphic types in data definition to be mapped
 -- in environment.
-morphData :: T.Data -> EnvM ()
-morphData (T.Data t cs) = do 
-  t' <- getMonoFromPoly t
-  output <- get
-  cs' <- mapM (\(T.Inj ident t) -> do t' <- getMonoFromPoly t
-                                      return (M.Inj ident t')) cs
-  addOutputData $ M.Data t' cs'
+--morphData :: T.Data -> EnvM ()
+--morphData (T.Data t cs) = do 
+--  t' <- getMonoFromPoly t
+--  output <- get
+--  cs' <- mapM (\(T.Inj ident t) -> do t' <- getMonoFromPoly t
+--                                      return (M.Inj ident t')) cs
+--  addOutputData $ M.Data t' cs'
 
 morphCons :: M.Type -> Ident -> EnvM ()
 morphCons expectedType ident = do 
@@ -175,18 +175,18 @@ morphCons expectedType ident = do
   case maybeD of
     Nothing -> error $ "identifier '" ++ show ident ++ "' not found"
     Just d -> do
+      modify (\output -> Map.insert ident (Data expectedType d) output )
       -- Find the polymorphic type of cons
-      case findConsType d ident of
-        Nothing -> error "didn't find constructor"
-        Just consType -> do
-          -- Map polymorphic types
-          local (\env -> env {
-            polys = Map.fromList (mapTypes consType expectedType) }) $ do
-              morphData d
+--      case findConsType d ident of
+--        Nothing -> error "didn't find constructor"
+--        Just consType -> do
+--          -- Map polymorphic types
+--          local (\env -> env {
+--            polys = Map.fromList (mapTypes consType expectedType) }) $ do
 
 -- TODO: detect internal errors here
-findConsType :: T.Data -> Ident -> Maybe T.Type
-findConsType (T.Data _ cs) name1 = foldl (\maybe (T.Inj name2 t) -> if name2 == name1 then Just t else maybe) Nothing cs
+--findConsType :: T.Data -> Ident -> Maybe T.Type
+--findConsType (T.Data _ cs) name1 = foldl (\maybe (T.Inj name2 t) -> if name2 == name1 then Just t else maybe) Nothing cs
 
 -- TODO: Change in tree so that these are the same.
 -- Converts Lit
@@ -255,16 +255,19 @@ morphPattern ls = \case
                         return (M.PInj ident (map fst pairs), Set.unions (map snd pairs))
 
 -- | Creates a new identifier for a function with an assigned type
-newName :: M.Type -> T.Bind -> Ident
-newName t (T.Bind (Ident bindName, _) _ _) = 
- if bindName == "main" then
-   Ident bindName
- else Ident (bindName ++ "$" ++ newName' t)
-  where
-   newName' :: M.Type -> String
-   newName' (M.TLit (Ident str))     = str
-   newName' (M.TFun t1 t2)           = newName' t1 ++ "_" ++ newName' t2
-   newName' (M.TData (Ident str) ts) = str ++ foldl (\s t -> s ++ "." ++ newName' t) "" ts
+newFuncName :: M.Type -> T.Bind -> Ident
+newFuncName t (T.Bind (ident@(Ident bindName), _) _ _) = 
+ if bindName == "main"
+  then Ident bindName
+  else newName t ident
+
+newName :: M.Type -> Ident -> Ident
+newName t (Ident str) = Ident $ str ++ "$" ++ newName' t
+ where
+  newName' :: M.Type -> String
+  newName' (M.TLit (Ident str))     = str
+  newName' (M.TFun t1 t2)           = newName' t1 ++ "_" ++ newName' t2
+  newName' (M.TData (Ident str) ts) = str ++ foldl (\s t -> s ++ "." ++ newName' t) "" ts
 
 -- Monomorphization step
 monomorphize :: T.Program -> O.Program
@@ -308,12 +311,54 @@ getBindsFromDefs = foldl (\bs -> \case
                                    T.DData _ -> bs) []
 
 getDefsFromOutput :: Output -> [M.Def]
-getDefsFromOutput outputMap = (map snd . Map.toList) $ fmap 
-                                 (\case
-                                    Incomplete -> error "Internal bug in monomorphizer"
-                                    Complete b -> M.DBind b
-                                    Data     d -> M.DData d) 
-                                  outputMap
+getDefsFromOutput o =
+  map M.DBind binds ++ 
+  (map (M.DData . snd) . Map.toList) (createNewData dataInput Map.empty)
+ where
+   (binds, dataInput) = splitBindsAndData o
+
+-- | Splits the output into binds and data declaration components (used in createNewData)
+splitBindsAndData :: Output -> ([M.Bind], [(Ident, M.Type, T.Data)])
+splitBindsAndData output = foldl
+  (\(oBinds, oData) (ident, o) -> case o of
+                                    Incomplete -> error "internal bug in monomorphizer"
+                                    Complete b   -> (b:oBinds, oData)
+                                    Data     t d -> (oBinds, (ident, t, d):oData)) 
+  ([], [])
+  (Map.toList output)
+
+-- | Converts all found constructors to monomorphic data declarations.
+createNewData :: [(Ident, M.Type, T.Data)] -> Map.Map Ident M.Data -> Map.Map Ident M.Data
+createNewData []                                      o = o
+createNewData ((consIdent, consType, polyData):input) o =
+  createNewData input $
+    Map.insertWith (\_ (M.Data _ cs) -> M.Data newDataType (newCons:cs))
+      newDataName (M.Data newDataType [newCons]) o
+ where
+  T.Data (T.TData polyDataIdent _) _ = polyData
+  newDataType = getDataType consType
+  newDataName = newName newDataType polyDataIdent
+  newCons     = M.Inj consIdent consType
+      
+getDataType :: M.Type -> M.Type
+getDataType       (M.TFun t1 t2) = getDataType t2
+getDataType tData@(M.TData _ _)  = tData
+getDataType _                    = error "???"
+
+-- | Converts all found constructors to monomorphic data declarations.
+--               cons->data              process    data.name -> data
+--createNewData :: [(Ident, M.Type, T.Data)] -> Map.Map Ident M.Data -> EnvM (Map.Map Ident M.Data)
+--createNewData []     o = return o
+--createNewData ((ident, expectedType, T.Data dt pcs):cs) o = case dt of
+--  T.TData dIdent _ -> do
+--    let newCons = M.Inj (newName expectedType ident) expectedType
+--    case Map.lookup dIdent o of
+--      Nothing -> do
+--        createNewData cs $ Map.insert ident (M.Data (M.TLit $ Ident "void") [newCons]) o
+--      Just _ -> do
+--        createNewData cs $ Map.adjust (\(M.Data _ pcs') -> 
+--          M.Data expectedType (newCons : pcs')) ident o
+--  _ -> error "internal bug in monomorphizer"
 
 getBindName :: T.Bind -> Ident
 getBindName (T.Bind (ident, _) _ _) = ident
