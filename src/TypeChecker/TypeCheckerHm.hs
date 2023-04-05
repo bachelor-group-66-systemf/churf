@@ -27,7 +27,13 @@ import           Grammar.Abs
 import           Grammar.Print             (printTree)
 import qualified TypeChecker.TypeCheckerIr as T
 
--- TODO: Disallow mutual recursion
+{-
+TODO
+Prettifying the types of generated variables does only need to be done when
+presenting the types to the user, i.e, when the user has made a mistake.
+For succesfully typed programs the types only need to match.
+
+-}
 
 -- | Type check a program
 typecheck :: Program -> Either String (T.Program' Type, [Warning])
@@ -51,20 +57,22 @@ prettify s (T.Program defs) = T.Program $ map (go s) defs
   where
     go :: Map T.Ident (Maybe Type) -> T.Def' Type -> T.Def' Type
     go _ (T.DData d) = T.DData d
-    go m b@(T.DBind (T.Bind (name, t) args e))
+    go m b@(T.DBind (T.Bind (name, t) args (e, et)))
         | Just (Just _) <- M.lookup name m = b
         | otherwise =
             let fvs = nub $ freeOrdered t
                 m = M.fromList $ zip fvs letters
-             in T.DBind $ T.Bind (name, replace m t) args e
+             in T.DBind $ T.Bind (name, replace m t) args (fmap (replace m) e, replace m et)
 
 replace :: Map T.Ident T.Ident -> Type -> Type
-replace m (TVar (MkTVar (LIdent a))) =
-    TVar $ MkTVar $ LIdent $ coerce $ m M.! coerce a
+replace m def@(TVar (MkTVar (LIdent a))) = case M.lookup (coerce a) m of
+    Just t -> TVar . MkTVar . LIdent $ coerce t
+    Nothing -> def
 replace m (TFun t1 t2) = (TFun `on` replace m) t1 t2
 replace m (TData name ts) = TData name (map (replace m) ts)
-replace m (TAll (MkTVar forall_) t) =
-    TAll (MkTVar $ coerce $ m M.! coerce forall_) (replace m t)
+replace m def@(TAll (MkTVar forall_) t) = case M.lookup (coerce forall_) m of
+    Just found -> TAll (MkTVar $ coerce found) (replace m t)
+    Nothing -> def
 replace _ t = t
 
 bindCount :: [Def] -> Infer [(Int, Def)]
