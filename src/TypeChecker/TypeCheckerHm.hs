@@ -595,6 +595,19 @@ fresh = do
     modify (\st -> st{count = succ (count st)})
     return $ TVar $ MkTVar $ LIdent $ show n
 
+{-
+
+The following definition of id should type check
+id : forall a. a -> a
+id x = (x : a)
+
+but not this one, according to haskell atleast
+
+id : a -> a
+id x = (x : a)
+
+currently this is not the case, the TAll pattern match is incorrectly implemented.
+-}
 -- Is the left a subtype of the right
 (<<=) :: Type -> Type -> Bool
 (<<=) (TVar _) _ = True
