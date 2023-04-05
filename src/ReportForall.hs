@@ -25,7 +25,7 @@ rpuType typ = do
   where
     go tvars = \case
         TAll tvar t
-            | tvar `elem` tvars -> throwError "Duplicate forall"
+            | tvar `elem` tvars -> throwError "Unused forall"
             | otherwise         -> go (tvar : tvars) t
         TVar tvar -> pure (delete tvar tvars)
         TFun t1 t2 -> go tvars t1 >>= (`go` t2)

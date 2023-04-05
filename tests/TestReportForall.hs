@@ -28,7 +28,7 @@ test = hspec testReportForall
 rp_unused1 = specify "Unused forall 1" $
     "g : forall a. forall a. a -> (forall a. a -> a) -> a"
     `shouldBeErrBi`
-    "Duplicate forall"
+    "Unused forall"
 
 rp_unused2 = specify "Unused forall 2" $
     "g : forall a. (forall a. a -> a) -> Int"
