@@ -7,6 +7,10 @@ Churf can then be built using `cabal install`
 Using the tool [make](https://www.gnu.org/software/make/) the entire thing can be built by running `make`
 or using [just](https://github.com/casey/just), `just build`
 
+# Dependencies
+If you have Nix installed, simply run `nix-shell --pure shell.nix` to get into an environment
+with the right versions of packages. Then run `make` and the compiler should build.
+
 # Compiling a program
 
 Using the Hindley-Milner type checker: `./language -t hm example.crf`
