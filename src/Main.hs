@@ -119,7 +119,7 @@ main' opts s =
 
     printToErr "\n -- Monomorphizer --"
     let monomorphized = monomorphize lifted
-    log lifted
+    log monomorphized
 
     printToErr "\n -- Compiler --"
     generatedCode <- fromErr $ generateCode monomorphized
