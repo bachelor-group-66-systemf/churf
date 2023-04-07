@@ -1,9 +1,6 @@
 #pragma once
 
 #include <ctime>
-#include <iostream>
-#include <list>
-#include <time.h>
 
 #include "chunk.hpp"
 

@@ -1,8 +1,5 @@
 #pragma once
 
-#include <assert.h>
-#include <iostream>
-#include <setjmp.h>
 #include <stdlib.h>
 #include <vector>
 
@@ -11,7 +8,7 @@
 
 #define HEAP_SIZE 2097152 //65536
 #define FREE_THRESH (uint) 100000
-#define DEBUG
+// #define HEAP_DEBUG
 
 namespace GC
 {
@@ -89,7 +86,7 @@ namespace GC
 		Heap(Heap const&) = delete;
 		Heap& operator=(Heap const&) = delete;
 
-#ifdef DEBUG
+#ifdef HEAP_DEBUG
 		void collect(CollectOption flags); // conditional collection
 		void check_init();		  // print dummy things
 		void print_contents();	  // print dummy things

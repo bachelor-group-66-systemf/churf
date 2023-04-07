@@ -7,9 +7,9 @@
 extern "C" {
 #endif
 
-// #define DEBUG
+// #define WRAPPER_DEBUG
 
-#ifdef DEBUG
+#ifdef WRAPPER_DEBUG
 typedef struct cheap
 {
     void *obj;

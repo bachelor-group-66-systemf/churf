@@ -1,9 +1,4 @@
-#include <algorithm>
-#include <assert.h>
-#include <cstring>
-#include <execinfo.h>
 #include <iostream>
-#include <setjmp.h>
 #include <stdexcept>
 #include <stdlib.h>
 #include <vector>
@@ -83,7 +78,8 @@ namespace GC
 		{
 			heap.collect();
 			// If memory is not enough after collect, crash with OOM error
-			throw std::runtime_error(std::string("Error: Heap out of memory"));
+			if (heap.m_size + size > HEAP_SIZE)
+				throw std::runtime_error(std::string("Error: Heap out of memory"));
 		}
 
 		// If a chunk was recycled, return the old chunk address
@@ -158,25 +154,6 @@ namespace GC
 		// If no chunk was found, return nullptr
 		return nullptr;
 	}
-
-	/**
-	 * Advances an iterator and returns an element
-	 * at position `n`.
-	 * 
-	 * @param list	The list to retrieve an element from.
-	 * 
-	 * @param n		The position to retrieve an element at.
-	 * 
-	 * @returns 	The pointer to the chunk at position n in list.
-	*/
-	// Chunk *Heap::get_at(std::vector<Chunk *> &list, size_t n)
-	// {
-	// 	auto iter = list.begin();
-	// 	if (!n)
-	// 		return *iter;
-	// 	std::advance(iter, n);
-	// 	return *iter;
-	// }
 
 	/**
 	 * Returns a bool whether the profiler is enabled
@@ -414,7 +391,13 @@ namespace GC
 		}
 	}
 
-#ifdef DEBUG
+	void Heap::set_profiler(bool mode)
+	{
+		Heap &heap = Heap::the();
+		heap.m_profiler_enable = mode;
+	}
+
+#ifdef HEAP_DEBUG
 	/**
 	 * Prints the result of Heap::init() and a dummy value
 	 * for the current stack frame for reference.
@@ -563,12 +546,6 @@ namespace GC
 		{
 			cout << "NO FREED CHUNKS" << endl;
 		}
-	}
-
-	void Heap::set_profiler(bool mode)
-	{
-		Heap &heap = Heap::the();
-		heap.m_profiler_enable = mode;
 	}
 
 	void Heap::print_allocated_chunks(Heap *heap) {
