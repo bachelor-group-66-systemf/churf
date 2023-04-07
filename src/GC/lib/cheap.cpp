@@ -1,10 +1,10 @@
 #include <stdlib.h>
-#include <stdio.h>
+#include <iostream>
 
 #include "heap.hpp"
 #include "cheap.h"
 
-#ifndef DEBUG
+#ifndef WRAPPER_DEBUG
 struct cheap
 {
     void *obj;
