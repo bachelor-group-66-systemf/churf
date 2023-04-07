@@ -104,7 +104,7 @@ newName name = do
                          }
     pure name'
   where
-    mk (LIdent name) i = LIdent ("#" ++ show i ++ name)
+    mk (LIdent name) i = LIdent ("$" ++ show i ++ name)
 
 localNames :: MonadState Cxt m => m b -> m b
 localNames m = do
