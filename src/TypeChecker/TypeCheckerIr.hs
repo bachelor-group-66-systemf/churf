@@ -71,17 +71,15 @@ instance Print Ident where
     prt _ (Ident s) = doc $ showString s
 
 instance Print t => Print (Program' t) where
-    prt i (Program sc) = prPrec i 0 $ prt 0 sc
+    prt i (Program sc) = prt i sc
 
 instance Print t => Print (Bind' t) where
-    prt i (Bind sig@(name, _) parms rhs) =
-        prPrec i 0 $
-            concatD
+    prt i (Bind sig@(name, _) parms rhs) = concatD
                 [ prtSig sig
-                , prt 0 name
-                , prtIdPs 0 parms
+                , prt i name
+                , prt i parms
                 , doc $ showString "="
-                , prt 0 rhs
+                , prt i rhs
                 ]
 
 prtSig :: Print t => Id' t -> Doc
@@ -98,18 +96,15 @@ instance Print t => Print (ExpT' t) where
         concatD
             [ doc $ showString "("
             , prt i e
-            , doc $ showString ","
-            , prt i t
+            , doc $ showString ":"
+            , prt 0 t
             , doc $ showString ")"
             ]
 
 instance Print t => Print [Bind' t] where
     prt _ []       = concatD []
-    prt _ [x]      = concatD [prt 0 x]
-    prt _ (x : xs) = concatD [prt 0 x, doc (showString ";"), prt 0 xs]
-
-prtIdPs :: Print t => Int -> [Id' t] -> Doc
-prtIdPs i = prPrec i 0 . concatD . map (prt i)
+    prt i [x]      = concatD [prt i x]
+    prt i (x : xs) = concatD [prt i x, doc (showString ";"), prt i xs]
 
 instance Print t => Print (Id' t) where
     prt i (name, t) =
@@ -123,48 +118,14 @@ instance Print t => Print (Id' t) where
 
 instance Print t => Print (Exp' t) where
     prt i = \case
-        EVar name -> prPrec i 3 $ prt 0 name
-        EInj name -> prPrec i 3 $ prt 0 name
-        ELit lit -> prPrec i 3 $ prt 0 lit
-        ELet b e ->
-            prPrec i 3 $
-                concatD
-                    [ doc $ showString "let"
-                    , prt 0 b
-                    , doc $ showString "in"
-                    , prt 0 e
-                    ]
-        EApp e1 e2 ->
-            prPrec i 2 $
-                concatD
-                    [ prt 2 e1
-                    , prt 3 e2
-                    ]
-        EAdd e1 e2 ->
-            prPrec i 1 $
-                concatD
-                    [ prt 1 e1
-                    , doc $ showString "+"
-                    , prt 2 e2
-                    ]
-        EAbs v e ->
-            prPrec i 0 $
-                concatD
-                    [ doc $ showString "\\"
-                    , prt 0 v
-                    , doc $ showString "."
-                    , prt 0 e
-                    ]
-        ECase e branches ->
-            prPrec i 0 $
-                concatD
-                    [ doc $ showString "case"
-                    , prt 0 e
-                    , doc $ showString "of"
-                    , doc $ showString "{"
-                    , prt 0 branches
-                    , doc $ showString "}"
-                    ]
+        EVar lident -> prPrec i 3 (concatD [prt 0 lident])
+        EInj uident -> prPrec i 3 (concatD [prt 0 uident])
+        ELit lit -> prPrec i 3 (concatD [prt 0 lit])
+        EApp exp1 exp2 -> prPrec i 2 (concatD [prt 2 exp1, prt 3 exp2])
+        EAdd exp1 exp2 -> prPrec i 1 (concatD [prt 1 exp1, doc (showString "+"), prt 2 exp2])
+        ELet bind exp -> prPrec i 0 (concatD [doc (showString "let"), prt 0 bind, doc (showString "in"), prt 0 exp])
+        EAbs lident exp -> prPrec i 0 (concatD [doc (showString "\\"), prt 0 lident, doc (showString "."), prt 0 exp])
+        ECase exp branchs -> prPrec i 0 (concatD [doc (showString "case"), prt 0 exp, doc (showString "of"), doc (showString "{"), prt 0 branchs, doc (showString "}")])
 
 instance Print t => Print (Branch' t) where
     prt i (Branch (pattern_, t) exp) = prPrec i 0 (concatD [doc (showString "("), prt 0 pattern_, doc (showString " : "), prt 0 t, doc (showString ")"), doc (showString "=>"), prt 0 exp])
