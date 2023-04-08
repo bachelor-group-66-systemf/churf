@@ -205,9 +205,8 @@ subtype t1 t2 = case (t1, t2) of
     (TAll tvar a, b) -> do
         tevar <- fresh
         let env_marker = EnvMark tevar
-            env_tevar  = EnvTEVar tevar
         insertEnv env_marker
-        insertEnv env_tevar
+        insertEnv $ EnvTEVar tevar
         let a' = substitute tvar tevar a
         subtype a' b
         dropTrailing env_marker
@@ -378,10 +377,10 @@ check exp typ
     --  Γ ⊢ λx.e ↑ A → B ⊣ Δ
     | EAbs name e <- exp
     , TFun t1 t2  <- typ = do
-        let env_id = EnvVar name t1
-        insertEnv env_id
+        let env_var = EnvVar name t1
+        insertEnv env_var
         e' <- check e t2
-        (env_l, _) <- gets (splitOn env_id . env)
+        (env_l, _) <- gets (splitOn env_var . env)
         putEnv env_l
         pure (T.EAbs (coerce name) e', typ)
 
@@ -449,10 +448,10 @@ infer = \case
       tevar2 <- fresh
       insertEnv $ EnvTEVar tevar1
       insertEnv $ EnvTEVar tevar2
-      let env_id = EnvVar name (TEVar tevar1)
-      insertEnv env_id
+      let env_var = EnvVar name (TEVar tevar1)
+      insertEnv env_var
       e' <- check e $ TEVar tevar2
-      dropTrailing env_id
+      dropTrailing env_var
       let t_exp = on TFun TEVar tevar1 tevar2
       pure (T.EAbs (coerce name) e', t_exp)
 
@@ -462,10 +461,10 @@ infer = \case
     --  Γ ⊢ let x=e in e' ↑ C ⊣ Δ
     ELet (Bind name [] rhs) e -> do -- TODO vars
         (rhs', t_rhs) <- infer rhs
-        let env_id = EnvVar name t_rhs
-        insertEnv env_id
+        let env_var = EnvVar name t_rhs
+        insertEnv env_var
         (e', t) <- infer e
-        (env_l, _) <- gets (splitOn env_id . env)
+        (env_l, _) <- gets (splitOn env_var . env)
         putEnv env_l
         pure (T.ELet (T.Bind (coerce name, t_rhs) [] (rhs', t_rhs)) (e',t), t)
 
