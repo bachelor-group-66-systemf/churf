@@ -2,7 +2,14 @@ data Bool () where
     True  : Bool ()
     False : Bool ()
 
-main : Bool () -> a -> Int
-main b = case b of
-    False => (\x. 1)
-    True  => (\x. 0)
+-- Both valid
+-- f : Bool () -> a -> Int
+f : Bool () -> (forall a. a -> Int)
+f b = case b of
+    False => (\x. 0 : forall a. a -> Int)
+    True  => (\x. 1 : forall a. a -> Int)
+
+
+main : Int
+main = (f True) 'h'
+

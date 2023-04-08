@@ -4,9 +4,8 @@
 
 module Auxiliary (module Auxiliary) where
 
-import           Control.Applicative       (Applicative (liftA2))
 import           Control.Monad.Error.Class (liftEither)
-import           Control.Monad.Except      (MonadError)
+import           Control.Monad.Except      (MonadError, liftM2)
 import           Data.Either.Combinators   (maybeToRight)
 import           Data.List                 (foldl')
 import           Grammar.Abs
@@ -31,8 +30,11 @@ mapAccumM f = go
             (acc'', xs') <- go acc' xs
             pure (acc'', x' : xs')
 
+onMM :: Monad m => (b -> b -> m c) -> (a -> m b) -> a -> a -> m c
+onMM f g x y = liftMM2 f (g x) (g y)
+
 onM :: Monad m => (b -> b -> c) -> (a -> m b) -> a -> a -> m c
-onM f g x y = liftA2 f (g x) (g y)
+onM f g x y = liftM2 f (g x) (g y)
 
 unzip4 :: [(a, b, c, d)] -> ([a], [b], [c], [d])
 unzip4 =
@@ -41,6 +43,12 @@ unzip4 =
             (as ++ [a], bs ++ [b], cs ++ [c], ds ++ [d])
         )
         ([], [], [], [])
+
+liftMM2 :: Monad m => (a -> b -> m c) -> m a -> m b -> m c
+liftMM2 f m1 m2 = do
+    x1 <- m1
+    x2 <- m2
+    f x1 x2
 
 litType :: Lit -> Type
 litType (LInt _)  = int

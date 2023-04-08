@@ -260,6 +260,17 @@ tc_pol_case = describe "Polymophic and recursive pattern matching" $ do
         , "  Cons (Cons _ ys) xs => 1 + elems (Cons ys xs)"
         ]
 
+tc_if = specify "Test if else case expression" $ do
+    run [ "data Bool () where"
+        , "    True  : Bool ()"
+        , "    False : Bool ()"
+
+        , "ifThenElse : Bool () -> a -> a -> a"
+        , "ifThenElse b if else = case b of"
+        , "    True  => if"
+        , "    False => else"
+        ] `shouldSatisfy` ok
+
 
 tc_infer_case = describe "Infer case expression" $ do
     specify "Wrong case expression rejected" $
