@@ -8,11 +8,14 @@ module TypeChecker.TypeCheckerBidir (typecheck, getVars) where
 
 import           Auxiliary                 (int, liftMM2, litType,
                                             maybeToRightM, onM, onMM, snoc)
-import           Control.Applicative       (Applicative (liftA2), (<|>))
+import           Control.Applicative       (Alternative, Applicative (liftA2),
+                                            (<|>))
 import           Control.Monad.Except      (ExceptT, MonadError (throwError),
                                             runExceptT, unless, zipWithM,
                                             zipWithM_)
-import           Control.Monad.State       (State, evalState, gets, modify)
+import           Control.Monad.Extra       (fromMaybeM, maybeM)
+import           Control.Monad.State       (MonadState, State, evalState, gets,
+                                            modify)
 import           Data.Coerce               (coerce)
 import           Data.Function             (on)
 import           Data.List                 (intercalate)
@@ -57,8 +60,8 @@ data Cxt = Cxt
     , data_injs  :: Map UIdent Type -- ^ Data injections (constructors) K/inj : A
     } deriving (Show, Eq)
 
-type Tc a = ExceptT String (State Cxt) a
-    -- deriving (Functor, Applicative, Monad, Alternative, MonadState Cxt, MonadError String)
+newtype Tc a = Tc { runTc :: ExceptT String (State Cxt) a }
+    deriving (Functor, Applicative, Monad, MonadState Cxt, MonadError String)
 
 
 initCxt :: [Def] -> Cxt
@@ -95,7 +98,7 @@ typecheck (Program defs) = do
 typecheckBinds :: Cxt -> [Bind] -> Err [T.Bind' Type]
 typecheckBinds cxt = flip evalState cxt
                    . runExceptT
-                   -- . runTc
+                   . runTc
                    . mapM typecheckBind
 
 typecheckBind :: Bind -> Tc (T.Bind' Type)
@@ -191,16 +194,14 @@ check exp typ
         putEnv env_l
         pure (T.EAbs (coerce name) e', typ)
 
-    | otherwise = subsumption
-  where
     --  Γ,α ⊢ e ↓ A ⊣ Θ   Θ ⊢ [Θ]A <: [Θ]B ⊣ Δ
     --  -------------------------------------- Sub
     --  Γ ⊢ e ↑ B ⊣ Δ
-    subsumption = do
-      (exp', t) <- infer exp
-      typ' <- apply typ
-      subtype t typ'
-      apply (exp', t)
+    | otherwise = do
+        (exp', t) <- infer exp
+        typ' <- apply typ
+        subtype t typ'
+        apply (exp', t)
 
 -- | Γ ⊢ e ↓ A ⊣ Δ
 -- Under input context Γ, e infers output type A, with output context ∆
@@ -210,18 +211,16 @@ infer = \case
     ELit lit -> pure (T.ELit lit, litType lit)
 
     --  Γ ∋ (x : A)         Γ ∌ (x : A)
-    --  ------------- Var   --------------- Var'
-    --  Γ ⊢ x ↓ A ⊣ Γ       Γ ⊢ x ↓ ά ⊣ Γ,ά
-    EVar name -> do
-        t <- liftA2 (<|>) (lookupEnv name) (lookupSig name) >>= \case
-                 Just t  -> pure t
-                 Nothing -> do
-                     tevar <- fresh
-                     insertEnv (EnvTEVar tevar)
-                     let t = TEVar tevar
-                     insertEnv (EnvVar name t)
-                     pure t
-        apply (T.EVar (coerce name), t)
+    --  ------------- Var   --------------------- Var'
+    --  Γ ⊢ x ↓ A ⊣ Γ       Γ ⊢ x ↓ ά ⊣ Γ,(x : ά)
+    EVar x -> do
+        t <- fromMaybeM extend $ liftA2 (<|>) (lookupEnv x) (lookupSig x)
+        apply (T.EVar (coerce x), t)
+     where
+        extend = do
+            t <- TEVar <$> fresh
+            insertEnv (EnvVar x t)
+            pure t
 
     EInj name -> do
         t <- maybeToRightM ("Unknown constructor: " ++ show name)
@@ -320,7 +319,9 @@ applyInfer typ exp = case typ of
     --  Γ ⊢ e ↑ A ⊣ Δ
     --  --------------------- →App
     --  Γ ⊢ A → C • e ⇓ C ⊣ Δ
-    TFun t1 t2 -> (, t2) <$> check exp t1
+    TFun t1 t2 -> do
+        exp' <- check exp t1
+        apply (exp', t2)
 
     _ -> throwError ("Cannot apply type " ++ show typ ++ " with expression " ++ show exp)
 
@@ -336,7 +337,6 @@ applyInfer typ exp = case typ of
 inferBranches :: [Branch] -> Type -> Tc ([T.Branch' Type], Type)
 inferBranches branches t_patt = do
     (branches', ts_exp) <- inferBranches' t_patt branches
-    traceTs "TYPES " ts_exp
     t_exp <- case ts_exp of
               [] -> pure t_patt
               t:_  -> do
@@ -805,7 +805,7 @@ applyType t = gets $ (`applyType'` t) . env
 -- | [Γ]A. Applies context to type until fully applied.
 applyType' :: Env -> Type -> Type
 applyType' cxt typ | typ == typ' = typ'
-                  | otherwise   = applyType' cxt typ'
+                   | otherwise   = applyType' cxt typ'
   where
     typ' = case typ of
         TLit _          -> typ

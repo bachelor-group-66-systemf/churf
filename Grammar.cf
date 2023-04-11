@@ -42,15 +42,15 @@ Inj. Inj ::= UIdent ":" Type ;
 -- * Expressions
 -------------------------------------------------------------------------------
 
-EAnn.  Exp4 ::= "(" Exp ":" Type ")";
-EVar.  Exp3 ::= LIdent;
-EInj.  Exp3 ::= UIdent;
-ELit.  Exp3 ::= Lit;
-EApp.  Exp2 ::= Exp2 Exp3;
-EAdd.  Exp1 ::= Exp1 "+" Exp2;
-ELet.  Exp  ::= "let" Bind "in" Exp; 
-EAbs.  Exp  ::= "\\" LIdent "." Exp;
-ECase. Exp  ::= "case" Exp "of" "{" [Branch] "}";
+EVar.  Exp4 ::= LIdent;
+EInj.  Exp4 ::= UIdent;
+ELit.  Exp4 ::= Lit;
+EApp.  Exp3 ::= Exp3 Exp4;
+EAdd.  Exp2 ::= Exp2 "+" Exp3;
+ELet.  Exp1  ::= "let" Bind "in" Exp1; 
+EAbs.  Exp1  ::= "\\" LIdent "." Exp1;
+ECase. Exp1  ::= "case" Exp "of" "{" [Branch] "}";
+EAnn.  Exp  ::= Exp1 ":" Type;
 
 -------------------------------------------------------------------------------
 -- * LITERALS
