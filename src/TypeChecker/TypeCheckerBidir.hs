@@ -38,7 +38,6 @@ import qualified TypeChecker.TypeCheckerIr as T
 --
 -- TODO
 -- • Fix problems with types in Pattern/Branch in TypeCheckerIr
--- • Use applyEnvExp consistently
 -- • Fix the different type getters functions (e.g. partitionType) functions
 
 data EnvElem = EnvVar         LIdent Type -- ^ Term variable typing. x : A
@@ -169,161 +168,156 @@ typecheckInj (Inj inj_name inj_typ) name tvars
 -- | Γ ⊢ e ↑ A ⊣ Δ
 -- Under input context Γ, e checks against input type A, with output context ∆
 check :: Exp -> Type -> Tc (T.ExpT' Type)
-check exp typ
 
-    --  Γ,α ⊢ e ↑ A ⊣ Δ,α,Θ
-    --  ------------------- ∀I
-    --  Γ ⊢ e ↑ ∀α.A ⊣ Δ
-    | TAll tvar t <- typ = do
-        let env_tvar = EnvTVar tvar
-        insertEnv env_tvar
-        exp' <- check exp t
-        (env_l, _) <- gets (splitOn env_tvar . env)
-        putEnv env_l
-        pure exp'
+--  Γ,α ⊢ e ↑ A ⊣ Δ,α,Θ
+--  ------------------- ∀I
+--  Γ ⊢ e ↑ ∀α.A ⊣ Δ
+check e (TAll alpha a) = do
+    let env_tvar = EnvTVar alpha
+    insertEnv env_tvar
+    e' <- check e a
+    (env_l, _) <- gets (splitOn env_tvar . env)
+    putEnv env_l
+    apply e'
 
-    --  Γ,(x:A) ⊢ e ↑ B ⊢ Δ,(x:A),Θ
-    --  --------------------------- →I
-    --  Γ ⊢ λx.e ↑ A → B ⊣ Δ
-    | EAbs name e <- exp
-    , TFun t1 t2  <- typ = do
-        let env_var = EnvVar name t1
-        insertEnv env_var
-        e' <- check e t2
-        (env_l, _) <- gets (splitOn env_var . env)
-        putEnv env_l
-        pure (T.EAbs (coerce name) e', typ)
+--  Γ,(x:A) ⊢ e ↑ B ⊢ Δ,(x:A),Θ
+--  --------------------------- →I
+--  Γ ⊢ λx.e ↑ A → B ⊣ Δ
+check (EAbs x e) (TFun a b) = do
+    let env_var = EnvVar x a
+    insertEnv env_var
+    e' <- check e b
+    (env_l, _) <- gets (splitOn env_var . env)
+    putEnv env_l
+    apply (T.EAbs (coerce x) e', TFun a b)
 
-    --  Γ,α ⊢ e ↓ A ⊣ Θ   Θ ⊢ [Θ]A <: [Θ]B ⊣ Δ
-    --  -------------------------------------- Sub
-    --  Γ ⊢ e ↑ B ⊣ Δ
-    | otherwise = do
-        (exp', t) <- infer exp
-        typ' <- apply typ
-        subtype t typ'
-        apply (exp', t)
+--  Γ,α ⊢ e ↓ A ⊣ Θ   Θ ⊢ [Θ]A <: [Θ]B ⊣ Δ
+--  -------------------------------------- Sub
+--  Γ ⊢ e ↑ B ⊣ Δ
+check e b = do
+    (e', a) <- infer e
+    b' <- apply b
+    subtype a b'
+    apply (e', b)
 
 -- | Γ ⊢ e ↓ A ⊣ Δ
 -- Under input context Γ, e infers output type A, with output context ∆
 infer :: Exp -> Tc (T.ExpT' Type)
-infer = \case
 
-    ELit lit -> pure (T.ELit lit, litType lit)
+infer (ELit lit) = apply (T.ELit lit, litType lit)
 
-    --  Γ ∋ (x : A)         Γ ∌ (x : A)
-    --  ------------- Var   --------------------- Var'
-    --  Γ ⊢ x ↓ A ⊣ Γ       Γ ⊢ x ↓ ά ⊣ Γ,(x : ά)
-    EVar x -> do
-        t <- fromMaybeM extend $ liftA2 (<|>) (lookupEnv x) (lookupSig x)
-        apply (T.EVar (coerce x), t)
-     where
-        extend = do
-            t <- TEVar <$> fresh
-            insertEnv (EnvVar x t)
-            pure t
+--  Γ ∋ (x : A)         Γ ∌ (x : A)
+--  ------------- Var   --------------------- Var'
+--  Γ ⊢ x ↓ A ⊣ Γ       Γ ⊢ x ↓ ά ⊣ Γ,(x : ά)
+infer (EVar x) = do
+    a <- fromMaybeM extend $ liftA2 (<|>) (lookupEnv x) (lookupSig x)
+    apply (T.EVar (coerce x), a)
+  where
+    extend = do
+        alpha <- TEVar <$> fresh
+        insertEnv (EnvVar x alpha)
+        pure alpha
 
-    EInj name -> do
-        t <- maybeToRightM ("Unknown constructor: " ++ show name)
-             =<< lookupInj name
-        apply (T.EInj $ coerce name, t)
+infer (EInj kappa) = do
+    t <- maybeToRightM ("Unknown constructor: " ++ show kappa)
+         =<< lookupInj kappa
+    apply (T.EInj $ coerce kappa, t)
 
-    --  Γ ⊢ A   Γ ⊢ e ↑ A ⊣ Δ
-    --  --------------------- Anno
-    --  Γ ⊢ (e : A) ↓ A ⊣ Δ
-    EAnn e t -> do
-        _ <- gets $ (`wellFormed` t) . env
-        (e', _) <- check e t
-        apply (e', t)
+--  Γ ⊢ A   Γ ⊢ e ↑ A ⊣ Δ
+--  --------------------- Anno
+--  Γ ⊢ (e : A) ↓ A ⊣ Δ
+infer (EAnn e a) = do
+    _ <- gets $ (`wellFormed` a) . env
+    (e', _) <- check e a
+    apply (e', a)
 
-    --  Γ ⊢ e₁ ↓ A ⊣ Θ   Γ ⊢ [Θ]A • ⇓ C ⊣ Δ
-    --  ----------------------------------- →E
-    --  Γ ⊢ e₁ e₂ ↓ C ⊣ Δ
-    EApp e1 e2 -> do
-        (e1', t) <- infer e1
-        (e2', t'') <- applyInfer t e2
-        apply (T.EApp (e1', t) e2', t'')
+--  Γ ⊢ e₁ ↓ A ⊣ Θ   Γ ⊢ [Θ]A • ⇓ C ⊣ Δ
+--  ----------------------------------- →E
+--  Γ ⊢ e₁ e₂ ↓ C ⊣ Δ
+infer (EApp e1 e2) = do
+    e1'@(_, a) <- infer e1
+    (e2', c) <- applyInfer a e2
+    apply (T.EApp e1' e2', c)
 
-    --  Γ,ά,έ,(x:ά) ⊢ e ↑ έ ⊣ Δ,(x:ά),Θ
-    --  ------------------------------- →I
-    --  Γ ⊢ λx.e ↓ ά → έ ⊣ Δ
-    EAbs name e -> do
-      tevar1 <- fresh
-      tevar2 <- fresh
-      insertEnv $ EnvTEVar tevar1
-      insertEnv $ EnvTEVar tevar2
-      let env_var = EnvVar name (TEVar tevar1)
-      insertEnv env_var
-      e' <- check e $ TEVar tevar2
-      dropTrailing env_var
-      let t_exp = on TFun TEVar tevar1 tevar2
-      apply (T.EAbs (coerce name) e', t_exp)
+--  Γ,ά,έ,(x:ά) ⊢ e ↑ έ ⊣ Δ,(x:ά),Θ
+--  ------------------------------- →I
+--  Γ ⊢ λx.e ↓ ά → έ ⊣ Δ
+infer (EAbs name e) = do
+    alpha <- fresh
+    epsilon <- fresh
+    insertEnv $ EnvTEVar alpha
+    insertEnv $ EnvTEVar epsilon
+    let env_var = EnvVar name (TEVar alpha)
+    insertEnv env_var
+    e' <- check e $ TEVar epsilon
+    dropTrailing env_var
+    apply (T.EAbs (coerce name) e', on TFun TEVar alpha epsilon)
 
+--  Γ ⊢ rhs ↓ A ⊣ Θ   Θ,(x:A) ⊢ e ↑ C ⊣ Δ,(x:A),Θ
+--  -------------------------------------------- LetI
+--  Γ ⊢ let x = rhs in e ↑ C ⊣ Δ
+infer (ELet (Bind x vars rhs) e) = do
+    (rhs', a) <- infer $ foldr EAbs rhs vars
+    let env_var = EnvVar x a
+    insertEnv env_var
+    e'@(_, c) <- infer e
+    (env_l, _) <- gets (splitOn env_var . env)
+    putEnv env_l
+    apply (T.ELet (T.Bind (coerce x, a) [] (rhs', a)) e', c)
 
-    --  Γ ⊢ e ↓ A ⊣ Θ   Θ,(x:A) ⊢ e' ↑ C ⊣ Δ,(x:A),Θ
-    --  -------------------------------------------- LetI
-    --  Γ ⊢ let x=e in e' ↑ C ⊣ Δ
-    ELet (Bind name [] rhs) e -> do -- TODO vars
-        (rhs', t_rhs) <- infer rhs
-        let env_var = EnvVar name t_rhs
-        insertEnv env_var
-        (e', t) <- infer e
-        (env_l, _) <- gets (splitOn env_var . env)
-        putEnv env_l
-        apply (T.ELet (T.Bind (coerce name, t_rhs) [] (rhs', t_rhs)) (e',t), t)
+--  Γ ⊢ e₁ ↑ Int ⊣ Θ  Θ ⊢ e₂ ↑ Int
+--  --------------------------- +I
+--  Γ ⊢ e₁ + e₂ ↓ Int ⊣ Δ
+infer (EAdd e1 e2) = do
+    e1' <- check e1 int
+    e2' <- check e2 int
+    apply (T.EAdd e1' e2', int)
 
-    --  Γ ⊢ e₁ ↑ Int ⊣ Θ  Θ ⊢ e₂ ↑ Int
-    --  --------------------------- +I
-    --  Γ ⊢ e₁ + e₂ ↓ Int ⊣ Δ
-    EAdd e1 e2 -> (, int) <$> onM T.EAdd (`check` int) e1 e2
-
-    --                  Θ ⊢ Π ∷ A ↓ C ⊣ Δ
-    --  Γ ⊢ e ↓ A ⊣ Θ   Δ ⊢ Π covers [Δ]A TODO
-    --  ---------------------------------------
-    --  Γ ⊢ case e of Π ↓ C ⊣ Δ
-    ECase scrut branches -> do
-      (scrut', t_scrut) <- infer scrut
-      (branches', t_return) <- inferBranches branches t_scrut
-      apply (T.ECase (scrut', t_scrut) branches', t_return)
+--                  Θ ⊢ Π ∷ A ↓ C ⊣ Δ
+--  Γ ⊢ e ↓ A ⊣ Θ   Δ ⊢ Π covers [Δ]A TODO
+--  ---------------------------------------
+--  Γ ⊢ case e of Π ↓ C ⊣ Δ
+infer (ECase scrut branches) = do
+   (scrut', t_scrut) <- infer scrut
+   (branches', t_return) <- inferBranches branches t_scrut
+   apply (T.ECase (scrut', t_scrut) branches', t_return)
 
 -- | Γ ⊢ A • e ⇓ C ⊣ Δ
 -- Under input context Γ , applying a function of type A to e infers type C, with output context ∆
 -- Instantiate existential type variables until there is an arrow type.
 applyInfer :: Type -> Exp -> Tc (T.ExpT' Type, Type)
-applyInfer typ exp = case typ of
 
-    --  Γ,ά ⊢ [ά/α]A • e ⇓ C ⊣ Δ
-    --  ------------------------ ∀App
-    --  Γ ⊢ ∀α.A • e ⇓ C ⊣ Δ
-    TAll tvar t -> do
-        tevar <- fresh
-        insertEnv $ EnvTEVar tevar
-        let t' = substitute tvar tevar t
-        applyInfer t' exp
+--  Γ,ά ⊢ [ά/α]A • e ⇓ C ⊣ Δ
+--  ------------------------ ∀App
+--  Γ ⊢ ∀α.A • e ⇓ C ⊣ Δ
+applyInfer (TAll alpha a) e = do
+    alpha' <- fresh
+    insertEnv $ EnvTEVar alpha'
+    applyInfer (substitute alpha alpha' a)  e
 
-    --  Γ[ά₂,ά₁,(ά=ά₁→ά₂)] ⊢ e ↑ ά₁ ⊣ Δ
-    --  ------------------------------- άApp
-    --  Γ[ά] ⊢ ά • e ⇓ ά₂ ⊣ Δ
-    TEVar tevar -> do
-        tevar1 <- fresh
-        tevar2 <- fresh
-        let env_tevar1       = EnvTEVar tevar1
-            env_tevar2       = EnvTEVar tevar2
-            t_fun            = on TFun TEVar tevar1 tevar2
-            env_tevar_solved = EnvTEVarSolved tevar t_fun
-        (env_l, env_r) <- gets (splitOn (EnvTEVar tevar) . env)
-        putEnv $
-            (env_l :|> env_tevar2 :|> env_tevar1 :|> env_tevar_solved) <> env_r
-        expT' <- check exp $ TEVar tevar1
-        apply (expT', TEVar tevar2)
+--  Γ[ά₂,ά₁,(ά=ά₁→ά₂)] ⊢ e ↑ ά₁ ⊣ Δ
+--  ------------------------------- άApp
+--  Γ[ά] ⊢ ά • e ⇓ ά₂ ⊣ Δ
+applyInfer (TEVar alpha) e = do
+    alpha1 <- fresh
+    alpha2 <- fresh
+    (env_l, env_r) <- gets (splitOn (EnvTEVar alpha) . env)
+    putEnv $ (env_l
+              :|> EnvTEVar alpha2
+              :|> EnvTEVar alpha1
+              :|> EnvTEVarSolved alpha (on TFun TEVar alpha1 alpha2)
+             ) <> env_r
+    e' <- check e $ TEVar alpha1
+    apply (e', TEVar alpha2)
 
-    --  Γ ⊢ e ↑ A ⊣ Δ
-    --  --------------------- →App
-    --  Γ ⊢ A → C • e ⇓ C ⊣ Δ
-    TFun t1 t2 -> do
-        exp' <- check exp t1
-        apply (exp', t2)
+--  Γ ⊢ e ↑ A ⊣ Δ
+--  --------------------- →App
+--  Γ ⊢ A → C • e ⇓ C ⊣ Δ
+applyInfer (TFun a c) e = do
+    exp' <- check e a
+    apply (exp', c)
 
-    _ -> throwError ("Cannot apply type " ++ show typ ++ " with expression " ++ show exp)
+applyInfer a e = throwError ("Cannot apply type " ++ show a ++ " with expression " ++ show e)
 
 ---------------------------------------------------------------------------
 -- * Pattern matching
@@ -435,59 +429,58 @@ checkPattern patt t_patt = case patt of
 -- | Γ ⊢ A <: B ⊣ Δ
 -- Under input context Γ, type A is a subtype of B, with output context ∆
 subtype :: Type -> Type -> Tc ()
+subtype (TLit lit1) (TLit lit2) | lit1 == lit2 = pure ()
+
+--  -------------------- <:Var
+--  Γ[α] ⊢ α <: α ⊣ Γ[α]
+subtype (TVar alpha) (TVar alpha') | alpha == alpha' = pure ()
+
+--  -------------------- <:Exvar
+--  Γ[ά] ⊢ ά <: ά ⊣ Γ[ά]
+subtype (TEVar alpha) (TEVar alpha') | alpha == alpha' = pure ()
+
+--  Γ ⊢ B₁ <: A₁ ⊣ Θ   Θ ⊢ [Θ]A₂ <: [Θ]B₂ ⊣ Δ
+--  ----------------------------------------- <:→
+--  Γ ⊢ A₁ → A₂ <: B₁ → B₂ ⊣ Δ
+subtype (TFun a1 a2) (TFun b1 b2) = do
+    subtype b1 a1
+    a2' <- apply a2
+    b2' <- apply b2
+    subtype a2' b2'
+
+--  Γ, α ⊢ A <: B ⊣ Δ,α,Θ
+--  --------------------- <:∀R
+--  Γ ⊢ A <: ∀α. B ⊣ Δ
+subtype a (TAll alpha b) = do
+    let env_tvar = EnvTVar alpha
+    insertEnv env_tvar
+    subtype a b
+    dropTrailing env_tvar
+
+--  Γ,▶ ά,ά ⊢ [ά/α]A <: B ⊣ Δ,▶ ά,Θ
+--  ------------------------------- <:∀L
+--  Γ ⊢ ∀α.A <: B ⊣ Δ
+subtype (TAll alpha a) b = do
+    alpha' <- fresh
+    let env_marker = EnvMark alpha'
+    insertEnv env_marker
+    insertEnv $ EnvTEVar alpha'
+    let a' = substitute alpha alpha' a
+    subtype a' b
+    dropTrailing env_marker
+
+--  ά ∉ FV(A)   Γ[ά] ⊢ ά :=< A ⊣ Δ
+--  ------------------------------ <:instantiateL
+--  Γ[ά] ⊢ ά <: A ⊣ Δ
+subtype (TEVar alpha) a | notElem alpha $ frees a = instantiateL alpha a
+
+--  ά ∉ FV(A)   Γ[ά] ⊢ A =:< ά ⊣ Δ
+--  ------------------------------ <:instantiateR
+--  Γ[ά] ⊢ A <: ά ⊣ Δ
+subtype a  (TEVar alpha) | notElem alpha $ frees a = instantiateR a alpha
+
+
 subtype t1 t2 = case (t1, t2) of
-
-    (TLit lit1, TLit lit2) | lit1 == lit2 -> pure ()
-
-    --  -------------------- <:Var
-    --  Γ[α] ⊢ α <: α ⊣ Γ[α]
-    (TVar tvar1, TVar tvar2) | tvar1 == tvar2 -> pure ()
-
-    --  -------------------- <:Exvar
-    --  Γ[ά] ⊢ ά <: ά ⊣ Γ[ά]
-    (TEVar tevar1, TEVar tevar2) | tevar1 == tevar2 -> pure ()
-
-    --  Γ ⊢ B₁ <: A₁ ⊣ Θ   Θ ⊢ [Θ]A₂ <: [Θ]B₂ ⊣ Δ
-    --  ----------------------------------------- <:→
-    --  Γ ⊢ A₁ → A₂ <: B₁ → B₂ ⊣ Δ
-    (TFun a1 a2, TFun b1 b2) -> do
-        subtype b1 a1
-        a2' <- apply a2
-        b2' <- apply b2
-        subtype a2' b2'
-
-    --  Γ, α ⊢ A <: B ⊣ Δ,α,Θ
-    --  --------------------- <:∀R
-    --  Γ ⊢ A <: ∀α. B ⊣ Δ
-    (a, TAll tvar b) -> do
-        let env_tvar = EnvTVar tvar
-        insertEnv env_tvar
-        subtype a b
-        dropTrailing env_tvar
-
-    --  Γ,▶ ά,ά ⊢ [ά/α]A <: B ⊣ Δ,▶ ά,Θ
-    --  ------------------------------- <:∀L
-    --  Γ ⊢ ∀α.A <: B ⊣ Δ
-    (TAll tvar a, b) -> do
-        tevar <- fresh
-        let env_marker = EnvMark tevar
-        insertEnv env_marker
-        insertEnv $ EnvTEVar tevar
-        let a' = substitute tvar tevar a
-        subtype a' b
-        dropTrailing env_marker
-
-    --  ά ∉ FV(A)   Γ[ά] ⊢ ά :=< A ⊣ Δ
-    --  ------------------------------ <:instantiateL
-    --  Γ[ά] ⊢ ά <: A ⊣ Δ
-    (TEVar tevar, typ) | notElem tevar $ frees typ -> instantiateL tevar typ
-
-    --  ά ∉ FV(A)   Γ[ά] ⊢ A =:< ά ⊣ Δ
-    --  ------------------------------ <:instantiateR
-    --  Γ[ά] ⊢ A <: ά ⊣ Δ
-    (typ, TEVar tevar) | notElem tevar $ frees typ -> instantiateR typ tevar
-
-
     (TData name1 typs1, TData name2 typs2)
 
       --  D₁ = D₂
@@ -524,99 +517,106 @@ subtype t1 t2 = case (t1, t2) of
 -- | Γ ⊢ ά :=< A ⊣ Δ
 -- Under input context Γ, instantiate ά such that ά <: A, with output context ∆
 instantiateL :: TEVar -> Type -> Tc ()
-instantiateL tevar typ = gets env >>= go
+instantiateL alpha a = gets env >>= \env -> go env alpha a
   where
-    go env
+    go env alpha tau
+       | isMono tau
+       , (env_l, env_r) <- splitOn (EnvTEVar alpha) env
+       , Right _ <-  wellFormed env_l tau
+       = putEnv $ (env_l :|> EnvTEVarSolved alpha tau) <> env_r
 
-        --  Γ ⊢ τ
-        --  ----------------------------- InstLSolve
-        --  Γ,ά,Γ' ⊢ ά :=< τ ⊣ Γ,(ά=τ),Γ'
-        | isMono typ
-        , (env_l, env_r) <- splitOn (EnvTEVar tevar) env
-        , Right _ <-  wellFormed env_l typ
-        = putEnv $ (env_l :|> EnvTEVarSolved tevar typ) <> env_r
+    --  Γ ⊢ τ
+    --  ----------------------------- InstLSolve
+    --  Γ,ά,Γ' ⊢ ά :=< τ ⊣ Γ,(ά=τ),Γ'
+    go env alpha tau
+        | isMono tau
+        , (env_l, env_r) <- splitOn (EnvTEVar alpha) env
+        , Right _ <-  wellFormed env_l tau
+        = putEnv $ (env_l :|> EnvTEVarSolved alpha tau) <> env_r
 
-        | TEVar tevar' <- typ = instReach tevar tevar'
+    --  ----------------------------- InstLReach
+    --  Γ[ά][έ] ⊢ ά :=< έ ⊣ Γ[ά][έ=ά]
+    go env alpha (TEVar epsilon) = do
+        let (env_l, env_r) = splitOn (EnvTEVar epsilon) env
+        putEnv $ (env_l :|> EnvTEVarSolved epsilon (TEVar alpha)) <> env_r
 
-        --  Γ[ά₂ά₁,(ά=ά₁→ά₂)] ⊢ A₁ =:< ά₁ ⊣ Θ  Θ ⊢ ά₂ :=< [Θ]A₂ ⊣ Δ
-        --  ------------------------------------------------------- InstLArr
-        --  Γ[ά] ⊢ ά :=< A₁ → A₂ ⊣ Δ
-        | TFun t1 t2 <- typ = do
-            tevar1 <- fresh
-            tevar2 <- fresh
-            insertEnv $ EnvTEVar tevar2
-            insertEnv $ EnvTEVar tevar1
-            insertEnv $ EnvTEVarSolved tevar (on TFun TEVar tevar1 tevar2)
-            instantiateR t1 tevar1
-            instantiateL tevar2 =<< apply t2
+    --  Γ[ά₂ά₁,(ά=ά₁→ά₂)] ⊢ A₁ =:< ά₁ ⊣ Θ  Θ ⊢ ά₂ :=< [Θ]A₂ ⊣ Δ
+    --  ------------------------------------------------------- InstLArr
+    --  Γ[ά] ⊢ ά :=< A₁ → A₂ ⊣ Δ
+    go _ alpha (TFun a1 a2) = do
+        alpha1 <- fresh
+        alpha2 <- fresh
+        insertEnv $ EnvTEVar alpha2
+        insertEnv $ EnvTEVar alpha1
+        insertEnv $ EnvTEVarSolved alpha (on TFun TEVar alpha1 alpha2)
+        instantiateR a1 alpha1
+        instantiateL alpha2 =<< apply a2
 
-        --  Γ[ά],ε ⊢ ά :=< E ⊣ Δ,ε,Δ'
-        --  ------------------------- InstLAIIR
-        --  Γ[ά] ⊢ ά :=< ∀ε.Ε ⊣ Δ
-        | TAll tvar t <- typ = do
-            instantiateL tevar t
-            let (env_l, _) = splitOn (EnvTVar tvar) env
-            putEnv env_l
+    --  Γ[ά],ε ⊢ ά :=< E ⊣ Δ,ε,Δ'
+    --  ------------------------- InstLAIIR
+    --  Γ[ά] ⊢ ά :=< ∀ε.Ε ⊣ Δ
+    go env tevar (TAll tvar t) = do
+        instantiateL tevar t
+        let (env_l, _) = splitOn (EnvTVar tvar) env
+        putEnv env_l
 
-        | otherwise = error $ "Trying to instantiateL: " ++ ppT (TEVar tevar)
-                              ++ " <: " ++ ppT typ
+    go _ alpha a = error $ "Trying to instantiateL: " ++ ppT (TEVar alpha)
+                              ++ " <: " ++ ppT a
 
 -- | Γ ⊢ A =:< ά ⊣ Δ
 -- Under input context Γ, instantiate ά such that A <: ά, with output context ∆
-instantiateR :: Type -> TEVar  -> Tc ()
-instantiateR typ tevar = gets env >>= go
+instantiateR :: Type -> TEVar -> Tc ()
+instantiateR a alpha = gets env >>= \env -> go env a alpha
   where
-    go env
 
         --  Γ ⊢ τ
         --  ----------------------------- InstRSolve
         --  Γ,ά,Γ' ⊢ τ =:< ά ⊣ Γ,(ά=τ),Γ'
-        | isMono typ
-        , (env_l, env_r) <- splitOn (EnvTEVar tevar) env
-        , Right _ <- wellFormed env_l typ
-        = putEnv $ (env_l :|> EnvTEVarSolved tevar typ) <> env_r
+    go env tau alpha
+        | isMono tau
+        , (env_l, env_r) <- splitOn (EnvTEVar alpha) env
+        , Right _ <- wellFormed env_l tau
+        = putEnv $ (env_l :|> EnvTEVarSolved alpha tau) <> env_r
 
-        | TEVar tevar' <- typ = instReach tevar tevar'
+    --
+    --  ----------------------------- InstRReach
+    --  Γ[ά][έ] ⊢ έ =:< ά ⊣ Γ[ά][έ=ά]
+    go env (TEVar epsilon) alpha = do
+        let (env_l, env_r) = splitOn (EnvTEVar epsilon) env
+        putEnv $ (env_l :|> EnvTEVarSolved epsilon (TEVar alpha)) <> env_r
+
+
 
         --  Γ[ά₂ά₁,(ά=ά₁→ά₂)] ⊢ A₁ :=< ά₁ ⊣ Θ  Θ ⊢ ά₂ =:< [Θ]A₂ ⊣ Δ
         --  ------------------------------------------------------- InstRArr
-        --  Γ[ά] ⊢ ά =:< A₁ → A₂ ⊣ Δ
-        | TFun t1 t2 <- typ = do
-            tevar1 <- fresh
-            tevar2 <- fresh
-            insertEnv $ EnvTEVar tevar2
-            insertEnv $ EnvTEVar tevar1
-            insertEnv $ EnvTEVarSolved tevar (on TFun TEVar tevar1 tevar2)
-            instantiateL tevar1 t1
-            t2' <- apply t2
-            instantiateR t2' tevar2
+        --  Γ[ά] ⊢ A₁ → A₂ =:< ά ⊣ Δ
+    go _ (TFun a1 a2) alpha = do
+        alpha1 <- fresh
+        alpha2 <- fresh
+        insertEnv $ EnvTEVar alpha2
+        insertEnv $ EnvTEVar alpha1
+        insertEnv $ EnvTEVarSolved alpha (on TFun TEVar alpha1 alpha2)
+        instantiateL alpha1 a1
+        a2' <- apply a2
+        instantiateR a2' alpha2
+
+
 
         --  Γ[ά],▶έ,ε ⊢ [έ/ε]E =:< ά ⊣ Δ,▶έ,Δ'
         --  ---------------------------------- InstRAIIL
         --  Γ[ά] ⊢ ∀ε.Ε =:< ά ⊣ Δ
-        | TAll tvar t <- typ = do
-            tevar' <- fresh
-            insertEnv $ EnvMark tevar'
-            insertEnv $ EnvTVar tvar
-            let t' = substitute tvar tevar' t
-            instantiateR t' tevar
-            let (env_l, _) = splitOn (EnvTVar tvar) env
+    go env (TAll epsilon e) alpha = do
+            epsilon' <- fresh
+            insertEnv $ EnvMark epsilon'
+            insertEnv $ EnvTVar epsilon
+            instantiateR (substitute epsilon epsilon' e) alpha
+            let (env_l, _) = splitOn (EnvMark epsilon') env
             putEnv env_l
 
-        | otherwise = error $ "Trying to instantiateR: " ++ ppT typ ++ " <: "
-                              ++ ppT (TEVar tevar)
+    go _ a alpha = error $ "Trying to instantiateR: " ++ ppT a ++ " <: "
+                ++ ppT (TEVar alpha)
 
 
---  ----------------------------- InstLReach
---  Γ[ά][έ] ⊢ ά :=< έ ⊣ Γ[ά][έ=ά]
---
---  ----------------------------- InstRReach
---  Γ[ά][έ] ⊢ έ =:< ά ⊣ Γ[ά][έ=ά]
-instReach :: TEVar -> TEVar -> Tc ()
-instReach tevar tevar' = do
-    (env_l, env_r) <- gets (splitOn (EnvTEVar tevar') . env)
-    let env_solved =  EnvTEVarSolved tevar' $ TEVar tevar
-    putEnv $ (env_l :|> env_solved) <> env_r
 
 
 ---------------------------------------------------------------------------
