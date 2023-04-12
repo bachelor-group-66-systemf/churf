@@ -237,22 +237,25 @@ morphBranch (T.Branch (p, pt) (e, et)) = do
   pt' <- getMonoFromPoly pt
   et' <- getMonoFromPoly et
   env <- ask
-  (p', newLocals)  <- morphPattern (locals env) p
+  (p', newLocals)  <- morphPattern pt' (locals env) p
   local (const env { locals = Set.union newLocals (locals env) }) $ do
     e' <- morphExp et' e
     return $ M.Branch (p', pt') (e', et')
 
 -- Morphs pattern (patter -> expression), gives the newly bound local variables.
-morphPattern :: Set.Set Ident -> T.Pattern -> EnvM (M.Pattern, Set.Set Ident)
-morphPattern ls = \case
+morphPattern :: M.Type -> Set.Set Ident -> T.Pattern -> EnvM (M.Pattern, Set.Set Ident)
+morphPattern expectedType ls = \case
   T.PVar (ident, t) -> do t' <- getMonoFromPoly t
                           return (M.PVar (ident, t'), Set.insert ident ls)
   T.PLit (lit, t) ->   do t' <- getMonoFromPoly t
                           return (M.PLit (convertLit lit, t'), ls)
   T.PCatch -> return (M.PCatch, ls)
   -- Constructor ident
-  T.PEnum ident   -> return (M.PEnum ident, ls)
-  T.PInj ident ps -> do pairs <- mapM (morphPattern ls) ps
+  T.PEnum ident   -> do morphCons expectedType ident
+                        return (M.PEnum ident, ls)
+  T.PInj ident ps -> do morphCons expectedType ident
+                        let (M.TData tIdent ts) = expectedType
+                        pairs <- mapM (\(pat, patT) -> morphPattern patT ls pat) (zip ps ts)
                         return (M.PInj ident (map fst pairs), Set.unions (map snd pairs))
 
 -- | Creates a new identifier for a function with an assigned type
