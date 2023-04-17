@@ -329,8 +329,8 @@ algoW = \case
     err@(EAdd e0 e1) -> do
         (s1, (e0', t0)) <- algoW e0
         (s2, (e1', t1)) <- algoW e1
-        s3 <- exprErr (unify (apply s2 t0) int) err
-        s4 <- exprErr (unify (apply s3 t1) int) err
+        s3 <- exprErr (unify t0 int) err
+        s4 <- exprErr (unify t1 int) err
         let comp = s4 `compose` s3 `compose` s2 `compose` s1
         return
             ( comp
