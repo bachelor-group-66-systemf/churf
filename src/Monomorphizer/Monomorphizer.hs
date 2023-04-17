@@ -120,7 +120,7 @@ getMonoFromPoly t = do env <- ask
 -- Returns the annotated bind name.
 -- TODO: Redundancy? btype and t should always be the same.
 morphBind :: M.Type -> T.Bind -> EnvM Ident
-morphBind expectedType b@(T.Bind (Ident _, btype) args (exp, expt)) =
+morphBind expectedType b@(T.Bind (Ident str, btype) args (exp, expt)) =
     local (\env -> env { locals = Set.fromList (map fst args),
                          polys  = Map.fromList (mapTypes btype expectedType)
                        }) $ do
@@ -137,7 +137,7 @@ morphBind expectedType b@(T.Bind (Ident _, btype) args (exp, expt)) =
         -- Get monomorphic type sof args
         args' <- mapM convertArg args
         addOutputBind $ M.Bind (coerce name', expectedType)
-            args' (exp', expectedType)
+            args' (exp', expt')
         return name'
 
 convertArg :: (Ident, T.Type) -> EnvM (Ident, M.Type)

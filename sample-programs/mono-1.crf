@@ -1,5 +1,6 @@
-const x y = x;
+const x y = x
 
-f x = (const x 'c');
+f x = (const x 'c')
 
-main = f 5;
+main = f 5
+
