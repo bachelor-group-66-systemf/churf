@@ -1,10 +1,10 @@
 data Maybe () where {
-    Just : Int -> Maybe () 
-    Nothing : Maybe () 
+    Just : Int -> Maybe () ;
+    Nothing : Maybe () ;
 };
 
 demoFunc x = case x of {
-    Just x => x + 24;
+    Just y => y + 24;
     Nothing => 0;
 };
 
