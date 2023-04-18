@@ -130,7 +130,6 @@ morphBind expectedType b@(T.Bind (Ident str, btype) args (exp, expt)) =
                          polys  = Map.fromList (mapTypes btype expectedType)
                        }) $ do
       -- The "new name" is used to find out if it is already marked or not.
-      trace ("Inside of bind: " ++ str) return ()
       let name' = newFuncName expectedType b
       bindMarked <- isBindMarked (coerce name')
       -- Return with right name if already marked
@@ -219,12 +218,9 @@ morphExp expectedType exp = case exp of
 morphBranch :: T.Branch -> EnvM M.Branch
 morphBranch (T.Branch (p, pt) (e, et)) = do
   pt' <- getMonoFromPoly pt
-  trace ("pt':" ++ show pt') return ()
   et' <- getMonoFromPoly et
   env <- ask
   (p', newLocals)  <- morphPattern pt' (locals env) p
-  trace ("MORBING RN: " ++ show newLocals) return ()
-  trace ("MORBING2 RN: " ++ show p) return ()
   local (const env { locals = newLocals }) $ do
     e' <- morphExp et' e
     return $ M.Branch (p', pt') (e', et')
