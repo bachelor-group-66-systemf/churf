@@ -138,4 +138,6 @@ defaultStart =
     , UnsafeRaw "declare external void @cheap_init()\n"
     , UnsafeRaw "declare external ptr @cheap_alloc(i64)\n"
     , UnsafeRaw "declare external void @cheap_dispose()\n"
+    , UnsafeRaw "declare external ptr @cheap_the()\n"
+    , UnsafeRaw "declare external void @cheap_set_profiler(ptr, i1)\n"
     ]

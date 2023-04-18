@@ -127,7 +127,11 @@ compileScs (MIR.DData (MIR.Data typ ts) : xs) = do
     compileScs xs
 
 firstMainContent :: [LLVMIr]
-firstMainContent = [UnsafeRaw "call void @cheap_init()\n"]
+firstMainContent =
+    [ UnsafeRaw "%prof = call ptr @cheap_the()\n"
+    , UnsafeRaw "call void @cheap_set_profiler(ptr %prof, i1 true)\n"
+    , UnsafeRaw "call void @cheap_init()\n"
+    ]
 
 lastMainContent :: LLVMValue -> [LLVMIr]
 lastMainContent var =
