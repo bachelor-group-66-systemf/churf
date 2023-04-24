@@ -66,5 +66,3 @@ rpProgram rf (Program defs) = do
         ECase e bs  -> rpuExp e >> mapM_ rpuBranch bs
         _           -> pure ()
 
-reportAnyForall :: Program -> Err ()
-reportAnyForall = undefined

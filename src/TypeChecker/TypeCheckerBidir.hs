@@ -396,10 +396,13 @@ checkPattern patt t_patt = case patt of
         --  Γ ⊢ K p₁ p₂ ↑ B ⊣ Δ
         PInj name ps -> do
             t_inj <- maybeToRightM "unknown constructor" =<< lookupInj name
+            let ps' = getParams t_inj
+            unless (length ps' == length ps) $
+                throwError "Wrong number of arguments!"
             sub <- substituteTVarsOf t_inj
             subtype (sub $ getDataId t_inj) t_patt
             let checkP p t = checkPattern p =<< apply (sub t)
-            ps' <- zipWithM checkP ps $ getParams t_inj
+            ps' <- zipWithM checkP ps ps'
             apply (T.PInj (coerce name) (map fst ps'), t_patt)
           where
             substituteTVarsOf = \case
