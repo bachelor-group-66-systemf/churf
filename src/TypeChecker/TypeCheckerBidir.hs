@@ -397,7 +397,7 @@ checkPattern patt t_patt = case patt of
         PInj name ps -> do
             t_inj <- maybeToRightM "unknown constructor" =<< lookupInj name
             let ts = getParams t_inj
-            unless (length ts' == length ps) $
+            unless (length ts == length ps) $
                 throwError "Wrong number of arguments!"
             sub <- substituteTVarsOf t_inj
             subtype (sub $ getDataId t_inj) t_patt
