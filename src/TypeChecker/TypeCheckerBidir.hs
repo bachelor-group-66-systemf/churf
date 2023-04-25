@@ -337,6 +337,7 @@ infer (EAdd e1 e2) = do
     e2' <- check e2 int
     apply (T.EAdd e1' e2', int)
 
+                    --FIXME
 --  Γ ⊢ e ↑ A ⊣ Θ   Θ ⊢ Π ∷ [Θ]A ↑ C ⊣ Δ
 --  ------------------------------------ Case
 --  Γ ⊢ case e of Π ↓ C ⊣ Δ
@@ -345,15 +346,15 @@ infer (ECase scrut pi) = do
    case pi of
      [] -> apply (T.ECase (scrut', a) [], a)
      (Branch _ e):_  -> do
-         (_, c)<- infer e
-         (pi', c') <- foldlM go ([], c) pi
-         apply (T.ECase (scrut', a) pi', c')
+         (_, b)<- infer e
+         (pi', b') <- foldlM go ([], b) pi
+         apply (T.ECase (scrut', a) pi', b')
        where
-         go (bs, c) (Branch p e) = do
+         go (pi, b) (Branch p e) = do
              p' <- checkPattern p =<< apply a
-             e'@(_, c') <- infer e
-             subtype c' c
-             apply (T.Branch p' e' : bs, c')
+             e'@(_, b') <- infer e
+             subtype b' b
+             apply (T.Branch p' e' : pi, b')
 
 -- | Γ ⊢ A • e ⇓ C ⊣ Δ
 -- Under input context Γ , applying a function of type A to e infers type C, with output context ∆
