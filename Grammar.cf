@@ -20,11 +20,10 @@ Bind. Bind ::= LIdent [LIdent] "=" Exp;
 -- * Types
 -------------------------------------------------------------------------------
 
-         TLit.     Type1 ::= UIdent;                 -- τ
-         TVar.     Type1 ::= TVar;                   -- α
-internal TEVar.    Type1 ::= TEVar;                  -- ά
-         TData.    Type1 ::= UIdent "(" [Type] ")";  -- D ()
-         TFun.     Type  ::= Type1 "->" Type;        -- A → A
+         TVar.     Type3 ::= TVar;                   -- α
+         TIdent.   Type3 ::= UIdent;
+         TApp.     Type1 ::= Type1 Type2;
+         TFun.     Type1 ::= Type2 "->" Type1;        -- A → A
          TAll.     Type  ::= "forall" TVar "." Type; -- ∀α. A 
 
          MkTVar.  TVar  ::= LIdent;
@@ -83,13 +82,13 @@ separator Branch ";" ;
 separator Inj ";";
 
 separator LIdent "";
-separator Type " ";
+separator Type2 " ";
 separator TVar " ";
 separator nonempty Pattern1 " ";
 
 coercions Pattern 1;
 coercions Exp 4;
-coercions Type 1 ;
+coercions Type 3 ;
 
 token UIdent (upper (letter | digit | '_')*) ;
 token LIdent (lower (letter | digit | '_')*) ;

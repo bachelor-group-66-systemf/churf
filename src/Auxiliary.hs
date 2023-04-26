@@ -1,15 +1,15 @@
-{-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE Rank2Types        #-}
+{-# LANGUAGE Rank2Types #-}
 
 module Auxiliary (module Auxiliary) where
 
-import           Control.Monad.Error.Class (liftEither)
-import           Control.Monad.Except      (MonadError, liftM2)
-import           Data.Either.Combinators   (maybeToRight)
-import           Data.List                 (foldl')
-import           Grammar.Abs
-import           Prelude                   hiding ((>>), (>>=))
+import Control.Monad.Error.Class (liftEither)
+import Control.Monad.Except (MonadError, liftM2)
+import Data.Either.Combinators (maybeToRight)
+import Data.List (foldl')
+import Grammar.Abs
+import Prelude hiding ((>>), (>>=))
 
 (>>) a b = a ++ " " ++ b
 (>>=) a f = f a
@@ -51,11 +51,11 @@ liftMM2 f m1 m2 = do
     f x1 x2
 
 litType :: Lit -> Type
-litType (LInt _)  = int
+litType (LInt _) = int
 litType (LChar _) = char
 
-int = TLit "Int"
-char = TLit "Char"
+int = TData "Int" []
+char = TData "Int" []
 
 tupSequence :: Monad m => (m a, b) -> m (a, b)
 tupSequence (ma, b) = (,b) <$> ma
@@ -70,6 +70,6 @@ trd_ (_, _, a) = a
 partitionDefs :: [Def] -> ([Data], [Sig], [Bind])
 partitionDefs defs = (datas, sigs, binds)
   where
-    datas = [ d | DData d <- defs ]
-    sigs  = [ s | DSig s  <- defs ]
-    binds = [ b | DBind b <- defs ]
+    datas = [d | DData d <- defs]
+    sigs = [s | DSig s <- defs]
+    binds = [b | DBind b <- defs]

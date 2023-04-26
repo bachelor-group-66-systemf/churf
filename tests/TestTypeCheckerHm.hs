@@ -2,19 +2,19 @@
 
 module TestTypeCheckerHm where
 
-import           Control.Monad             (sequence_, (<=<))
-import           Test.Hspec
+import Control.Monad (sequence_, (<=<))
+import Test.Hspec
 
-import           AnnForall                 (annotateForall)
-import qualified DoStrings                 as D
-import           Grammar.Layout            (resolveLayout)
-import           Grammar.Par               (myLexer, pProgram)
-import           Grammar.Print             (printTree)
-import           Renamer.Renamer           (rename)
-import           ReportForall              (reportForall)
-import           TypeChecker.TypeChecker   (TypeChecker (Hm))
-import           TypeChecker.TypeCheckerHm (typecheck)
-import           TypeChecker.TypeCheckerIr (Program)
+import AnnForall (annotateForall)
+import DoStrings qualified as D
+import Grammar.Layout (resolveLayout)
+import Grammar.Par (myLexer, pProgram)
+import Grammar.Print (printTree)
+import Renamer.Renamer (rename)
+import ReportForall (reportForall)
+import TypeChecker.TypeChecker (TypeChecker (Hm))
+import TypeChecker.TypeCheckerHm (typecheck)
+import TypeChecker.TypeCheckerIr (Program)
 
 testTypeCheckerHm = describe "Hindley-Milner type checker test" $ do
     sequence_ goods
@@ -47,7 +47,7 @@ goods =
         "Pattern matching on a nested list"
         ( D.do
             _List
-            "main : List (List (a)) -> Int ;"
+            "main : List (List a) -> Int ;"
             "main xs = case xs of {"
             "    Cons Nil _ => 1 ;"
             "    _ => 0 ;"
@@ -78,7 +78,7 @@ bads =
         ( D.do
             _Bool
             _not
-            "f : a -> Bool () ;"
+            "f : a -> Bool ;"
             "f x = not x ;"
         )
         bad
@@ -102,7 +102,7 @@ bads =
         "Pattern matching on literal and _List should not succeed"
         ( D.do
             _List
-            "length : List (c) -> Int;"
+            "length : List c -> Int;"
             "length _List = case _List of {"
             "  0         => 0;"
             "  Cons x xs => 1 + length xs;"
@@ -120,29 +120,29 @@ bads =
             " };"
         )
         bad
-    -- FIXME FAILING TEST
-    -- , testSatisfy
-    --     "id with incorrect signature"
-    --     ( D.do
-    --         "id : a -> b;"
-    --         "id x = x;"
-    --     )
-    --     bad
-    -- FIXME FAILING TEST
-    -- , testSatisfy
-    --     "incorrect signature on const"
-    --     ( D.do
-    --         "const : a -> b -> b;"
-    --         "const x y = x"
-    --     )
-    --     bad
-    -- FIXME FAILING TEST
-    -- , testSatisfy
-    --     "incorrect type signature on id lambda"
-    --     ( D.do
-    --         "id = ((\\x. x) : a -> b);"
-    --     )
-    --     bad
+        -- FIXME FAILING TEST
+        -- , testSatisfy
+        --     "id with incorrect signature"
+        --     ( D.do
+        --         "id : a -> b;"
+        --         "id x = x;"
+        --     )
+        --     bad
+        -- FIXME FAILING TEST
+        -- , testSatisfy
+        --     "incorrect signature on const"
+        --     ( D.do
+        --         "const : a -> b -> b;"
+        --         "const x y = x"
+        --     )
+        --     bad
+        -- FIXME FAILING TEST
+        -- , testSatisfy
+        --     "incorrect type signature on id lambda"
+        --     ( D.do
+        --         "id = ((\\x. x) : a -> b);"
+        --     )
+        --     bad
     ]
 
 bes =
@@ -187,9 +187,9 @@ bes =
     , testBe
         "length function on int list infers correct signature"
         ( D.do
-            "data List () where {"
-            "    Nil : List ()"
-            "    Cons : Int -> List () -> List ()"
+            "data List where {"
+            "    Nil : List"
+            "    Cons : Int -> List -> List"
             "};"
 
             "length xs = case xs of {"
@@ -198,12 +198,12 @@ bes =
             "};"
         )
         ( D.do
-            "data List () where {"
-            "    Nil : List ()"
-            "    Cons : Int -> List () -> List ()"
+            "data List where {"
+            "    Nil : List"
+            "    Cons : Int -> List -> List"
             "};"
 
-            "length : List () -> Int ;"
+            "length : List -> Int ;"
             "length xs = case xs of {"
             "    Nil => 0 ;"
             "    Cons _ xs => 1 + length xs ;"
@@ -222,7 +222,7 @@ run' s = do
     (rename <=< annotateForall) p
 
 ok (Right _) = True
-ok (Left _)  = False
+ok (Left _) = False
 
 bad = not . ok
 
@@ -232,14 +232,14 @@ _const = D.do
     "const : a -> b -> a ;"
     "const x y = x ;"
 _List = D.do
-    "data List (a) where"
+    "data List a where"
     "  {"
-    "    Nil : List (a);"
-    "    Cons : a -> List (a) -> List (a)"
+    "    Nil : List a;"
+    "    Cons : a -> List a -> List a"
     "  };"
 
 _headSig = D.do
-    "head : List (a) -> a ;"
+    "head : List a -> a ;"
 
 _head = D.do
     "head xs = "
@@ -248,13 +248,13 @@ _head = D.do
     "  };"
 
 _Bool = D.do
-    "data Bool () where {"
-    "    True : Bool ()"
-    "    False : Bool ()"
+    "data Bool where {"
+    "    True : Bool"
+    "    False : Bool"
     "};"
 
 _not = D.do
-    "not : Bool () -> Bool () ;"
+    "not : Bool -> Bool;"
     "not x = case x of {"
     "    True => False ;"
     "    False => True ;"
@@ -262,9 +262,9 @@ _not = D.do
 _id = "id x = x ;"
 
 _Maybe = D.do
-    "data Maybe (a) where {"
-    "    Nothing : Maybe (a)"
-    "    Just : a -> Maybe (a)"
+    "data Maybe a where {"
+    "    Nothing : Maybe a"
+    "    Just : a -> Maybe a"
     "    };"
 
 _fmap = D.do

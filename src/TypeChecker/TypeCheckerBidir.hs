@@ -1,36 +1,46 @@
-{-# LANGUAGE LambdaCase          #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedRecordDot #-}
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE PatternSynonyms     #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PatternSynonyms #-}
 {-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 
 module TypeChecker.TypeCheckerBidir (typecheck) where
 
-import           Auxiliary                 (int, litType, maybeToRightM, snoc)
-import           Control.Applicative       (Applicative (liftA2), (<|>))
-import           Control.Monad.Except      (ExceptT, MonadError (throwError),
-                                            runExceptT, unless, zipWithM,
-                                            zipWithM_)
-import           Control.Monad.Extra       (fromMaybeM)
-import           Control.Monad.State       (MonadState, State, evalState, gets,
-                                            modify)
-import           Data.Coerce               (coerce)
-import           Data.Foldable             (foldlM)
-import           Data.Function             (on)
-import           Data.List                 (intercalate)
-import           Data.Map                  (Map)
-import qualified Data.Map                  as Map
-import           Data.Maybe                (fromMaybe, isNothing)
-import           Data.Sequence             (Seq (..))
-import qualified Data.Sequence             as S
-import qualified Data.Set                  as Set
-import           Data.Tuple.Extra          (second)
-import           Debug.Trace               (trace)
-import           Grammar.Abs
-import           Grammar.ErrM
-import           Grammar.Print             (printTree)
-import           Prelude                   hiding (exp)
-import qualified TypeChecker.TypeCheckerIr as T
+import Auxiliary (int, litType, maybeToRightM, snoc)
+import Control.Applicative (Applicative (liftA2), (<|>))
+import Control.Monad.Except (
+    ExceptT,
+    MonadError (throwError),
+    runExceptT,
+    unless,
+    zipWithM,
+    zipWithM_,
+ )
+import Control.Monad.Extra (fromMaybeM)
+import Control.Monad.State (
+    MonadState,
+    State,
+    evalState,
+    gets,
+    modify,
+ )
+import Data.Coerce (coerce)
+import Data.Foldable (foldlM)
+import Data.Function (on)
+import Data.List (intercalate)
+import Data.Map (Map)
+import Data.Map qualified as Map
+import Data.Maybe (fromMaybe, isNothing)
+import Data.Sequence (Seq (..))
+import Data.Sequence qualified as S
+import Data.Set qualified as Set
+import Data.Tuple.Extra (second)
+import Debug.Trace (trace)
+import Grammar.Abs
+import Grammar.ErrM
+import Grammar.Print (printTree)
+import TypeChecker.TypeCheckerIr qualified as T
+import Prelude hiding (exp)
 
 -- Implementation is derived from the paper (Dunfield and Krishnaswami 2013)
 -- https://doi.org/10.1145/2500365.2500582
@@ -40,85 +50,108 @@ import qualified TypeChecker.TypeCheckerIr as T
 -- • Remove EAdd
 -- • Add kinds!!
 
-data EnvElem = EnvVar         LIdent Type -- ^ Term variable typing. x : A
-             | EnvTVar        TVar        -- ^ Universal type variable. α
-             | EnvTEVar       TEVar       -- ^ Existential unsolved type variable. ά
-             | EnvTEVarSolved TEVar Type  -- ^ Existential solved type variable. ά = τ
-             | EnvMark        TEVar       -- ^ Scoping Marker. ▶ ά
-               deriving (Eq, Show)
+data EnvElem
+    = -- | Term variable typing. x : A
+      EnvVar LIdent Type
+    | -- | Universal type variable. α
+      EnvTVar TVar
+    | -- | Existential unsolved type variable. ά
+      EnvTEVar TEVar
+    | -- | Existential solved type variable. ά = τ
+      EnvTEVarSolved TEVar Type
+    | -- | Scoping Marker. ▶ ά
+      EnvMark TEVar
+    deriving (Eq, Show)
 
 type Env = Seq EnvElem
 
--- | Ordered context
--- Γ ::= ・| Γ, α | Γ, ά | Γ, ▶ ά | Γ, x:A
+{- | Ordered context
+Γ ::= ・| Γ, α | Γ, ά | Γ, ▶ ά | Γ, x:A
+-}
 data Cxt = Cxt
-    { env        :: Env             -- ^ Local scope context  Γ
-    , sig        :: Map LIdent Type -- ^ Top-level signatures x : A
-    , binds      :: Map LIdent Exp  -- ^ Top-level binds x : e
-    , next_tevar :: Int             -- ^ Counter to distinguish ά
-    , data_injs  :: Map UIdent Type -- ^ Data injections (constructors) K/inj : A
-    } deriving (Show, Eq)
+    { env :: Env
+    -- ^ Local scope context  Γ
+    , sig :: Map LIdent Type
+    -- ^ Top-level signatures x : A
+    , binds :: Map LIdent Exp
+    -- ^ Top-level binds x : e
+    , next_tevar :: Int
+    -- ^ Counter to distinguish ά
+    , data_injs :: Map UIdent Type
+    -- ^ Data injections (constructors) K/inj : A
+    }
+    deriving (Show, Eq)
 
-newtype Tc a = Tc { runTc :: ExceptT String (State Cxt) a }
+newtype Tc a = Tc {runTc :: ExceptT String (State Cxt) a}
     deriving (Functor, Applicative, Monad, MonadState Cxt, MonadError String)
 
-
 initCxt :: [Def] -> Cxt
-initCxt defs = Cxt
-            { env        = mempty
-            , sig        = Map.fromList [ (name, t)
-                                        | DSig' name t <- defs
-                                        ]
-            , binds      = Map.fromList [ (name, foldr EAbs rhs vars)
-                                        | DBind' name vars rhs <- defs
-                                        ]
-            , next_tevar = 0
-            , data_injs  = Map.fromList [ (name, foldr TAll t $ unboundedTVars t)
-                                        | DData (Data _ injs) <- defs
-                                        , Inj name t <- injs
-                                        ]
-            }
+initCxt defs =
+    Cxt
+        { env = mempty
+        , sig =
+            Map.fromList
+                [ (name, t)
+                | DSig' name t <- defs
+                ]
+        , binds =
+            Map.fromList
+                [ (name, foldr EAbs rhs vars)
+                | DBind' name vars rhs <- defs
+                ]
+        , next_tevar = 0
+        , data_injs =
+            Map.fromList
+                [ (name, foldr TAll t $ unboundedTVars t)
+                | DData (Data _ injs) <- defs
+                , Inj name t <- injs
+                ]
+        }
   where
-    unboundedTVars = uncurry (Set.\\)  . go (mempty, mempty)
+    unboundedTVars = uncurry (Set.\\) . go (mempty, mempty)
       where
         go (unbounded, bounded) = \case
-          TAll tvar t  -> go (unbounded, Set.insert tvar bounded) t
-          TVar tvar    -> (Set.insert tvar unbounded, bounded)
-          TFun t1 t2   -> foldl go (unbounded, bounded) [t1, t2]
-          TData _ typs -> foldl go (unbounded, bounded) typs
-          _            -> (unbounded, bounded)
+            TAll tvar t -> go (unbounded, Set.insert tvar bounded) t
+            TVar tvar -> (Set.insert tvar unbounded, bounded)
+            TFun t1 t2 -> foldl go (unbounded, bounded) [t1, t2]
+            TData _ typs -> foldl go (unbounded, bounded) typs
+            _ -> (unbounded, bounded)
 
 typecheck :: Program -> Err (T.Program' Type)
 typecheck (Program defs) = do
-    dataTypes' <- mapM typecheckDataType [ d | DData d <- defs ]
+    dataTypes' <- mapM typecheckDataType [d | DData d <- defs]
     binds' <- typecheckBinds (initCxt defs) [b | DBind b <- defs]
     pure . T.Program $ map T.DData dataTypes' ++ map T.DBind binds'
 
 typecheckBinds :: Cxt -> [Bind] -> Err [T.Bind' Type]
-typecheckBinds cxt = flip evalState cxt
-                   . runExceptT
-                   . runTc
-                   . mapM typecheckBind
+typecheckBinds cxt =
+    flip evalState cxt
+        . runExceptT
+        . runTc
+        . mapM typecheckBind
 
 typecheckBind :: Bind -> Tc (T.Bind' Type)
 typecheckBind (Bind name vars rhs) = do
-    bind'@(T.Bind (name, typ) _ _) <- lookupSig name >>= \case
-        Just t  -> do
-            (rhs', _) <- check (foldr EAbs rhs vars) t
-            pure (T.Bind (coerce name, t) [] (rhs', t))
-        Nothing -> do
-            (e, t) <- apply =<< infer (foldr EAbs rhs vars)
-            pure (T.Bind (coerce name, t) [] (e, t))
+    bind'@(T.Bind (name, typ) _ _) <-
+        lookupSig name >>= \case
+            Just t -> do
+                (rhs', _) <- check (foldr EAbs rhs vars) t
+                pure (T.Bind (coerce name, t) [] (rhs', t))
+            Nothing -> do
+                (e, t) <- apply =<< infer (foldr EAbs rhs vars)
+                pure (T.Bind (coerce name, t) [] (e, t))
     env <- gets env
     unless (isComplete env) err
     insertSig (coerce name) typ
     putEnv Empty
     pure bind'
   where
-    err = throwError $ unlines
-        [ "Type inference failed: " ++ printTree (Bind name vars rhs)
-        , "Did you forget to add type annotation to a polymorphic function?"
-        ]
+    err =
+        throwError $
+            unlines
+                [ "Type inference failed: " ++ printTree (Bind name vars rhs)
+                , "Did you forget to add type annotation to a polymorphic function?"
+                ]
 
 -- TODO remove some checks
 typecheckDataType :: Data -> Err (T.Data' Type)
@@ -128,49 +161,54 @@ typecheckDataType (Data typ injs) = do
     pure (T.Data typ injs')
   where
     go tvars = \case
-      TAll tvar t -> go (tvar:tvars) t
-      TData name typs
-          | Right tvars' <- mapM toTVar typs
-          , all (`elem` tvars) tvars'
-          -> pure (name, tvars')
-      _ -> throwError $ unwords ["Bad data type definition: ", ppT typ]
+        TAll tvar t -> go (tvar : tvars) t
+        TData name typs
+            | Right tvars' <- mapM toTVar typs
+            , all (`elem` tvars) tvars' ->
+                pure (name, tvars')
+        _ -> throwError $ unwords ["Bad data type definition: ", ppT typ]
 
 -- TODO remove some checks
 typecheckInj :: Inj -> UIdent -> [TVar] -> Err (T.Inj' Type)
 typecheckInj (Inj inj_name inj_typ) name tvars
-    | not $ boundTVars tvars inj_typ
-    = throwError "Unbound type variables"
+    | not $ boundTVars tvars inj_typ =
+        throwError "Unbound type variables"
     | TData name' typs <- getDataId inj_typ
-    , name'  == name
+    , name' == name
     , Right tvars' <- mapM toTVar typs
-    , all (`elem` tvars) tvars'
-    = pure $ T.Inj (coerce inj_name) (foldr TAll inj_typ tvars')
-    | otherwise
-    = throwError $ unwords
-        ["Bad type constructor: ", show name
-        , "\nExpected: ", ppT . TData name $ map TVar tvars
-        , "\nActual: ", ppT $ getDataId inj_typ
-        ]
+    , all (`elem` tvars) tvars' =
+        pure $ T.Inj (coerce inj_name) (foldr TAll inj_typ tvars')
+    | otherwise =
+        throwError $
+            unwords
+                [ "Bad type constructor: "
+                , show name
+                , "\nExpected: "
+                , ppT . TData name $ map TVar tvars
+                , "\nActual: "
+                , ppT $ getDataId inj_typ
+                ]
   where
     boundTVars :: [TVar] -> Type -> Bool
     boundTVars tvars' = \case
-        TAll tvar t  -> boundTVars (tvar:tvars') t
-        TFun t1 t2   -> on (&&) (boundTVars tvars') t1 t2
-        TVar tvar    -> elem tvar tvars'
+        TAll tvar t -> boundTVars (tvar : tvars') t
+        TFun t1 t2 -> on (&&) (boundTVars tvars') t1 t2
+        TVar tvar -> elem tvar tvars'
+        TData "Int" _ -> True
+        TData "Char" _ -> True
         TData _ typs -> all (boundTVars tvars) typs
-        TLit _       -> True
-        TEVar _      -> error "TEVar in data type declaration"
-
-
+        TEVar _ -> error "TEVar in data type declaration"
 
 ---------------------------------------------------------------------------
+
 -- * Typing rules
+
 ---------------------------------------------------------------------------
 
--- | Γ ⊢ e ↑ A ⊣ Δ
--- Under input context Γ, e checks against input type A, with output context ∆
+{- | Γ ⊢ e ↑ A ⊣ Δ
+Under input context Γ, e checks against input type A, with output context ∆
+-}
 check :: Exp -> Type -> Tc (T.ExpT' Type)
-
 --  Γ,α ⊢ e ↑ A ⊣ Δ,α,Θ
 --  ------------------- ∀I
 --  Γ ⊢ e ↑ ∀α.A ⊣ Δ
@@ -204,72 +242,71 @@ check e b = do
 
 checkPattern :: Pattern -> Type -> Tc (T.Pattern' Type, Type)
 checkPattern patt t_patt = case patt of
+    --  -------------------
+    --  Γ ⊢ x ↑ A ⊣ Γ,(x:A)
+    PVar x -> do
+        insertEnv $ EnvVar x t_patt
+        apply (T.PVar (coerce x, t_patt), t_patt)
 
-        --  -------------------
-        --  Γ ⊢ x ↑ A ⊣ Γ,(x:A)
-        PVar x -> do
-            insertEnv $ EnvVar x t_patt
-            apply (T.PVar (coerce x, t_patt), t_patt)
+    --  -------------
+    --  Γ ⊢ _ ↑ A ⊣ Γ
+    PCatch -> apply (T.PCatch, t_patt)
+    --  Γ ⊢ τ ↓ A ⊣ Γ   Γ ⊢ A <: B ⊣ Δ
+    --  ------------------------------
+    --  Γ ⊢ τ ↑ B ⊣ Δ
+    PLit lit -> do
+        subtype (litType lit) t_patt
+        apply (T.PLit (lit, t_patt), t_patt)
 
-        --  -------------
-        --  Γ ⊢ _ ↑ A ⊣ Γ
-        PCatch -> apply (T.PCatch, t_patt)
+    --  Γ ∋ (K : A)  Γ ⊢ A <: B ⊣ Δ
+    --  ---------------------------
+    --  Γ ⊢ K ↑ B ⊣ Δ
+    PEnum name -> do
+        t <-
+            maybeToRightM ("Unknown constructor " ++ show name)
+                =<< lookupInj name
+        subtype t t_patt
+        apply (T.PEnum (coerce name), t_patt)
 
-        --  Γ ⊢ τ ↓ A ⊣ Γ   Γ ⊢ A <: B ⊣ Δ
-        --  ------------------------------
-        --  Γ ⊢ τ ↑ B ⊣ Δ
-        PLit lit -> do
-          subtype (litType lit) t_patt
-          apply (T.PLit (lit, t_patt), t_patt)
+    --  Example
+    --  Γ ∋ (K : A)  let A = ∀α. A₁ -> A₂ -> Tτs
+    --  Γ ⊢ [ά/α]Tτs <: B     ⊣ Θ₁
+    --  Θ  ⊢ p₁ ↑ [Θ][ά/α]A₁  ⊣ Θ₂
+    --  Θ₂ ⊢ p₂ ↑ [Θ₂][ά/α]A₂ ⊣ Δ
+    --  ---------------------------
+    --  Γ ⊢ K p₁ p₂ ↑ B ⊣ Δ
+    PInj name ps -> do
+        t_inj <- maybeToRightM "unknown constructor" =<< lookupInj name
+        let ts = getArgs t_inj
+        unless (length ts == length ps) $
+            throwError "Wrong number of arguments!"
 
-        --  Γ ∋ (K : A)  Γ ⊢ A <: B ⊣ Δ
-        --  ---------------------------
-        --  Γ ⊢ K ↑ B ⊣ Δ
-        PEnum name -> do
-            t <- maybeToRightM ("Unknown constructor " ++ show name)
-                     =<< lookupInj name
-            subtype t t_patt
-            apply (T.PEnum (coerce name), t_patt)
+        -- [ά/α]
+        sub <- substituteTVarsOf t_inj
+        subtype (sub $ getDataId t_inj) t_patt
+        let check p t = checkPattern p =<< apply (sub t)
+        ps' <- zipWithM check ps ts
+        apply (T.PInj (coerce name) (map fst ps'), t_patt)
+      where
+        substituteTVarsOf = \case
+            TAll tvar t -> do
+                tevar <- fresh
+                (substitute tvar tevar .) <$> substituteTVarsOf t
+            _ -> pure id
 
-        --  Example
-        --  Γ ∋ (K : A)  let A = ∀α. A₁ -> A₂ -> Tτs
-        --  Γ ⊢ [ά/α]Tτs <: B     ⊣ Θ₁
-        --  Θ  ⊢ p₁ ↑ [Θ][ά/α]A₁  ⊣ Θ₂
-        --  Θ₂ ⊢ p₂ ↑ [Θ₂][ά/α]A₂ ⊣ Δ
-        --  ---------------------------
-        --  Γ ⊢ K p₁ p₂ ↑ B ⊣ Δ
-        PInj name ps -> do
-            t_inj <- maybeToRightM "unknown constructor" =<< lookupInj name
-            let ts = getArgs t_inj
-            unless (length ts == length ps)
-                $ throwError "Wrong number of arguments!"
-
-            -- [ά/α]
-            sub <- substituteTVarsOf t_inj
-            subtype (sub $ getDataId t_inj) t_patt
-            let check p t = checkPattern p =<< apply (sub t)
-            ps' <- zipWithM check ps ts
-            apply (T.PInj (coerce name) (map fst ps'), t_patt)
+        getArgs = \case
+            TAll _ t -> getArgs t
+            t -> go [] t
           where
-            substituteTVarsOf = \case
-                TAll tvar t -> do
-                    tevar <- fresh
-                    (substitute tvar tevar .) <$> substituteTVarsOf t
-                _ -> pure id
+            go acc = \case
+                TFun t1 t2 -> go (snoc t1 acc) t2
+                _ -> acc
 
-            getArgs = \case
-                TAll _ t -> getArgs t
-                t        -> go [] t
-              where
-                go acc = \case
-                  TFun t1 t2 -> go (snoc t1 acc) t2
-                  _          -> acc
-
--- | Γ ⊢ e ↓ A ⊣ Δ
--- Under input context Γ, e infers output type A, with output context ∆
+{- | Γ ⊢ e ↓ A ⊣ Δ
+Under input context Γ, e infers output type A, with output context ∆
+-}
 infer :: Exp -> Tc (T.ExpT' Type)
 infer (ELit lit) = apply (T.ELit lit, litType lit)
-
 --  Γ ∋ (x : A)         Γ ∌ (x : A)
 --  ------------- Var   --------------------- Var'
 --  Γ ⊢ x ↓ A ⊣ Γ       Γ ⊢ x ↓ ά ⊣ Γ,(x : ά)
@@ -281,10 +318,10 @@ infer (EVar x) = do
         alpha <- TEVar <$> fresh
         insertEnv (EnvVar x alpha)
         pure alpha
-
 infer (EInj kappa) = do
-    t <- maybeToRightM ("Unknown constructor: " ++ show kappa)
-         =<< lookupInj kappa
+    t <-
+        maybeToRightM ("Unknown constructor: " ++ show kappa)
+            =<< lookupInj kappa
     apply (T.EInj $ coerce kappa, t)
 
 --  Γ ⊢ A   Γ ⊢ e ↑ A ⊣ Δ
@@ -337,37 +374,37 @@ infer (EAdd e1 e2) = do
     e2' <- check e2 int
     apply (T.EAdd e1' e2', int)
 
-                    --FIXME
+-- FIXME
 --  Γ ⊢ e ↑ A ⊣ Θ   Θ ⊢ Π ∷ [Θ]A ↑ C ⊣ Δ
 --  ------------------------------------ Case
 --  Γ ⊢ case e of Π ↓ C ⊣ Δ
 infer (ECase scrut pi) = do
-   (scrut', a) <- infer scrut
-   case pi of
-     [] -> apply (T.ECase (scrut', a) [], a)
-     (Branch _ e):_  -> do
-         (_, b)<- infer e
-         (pi', b') <- foldlM go ([], b) pi
-         apply (T.ECase (scrut', a) pi', b')
-       where
-         go (pi, b) (Branch p e) = do
-             p' <- checkPattern p =<< apply a
-             e'@(_, b') <- infer e
-             subtype b' b
-             apply (T.Branch p' e' : pi, b')
+    (scrut', a) <- infer scrut
+    case pi of
+        [] -> apply (T.ECase (scrut', a) [], a)
+        (Branch _ e) : _ -> do
+            (_, b) <- infer e
+            (pi', b') <- foldlM go ([], b) pi
+            apply (T.ECase (scrut', a) pi', b')
+          where
+            go (pi, b) (Branch p e) = do
+                p' <- checkPattern p =<< apply a
+                e'@(_, b') <- infer e
+                subtype b' b
+                apply (T.Branch p' e' : pi, b')
 
--- | Γ ⊢ A • e ⇓ C ⊣ Δ
--- Under input context Γ , applying a function of type A to e infers type C, with output context ∆
--- Instantiate existential type variables until there is an arrow type.
+{- | Γ ⊢ A • e ⇓ C ⊣ Δ
+Under input context Γ , applying a function of type A to e infers type C, with output context ∆
+Instantiate existential type variables until there is an arrow type.
+-}
 applyInfer :: Type -> Exp -> Tc (T.ExpT' Type, Type)
-
 --  Γ,ά ⊢ [ά/α]A • e ⇓ C ⊣ Δ
 --  ------------------------ ∀App
 --  Γ ⊢ ∀α.A • e ⇓ C ⊣ Δ
 applyInfer (TAll alpha a) e = do
     alpha' <- fresh
     insertEnv $ EnvTEVar alpha'
-    applyInfer (substitute alpha alpha' a)  e
+    applyInfer (substitute alpha alpha' a) e
 
 --  Γ[ά₂,ά₁,(ά=ά₁→ά₂)] ⊢ e ↑ ά₁ ⊣ Δ
 --  ------------------------------- άApp
@@ -376,11 +413,13 @@ applyInfer (TEVar alpha) e = do
     alpha1 <- fresh
     alpha2 <- fresh
     (env_l, env_r) <- gets (splitOn (EnvTEVar alpha) . env)
-    putEnv $ (env_l
-              :|> EnvTEVar alpha2
-              :|> EnvTEVar alpha1
-              :|> EnvTEVarSolved alpha (on TFun TEVar alpha1 alpha2)
-             ) <> env_r
+    putEnv $
+        ( env_l
+            :|> EnvTEVar alpha2
+            :|> EnvTEVar alpha1
+            :|> EnvTEVarSolved alpha (on TFun TEVar alpha1 alpha2)
+        )
+            <> env_r
     e' <- check e $ TEVar alpha1
     apply (e', TEVar alpha2)
 
@@ -390,26 +429,24 @@ applyInfer (TEVar alpha) e = do
 applyInfer (TFun a c) e = do
     exp' <- check e a
     apply (exp', c)
-
 applyInfer a e = throwError ("Cannot apply type " ++ show a ++ " with expression " ++ show e)
 
 ---------------------------------------------------------------------------
+
 -- * Subtyping rules
+
 ---------------------------------------------------------------------------
 
--- | Γ ⊢ A <: B ⊣ Δ
--- Under input context Γ, type A is a subtype of B, with output context ∆
+{- | Γ ⊢ A <: B ⊣ Δ
+Under input context Γ, type A is a subtype of B, with output context ∆
+-}
 subtype :: Type -> Type -> Tc ()
-subtype (TLit lit1) (TLit lit2) | lit1 == lit2 = pure ()
-
 --  -------------------- <:Var
 --  Γ[α] ⊢ α <: α ⊣ Γ[α]
 subtype (TVar alpha) (TVar alpha') | alpha == alpha' = pure ()
-
 --  -------------------- <:Exvar
 --  Γ[ά] ⊢ ά <: ά ⊣ Γ[ά]
 subtype (TEVar alpha) (TEVar alpha') | alpha == alpha' = pure ()
-
 --  Γ ⊢ B₁ <: A₁ ⊣ Θ   Θ ⊢ [Θ]A₂ <: [Θ]B₂ ⊣ Δ
 --  ----------------------------------------- <:→
 --  Γ ⊢ A₁ → A₂ <: B₁ → B₂ ⊣ Δ
@@ -444,66 +481,62 @@ subtype (TAll alpha a) b = do
 --  ------------------------------ <:instantiateL
 --  Γ[ά] ⊢ ά <: A ⊣ Δ
 subtype (TEVar alpha) a | notElem alpha $ frees a = instantiateL alpha a
-
 --  ά ∉ FV(A)   Γ[ά] ⊢ A =:< ά ⊣ Δ
 --  ------------------------------ <:instantiateR
 --  Γ[ά] ⊢ A <: ά ⊣ Δ
-subtype a  (TEVar alpha) | notElem alpha $ frees a = instantiateR a alpha
-
+subtype a (TEVar alpha) | notElem alpha $ frees a = instantiateR a alpha
 subtype t1 t2 = case (t1, t2) of
     (TData name1 typs1, TData name2 typs2)
-
-      --  D₁ = D₂
-      --  ----------------
-      --  Γ ⊢ D₁ () <: D₂ ()
-      | name1 == name2
-      , [] <- typs1
-      , [] <- typs2
-      -> pure ()
-
-      --                    Γ ⊢ ά₁ <: έ₁ ⊣ Θ₁
-      --                           ...
-      -- D₁ = D₂   Θₙ₋₁ ⊢ [Θₙ₋₁]άₙ <: [Θₙ₋₁]έₙ ⊣ Δ
-      -- -------------------------------------------
-      -- Γ ⊢ D (ά₁ ‥ άₙ) <: D (έ₁ ‥ έₙ) ⊣ Δ
-      | name1 == name2
-      , t1:t1s <- typs1
-      , t2:t2s <- typs2
-      -> do
-          subtype t1 t2
-          zipWithM_ go t1s t2s
-     where
-       go t1' t2' = do
-           t1'' <- apply t1'
-           t2'' <- apply t2'
-           subtype t1'' t2''
-
+        --  D₁ = D₂
+        --  ----------------
+        --  Γ ⊢ D₁ () <: D₂ ()
+        | name1 == name2
+        , [] <- typs1
+        , [] <- typs2 ->
+            pure ()
+        --                    Γ ⊢ ά₁ <: έ₁ ⊣ Θ₁
+        --                           ...
+        -- D₁ = D₂   Θₙ₋₁ ⊢ [Θₙ₋₁]άₙ <: [Θₙ₋₁]έₙ ⊣ Δ
+        -- -------------------------------------------
+        -- Γ ⊢ D (ά₁ ‥ άₙ) <: D (έ₁ ‥ έₙ) ⊣ Δ
+        | name1 == name2
+        , t1 : t1s <- typs1
+        , t2 : t2s <- typs2 ->
+            do
+                subtype t1 t2
+                zipWithM_ go t1s t2s
+      where
+        go t1' t2' = do
+            t1'' <- apply t1'
+            t2'' <- apply t2'
+            subtype t1'' t2''
     _ -> throwError $ unwords ["Types", ppT t1, "and", ppT t2, "doesn't match!"]
 
 ---------------------------------------------------------------------------
+
 -- * Instantiation rules
+
 ---------------------------------------------------------------------------
 
--- | Γ ⊢ ά :=< A ⊣ Δ
--- Under input context Γ, instantiate ά such that ά <: A, with output context ∆
+{- | Γ ⊢ ά :=< A ⊣ Δ
+Under input context Γ, instantiate ά such that ά <: A, with output context ∆
+-}
 instantiateL :: TEVar -> Type -> Tc ()
 instantiateL alpha a = gets env >>= \env -> go env alpha a
   where
     go env alpha tau
-       | isMono tau
-       , (env_l, env_r) <- splitOn (EnvTEVar alpha) env
-       , Right _ <-  wellFormed env_l tau
-       = putEnv $ (env_l :|> EnvTEVarSolved alpha tau) <> env_r
-
+        | isMono tau
+        , (env_l, env_r) <- splitOn (EnvTEVar alpha) env
+        , Right _ <- wellFormed env_l tau =
+            putEnv $ (env_l :|> EnvTEVarSolved alpha tau) <> env_r
     --  Γ ⊢ τ
     --  ----------------------------- InstLSolve
     --  Γ,ά,Γ' ⊢ ά :=< τ ⊣ Γ,(ά=τ),Γ'
     go env alpha tau
         | isMono tau
         , (env_l, env_r) <- splitOn (EnvTEVar alpha) env
-        , Right _ <-  wellFormed env_l tau
-        = putEnv $ (env_l :|> EnvTEVarSolved alpha tau) <> env_r
-
+        , Right _ <- wellFormed env_l tau =
+            putEnv $ (env_l :|> EnvTEVarSolved alpha tau) <> env_r
     --  ----------------------------- InstLReach
     --  Γ[ά][έ] ⊢ ά :=< έ ⊣ Γ[ά][έ=ά]
     go env alpha (TEVar epsilon) = do
@@ -529,24 +562,27 @@ instantiateL alpha a = gets env >>= \env -> go env alpha a
         instantiateL tevar t
         let (env_l, _) = splitOn (EnvTVar tvar) env
         putEnv env_l
+    go _ alpha a =
+        error $
+            "Trying to instantiateL: "
+                ++ ppT (TEVar alpha)
+                ++ " <: "
+                ++ ppT a
 
-    go _ alpha a = error $ "Trying to instantiateL: " ++ ppT (TEVar alpha)
-                           ++ " <: " ++ ppT a
-
--- | Γ ⊢ A =:< ά ⊣ Δ
--- Under input context Γ, instantiate ά such that A <: ά, with output context ∆
+{- | Γ ⊢ A =:< ά ⊣ Δ
+Under input context Γ, instantiate ά such that A <: ά, with output context ∆
+-}
 instantiateR :: Type -> TEVar -> Tc ()
 instantiateR a alpha = gets env >>= \env -> go env a alpha
   where
-        --  Γ ⊢ τ
-        --  ----------------------------- InstRSolve
-        --  Γ,ά,Γ' ⊢ τ =:< ά ⊣ Γ,(ά=τ),Γ'
+    --  Γ ⊢ τ
+    --  ----------------------------- InstRSolve
+    --  Γ,ά,Γ' ⊢ τ =:< ά ⊣ Γ,(ά=τ),Γ'
     go env tau alpha
         | isMono tau
         , (env_l, env_r) <- splitOn (EnvTEVar alpha) env
-        , Right _ <- wellFormed env_l tau
-        = putEnv $ (env_l :|> EnvTEVarSolved alpha tau) <> env_r
-
+        , Right _ <- wellFormed env_l tau =
+            putEnv $ (env_l :|> EnvTEVarSolved alpha tau) <> env_r
     --
     --  ----------------------------- InstRReach
     --  Γ[ά][έ] ⊢ έ =:< ά ⊣ Γ[ά][έ=ά]
@@ -577,119 +613,118 @@ instantiateR a alpha = gets env >>= \env -> go env a alpha
         instantiateR (substitute epsilon epsilon' e) alpha
         let (env_l, _) = splitOn (EnvMark epsilon') env
         putEnv env_l
-
-    go _ a alpha = error $ "Trying to instantiateR: " ++ ppT a ++ " <: "
-                           ++ ppT (TEVar alpha)
+    go _ a alpha =
+        error $
+            "Trying to instantiateR: "
+                ++ ppT a
+                ++ " <: "
+                ++ ppT (TEVar alpha)
 
 ---------------------------------------------------------------------------
+
 -- * Auxiliary
+
 ---------------------------------------------------------------------------
 
 frees :: Type -> [TEVar]
 frees = \case
-  TLit _       -> []
-  TVar _       -> []
-  TEVar tevar  -> [tevar]
-  TFun t1 t2   -> on (++) frees t1 t2
-  TAll _ t     -> frees t
-  TData _ typs -> concatMap frees typs
+    TVar _ -> []
+    TEVar tevar -> [tevar]
+    TFun t1 t2 -> on (++) frees t1 t2
+    TAll _ t -> frees t
+    TData _ typs -> concatMap frees typs
 
 -- | [ά/α]A
-substitute :: TVar  -- α
-           -> TEVar -- ά
-           -> Type  -- A
-           -> Type  -- [ά/α]A
+substitute ::
+    TVar -> -- α
+    TEVar -> -- ά
+    Type -> -- A
+    Type -- [ά/α]A
 substitute tvar tevar typ = case typ of
-    TLit _                     -> typ
-    TVar tvar' | tvar' == tvar -> TEVar tevar
-               | otherwise     -> typ
-    TEVar _                    -> typ
-    TFun t1 t2                 -> on TFun substitute' t1 t2
-    TAll tvar' t               -> TAll tvar' (substitute' t)
-    TData name typs            -> TData name $ map substitute' typs
+    TVar tvar'
+        | tvar' == tvar -> TEVar tevar
+        | otherwise -> typ
+    TEVar _ -> typ
+    TFun t1 t2 -> on TFun substitute' t1 t2
+    TAll tvar' t -> TAll tvar' (substitute' t)
+    TData name typs -> TData name $ map substitute' typs
   where
     substitute' = substitute tvar tevar
 
 -- | Γ,x,Γ' → (Γ, Γ')
 splitOn :: EnvElem -> Env -> (Env, Env)
-splitOn x env = second (S.drop 1) $ S.breakl (==x) env
+splitOn x env = second (S.drop 1) $ S.breakl (== x) env
 
 -- | Drop frontmost elements until and including element @x@.
 dropTrailing :: EnvElem -> Tc ()
 dropTrailing x = modifyEnv $ S.takeWhileL (/= x)
 
-
 findSolved :: TEVar -> Env -> Maybe Type
-findSolved _     Empty      = Nothing
+findSolved _ Empty = Nothing
 findSolved tevar (xs :|> x) = case x of
     EnvTEVarSolved tevar' t | tevar == tevar' -> Just t
-    _                                         -> findSolved tevar xs
+    _ -> findSolved tevar xs
 
--- | Γ ⊢ A
---   Under context Γ, type A is well-formed
+{- | Γ ⊢ A
+  Under context Γ, type A is well-formed
+-}
 wellFormed :: Env -> Type -> Err ()
 wellFormed env = \case
-    TLit _ -> pure ()
-
     --  -------- UvarWF
     --  Γ[α] ⊢ α
-    TVar tvar -> unless (EnvTVar tvar `elem` env) $
-                     throwError ("Unbound type variable: " ++ show tvar)
+    TVar tvar ->
+        unless (EnvTVar tvar `elem` env) $
+            throwError ("Unbound type variable: " ++ show tvar)
     --  Γ ⊢ A   Γ ⊢ B
     --  ------------- ArrowWF
     --  Γ ⊢ A → B
-    TFun t1 t2 -> do { wellFormed env t1; wellFormed env t2 }
+    TFun t1 t2 -> do wellFormed env t1; wellFormed env t2
 
     --  Γ,α ⊢ A
     --  -------- ForallWF
     --  Γ ⊢ ∀α.A
     TAll tvar t -> wellFormed (env :|> EnvTVar tvar) t
-
     TEVar tevar
         --  ---------- EvarWF
         --  Γ[ά] ⊢ ά
         | EnvTEVar tevar `elem` env -> pure ()
-
         --  ---------- SolvedEvarWF
         --  Γ[ά=τ] ⊢ ά
         | Just _ <- findSolved tevar env -> pure ()
         | otherwise -> throwError ("Can't find type: " ++ show tevar)
-
     TData _ typs -> mapM_ (wellFormed env) typs
 
 isMono :: Type -> Bool
 isMono = \case
-  TAll{}       -> False
-  TFun t1 t2   -> on (&&) isMono t1 t2
-  TData _ typs -> all isMono typs
-  TVar _       -> True
-  TEVar _      -> True
-  TLit _       -> True
+    TAll{} -> False
+    TFun t1 t2 -> on (&&) isMono t1 t2
+    TData _ typs -> all isMono typs
+    TVar _ -> True
+    TEVar _ -> True
 
 fresh :: Tc TEVar
 fresh = do
-   tevar <- gets (MkTEVar . LIdent . show . next_tevar)
-   modify $ \cxt -> cxt { next_tevar = succ cxt.next_tevar }
-   pure tevar
-
+    tevar <- gets (MkTEVar . LIdent . show . next_tevar)
+    modify $ \cxt -> cxt{next_tevar = succ cxt.next_tevar}
+    pure tevar
 
 isComplete :: Env -> Bool
 isComplete = isNothing . S.findIndexL unSolvedTEVar
   where
     unSolvedTEVar = \case
         EnvTEVar _ -> True
-        _          -> False
+        _ -> False
 
 getDataId :: Type -> Type
 getDataId typ = case typ of
-  TAll _ t -> getDataId t
-  TFun _ t -> getDataId t
-  TData {} -> typ
+    TAll _ t -> getDataId t
+    TFun _ t -> getDataId t
+    TData{} -> typ
 
 toTVar :: Type -> Err TVar
 toTVar = \case
     TVar tvar -> pure tvar
-    _         -> throwError "Not a type variable"
+    _ -> throwError "Not a type variable"
 
 insertEnv :: EnvElem -> Tc ()
 insertEnv x = modifyEnv (:|> x)
@@ -698,15 +733,15 @@ lookupSig :: LIdent -> Tc (Maybe Type)
 lookupSig x = gets (Map.lookup x . sig)
 
 insertSig :: LIdent -> Type -> Tc ()
-insertSig name t = modify $ \cxt -> cxt { sig = Map.insert name t cxt.sig }
+insertSig name t = modify $ \cxt -> cxt{sig = Map.insert name t cxt.sig}
 
 lookupEnv :: LIdent -> Tc (Maybe Type)
 lookupEnv x = gets (findId . env)
   where
-    findId Empty      = Nothing
+    findId Empty = Nothing
     findId (ys :|> y) = case y of
-        EnvVar x' t | x==x' -> Just t
-        _                   -> findId ys
+        EnvVar x' t | x == x' -> Just t
+        _ -> findId ys
 
 lookupInj :: UIdent -> Tc (Maybe Type)
 lookupInj x = gets (Map.lookup x . data_injs)
@@ -716,46 +751,48 @@ putEnv = modifyEnv . const
 
 modifyEnv :: (Env -> Env) -> Tc ()
 modifyEnv f =
-  modify $ \cxt -> {- trace (ppEnv (f cxt.env)) -} cxt { env = f cxt.env }
+    modify $ \cxt -> {- trace (ppEnv (f cxt.env)) -} cxt{env = f cxt.env}
 
 pattern DBind' name vars exp = DBind (Bind name vars exp)
 pattern DSig' name typ = DSig (Sig name typ)
 
 ---------------------------------------------------------------------------
+
 -- * Apply
+
 ---------------------------------------------------------------------------
 
 class Apply a where
     apply :: a -> Tc a
 
-instance Apply Type                         where apply = applyType
-instance Apply (T.Exp' Type)                where apply = applyExp
-instance Apply (T.Branch' Type)             where apply = applyBranch
-instance Apply (T.Pattern' Type)            where apply = applyPattern
-instance Apply a => Apply [a]               where apply = mapM apply
+instance Apply Type where apply = applyType
+instance Apply (T.Exp' Type) where apply = applyExp
+instance Apply (T.Branch' Type) where apply = applyBranch
+instance Apply (T.Pattern' Type) where apply = applyPattern
+instance Apply a => Apply [a] where apply = mapM apply
 instance (Apply a, Apply b) => Apply (a, b) where apply = applyPair
-instance Apply T.Ident                      where apply = pure
+instance Apply T.Ident where apply = pure
 
 applyType :: Type -> Tc Type
 applyType t = gets $ (`applyType'` t) . env
 
 -- | [Γ]A. Applies context to type until fully applied.
 applyType' :: Env -> Type -> Type
-applyType' cxt typ | typ == typ' = typ'
-                   | otherwise   = applyType' cxt typ'
+applyType' cxt typ
+    | typ == typ' = typ'
+    | otherwise = applyType' cxt typ'
   where
     typ' = case typ of
-        TLit _          -> typ
         TData name typs -> TData name $ map (applyType' cxt) typs
         -- [Γ]α = α
-        TVar _          -> typ
+        TVar _ -> typ
         -- [Γ[ά=τ]]ά = [Γ[ά=τ]]τ
         -- [Γ[ά]]ά = [Γ[ά]]ά
-        TEVar tevar     -> fromMaybe typ $ findSolved tevar cxt
+        TEVar tevar -> fromMaybe typ $ findSolved tevar cxt
         -- [Γ](A → B) = [Γ]A → [Γ]B
-        TFun t1 t2      -> on TFun (applyType' cxt) t1 t2
+        TFun t1 t2 -> on TFun (applyType' cxt) t1 t2
         -- [Γ](∀α. A) = (∀α. [Γ]A)
-        TAll tvar t     -> TAll tvar $ applyType' cxt t
+        TAll tvar t -> TAll tvar $ applyType' cxt t
 
 applyExp :: T.Exp' Type -> Tc (T.Exp' Type)
 applyExp exp = case exp of
@@ -767,9 +804,12 @@ applyExp exp = case exp of
         pure $ T.ELet (T.Bind id vars' rhs') exp'
     T.EApp e1 e2 -> liftA2 T.EApp (apply e1) (apply e2)
     T.EAdd e1 e2 -> liftA2 T.EAdd (apply e1) (apply e2)
-    T.EAbs name e  -> T.EAbs name <$> apply e
-    T.ECase e branches -> liftA2 T.ECase (apply e)
-                                         (mapM apply branches)
+    T.EAbs name e -> T.EAbs name <$> apply e
+    T.ECase e branches ->
+        liftA2
+            T.ECase
+            (apply e)
+            (mapM apply branches)
     _ -> pure exp
 
 applyBranch :: T.Branch' Type -> Tc (T.Branch' Type)
@@ -780,21 +820,23 @@ applyBranch (T.Branch (p, t) e) = do
 
 applyPattern :: T.Pattern' Type -> Tc (T.Pattern' Type)
 applyPattern = \case
-    T.PVar id       -> T.PVar <$> apply id
-    T.PLit (lit, t) -> T.PLit . (lit, ) <$> apply t
-    T.PInj name ps  -> T.PInj name <$> apply ps
-    p               -> pure p
+    T.PVar id -> T.PVar <$> apply id
+    T.PLit (lit, t) -> T.PLit . (lit,) <$> apply t
+    T.PInj name ps -> T.PInj name <$> apply ps
+    p -> pure p
 
 applyPair :: (Apply a, Apply b) => (a, b) -> Tc (a, b)
 applyPair (x, y) = liftA2 (,) (apply x) (apply y)
 
 ---------------------------------------------------------------------------
+
 -- * Debug
+
 ---------------------------------------------------------------------------
 
 traceEnv s = do
-  env <- gets env
-  trace (s ++ " " ++ ppEnv env) pure ()
+    env <- gets env
+    trace (s ++ " " ++ ppEnv env) pure ()
 
 traceD s x = trace (s ++ " " ++ show x) pure ()
 
@@ -803,20 +845,22 @@ traceT s x = trace (s ++ " : " ++ ppT x) pure ()
 traceTs s xs = trace (s ++ " [ " ++ intercalate ", " (map ppT xs) ++ " ]") pure ()
 
 ppT = \case
-    TLit (UIdent s)            -> s
-    TVar (MkTVar (LIdent s))   -> "tvar_" ++ s
-    TFun t1 t2                 -> ppT t1 ++ "->" ++ ppT t2
+    TVar (MkTVar (LIdent s)) -> "tvar_" ++ s
+    TFun t1 t2 -> ppT t1 ++ "->" ++ ppT t2
     TAll (MkTVar (LIdent s)) t -> "forall " ++ s ++ ". " ++ ppT t
     TEVar (MkTEVar (LIdent s)) -> "tevar_" ++ s
-    TData (UIdent name) typs   -> name ++ " (" ++ unwords (map ppT typs)
-                                       ++ " )"
+    TData (UIdent name) typs ->
+        name
+            ++ " ("
+            ++ unwords (map ppT typs)
+            ++ " )"
 ppEnvElem = \case
-   EnvVar         (LIdent s) t           -> s ++ ":" ++ ppT t
-   EnvTVar        (MkTVar  (LIdent s))   -> "tvar_" ++ s
-   EnvTEVar       (MkTEVar (LIdent s))   -> "tevar_" ++ s
-   EnvTEVarSolved (MkTEVar (LIdent s)) t -> "tevar_" ++ s ++ "=" ++ ppT t
-   EnvMark        (MkTEVar (LIdent s))   -> "▶" ++ "tevar_" ++ s
+    EnvVar (LIdent s) t -> s ++ ":" ++ ppT t
+    EnvTVar (MkTVar (LIdent s)) -> "tvar_" ++ s
+    EnvTEVar (MkTEVar (LIdent s)) -> "tevar_" ++ s
+    EnvTEVarSolved (MkTEVar (LIdent s)) t -> "tevar_" ++ s ++ "=" ++ ppT t
+    EnvMark (MkTEVar (LIdent s)) -> "▶" ++ "tevar_" ++ s
 
 ppEnv = \case
-    Empty      -> "·"
+    Empty -> "·"
     (xs :|> x) -> ppEnv xs ++ " (" ++ ppEnvElem x ++ ")"

@@ -493,15 +493,6 @@ unify t0 t1 =
             (t, TVar (MkTVar b)) -> occurs (coerce b) t
             (TAll _ t, b) -> unify t b
             (a, TAll _ t) -> unify a t
-            (TLit a, TLit b) ->
-                if a == b
-                    then return M.empty
-                    else catchableErr $
-                        Aux.do
-                            "Can not unify"
-                            quote $ printTree (TLit a)
-                            "with"
-                            quote $ printTree (TLit b)
             (TData name t, TData name' t') ->
                 if name == name' && length t == length t'
                     then do
@@ -656,7 +647,6 @@ instance FreeVars Type where
     free (TVar (MkTVar a)) = S.singleton (coerce a)
     free (TAll (MkTVar bound) t) =
         S.singleton (coerce bound) `S.intersection` free t
-    free (TLit _) = mempty
     free (TFun a b) = free a `S.union` free b
     free (TData _ a) = free a
     free (TEVar _) = S.empty
@@ -668,7 +658,6 @@ instance SubstType Type where
     apply :: Subst -> Type -> Type
     apply sub t = do
         case t of
-            TLit _ -> t
             TVar (MkTVar a) -> case M.lookup (coerce a) sub of
                 Nothing -> TVar (MkTVar $ coerce a)
                 Just t -> t
