@@ -22,7 +22,7 @@ Bind. Bind ::= LIdent [LIdent] "=" Exp;
 
          TVar.     Type3 ::= TVar;                   -- α
          TIdent.   Type3 ::= UIdent;
-         TApp.     Type1 ::= Type1 Type2;
+         TApp.     Type2 ::= Type2 Type3;
          TFun.     Type1 ::= Type2 "->" Type1;        -- A → A
          TAll.     Type  ::= "forall" TVar "." Type; -- ∀α. A 
 internal TData.    Type  ::= UIdent [Type];

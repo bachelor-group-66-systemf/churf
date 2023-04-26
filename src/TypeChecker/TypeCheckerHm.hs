@@ -142,13 +142,10 @@ checkDef (x : xs) = case x of
         return $ T.DBind b' : xs'
     (DData d) -> do
         xs' <- checkDef xs
-        d <- coerceData d
-        return $ T.DData d : xs'
+        return $ T.DData (coerceData d) : xs'
     (DSig _) -> checkDef xs
   where
-    coerceData (Data t injs) = do
-        (ident, ts) <- convertData t
-        return $ T.Data (TData ident ts) $ map (\(Inj name typ) -> T.Inj (coerce name) typ) injs
+    coerceData (Data t injs) = T.Data t $ map (\(Inj name typ) -> T.Inj (coerce name) typ) injs
 
 freeOrdered :: Type -> [T.Ident]
 freeOrdered (TVar (MkTVar a)) = return (coerce a)
@@ -232,7 +229,7 @@ checkInj (Inj c inj_typ) name tvars
                 "with type"
                 quote $ printTree t
                 "already exist"
-            Nothing -> insertInj (coerce c) (TData name (map TVar tvars))
+            Nothing -> insertInj (coerce c) inj_typ
     | otherwise =
         uncatchableErr $
             unwords
@@ -462,9 +459,8 @@ inferPattern = \case
                 show (typeLength t - 1)
                 " arguments but has been given 0"
             )
-        let (TData _data _ts) = t -- nasty nasty
-        frs <- mapM (const fresh) _ts
-        return (T.PEnum $ coerce p, TData _data frs)
+        t' <- freshenDataTVars t
+        return (T.PEnum $ coerce p, t')
     PInj constr patterns -> do
         t <- gets (M.lookup (coerce constr) . injections)
         t <-
@@ -496,6 +492,14 @@ inferPattern = \case
             ( T.PInj (coerce constr) (apply sub (map fst patterns))
             , apply sub ret
             )
+  where
+    freshenDataTVars :: Type -> Infer Type
+    freshenDataTVars (TApp t1 t2) = do
+        t1 <- freshenDataTVars t1
+        t2 <- freshenDataTVars t2
+        return $ TApp t1 t2
+    freshenDataTVars (TVar _) = fresh
+    freshenDataTVars t = return t
 
 -- | Unify two types producing a new substitution
 unify :: Type -> Type -> Infer Subst
@@ -504,6 +508,10 @@ unify t0 t1 =
         m = M.fromList $ zip fvs letters
      in case (t0, t1) of
             (TFun a b, TFun c d) -> do
+                s1 <- unify a c
+                s2 <- unify (apply s1 b) (apply s1 d)
+                return $ s2 `compose` s1
+            (TApp a b, TApp c d) -> do
                 s1 <- unify a c
                 s2 <- unify (apply s1 b) (apply s1 d)
                 return $ s2 `compose` s1
@@ -528,13 +536,22 @@ unify t0 t1 =
                             quote $ printTree $ map (replace m) t'
             (TEVar a, TEVar b) ->
                 if a == b
-                    then return M.empty
+                    then return nullSubst
                     else catchableErr $
                         Aux.do
                             "Can not unify"
                             quote $ printTree (TEVar a)
                             "with"
                             quote $ printTree (TEVar b)
+            (TIdent a, TIdent b) ->
+                if a == b
+                    then return nullSubst
+                    else catchableErr $
+                        Aux.do
+                            "Can not unify"
+                            quote $ printTree (TIdent a)
+                            "with"
+                            quote $ printTree (TIdent b)
             (a, b) -> do
                 catchableErr $
                     Aux.do
@@ -616,7 +633,7 @@ currently this is not the case, the TAll pattern match is incorrectly implemente
 -- Is the left a subtype of the right
 (<<=) :: Type -> Type -> Bool
 (<<=) (TVar _) _ = True
-(<<=) t1@TAll{} t2 = skipForalls t1 <<= t2
+(<<=) (TAll _ t1) t2 = t1 <<= t2
 (<<=) t1 t2@TAll{} = t1 <<= skipForalls t2
 (<<=) (TFun a b) (TFun c d) = a <<= c && b <<= d
 (<<=) (TData n1 ts1) (TData n2 ts2) =

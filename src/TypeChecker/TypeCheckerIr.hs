@@ -178,7 +178,7 @@ instance Print Type where
         TVar tvar -> prPrec i 1 (concatD [prt 0 tvar])
         TData uident types -> prPrec i 1 (concatD [prt 0 uident, doc (showString "("), prt 0 types, doc (showString ")")])
         TFun type_1 type_2 -> prPrec i 0 (concatD [prt 1 type_1, doc (showString "->"), prt 0 type_2])
-        TApp type_1 type_2 -> prPrec i 0 (concatD [prt 1 type_1, prt 0 type_2])
+        TApp type_1 type_2 -> prPrec i 0 (concatD [prt 0 type_1, prt 0 type_2])
 
 instance Print TVar where
     prt i (MkTVar ident) = prt i ident
