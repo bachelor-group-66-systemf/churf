@@ -1,46 +1,36 @@
-{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE OverloadedRecordDot #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE PatternSynonyms     #-}
 {-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 
 module TypeChecker.TypeCheckerBidir (typecheck) where
 
-import Auxiliary (int, litType, maybeToRightM, snoc)
-import Control.Applicative (Applicative (liftA2), (<|>))
-import Control.Monad.Except (
-    ExceptT,
-    MonadError (throwError),
-    runExceptT,
-    unless,
-    zipWithM,
-    zipWithM_,
- )
-import Control.Monad.Extra (fromMaybeM)
-import Control.Monad.State (
-    MonadState,
-    State,
-    evalState,
-    gets,
-    modify,
- )
-import Data.Coerce (coerce)
-import Data.Foldable (foldlM)
-import Data.Function (on)
-import Data.List (intercalate)
-import Data.Map (Map)
-import Data.Map qualified as Map
-import Data.Maybe (fromMaybe, isNothing)
-import Data.Sequence (Seq (..))
-import Data.Sequence qualified as S
-import Data.Set qualified as Set
-import Data.Tuple.Extra (second)
-import Debug.Trace (trace)
-import Grammar.Abs
-import Grammar.ErrM
-import Grammar.Print (printTree)
-import TypeChecker.TypeCheckerIr qualified as T
-import Prelude hiding (exp)
+import           Auxiliary                 (int, litType, maybeToRightM, snoc)
+import           Control.Applicative       (Applicative (liftA2), (<|>))
+import           Control.Monad.Except      (ExceptT, MonadError (throwError),
+                                            runExceptT, unless, zipWithM,
+                                            zipWithM_)
+import           Control.Monad.Extra       (fromMaybeM)
+import           Control.Monad.State       (MonadState, State, evalState, gets,
+                                            modify)
+import           Data.Coerce               (coerce)
+import           Data.Foldable             (foldlM)
+import           Data.Function             (on)
+import           Data.List                 (intercalate)
+import           Data.Map                  (Map)
+import qualified Data.Map                  as Map
+import           Data.Maybe                (fromMaybe, isNothing)
+import           Data.Sequence             (Seq (..))
+import qualified Data.Sequence             as S
+import qualified Data.Set                  as Set
+import           Data.Tuple.Extra          (second)
+import           Debug.Trace               (trace)
+import           Grammar.Abs
+import           Grammar.ErrM
+import           Grammar.Print             (printTree)
+import           Prelude                   hiding (exp)
+import qualified TypeChecker.TypeCheckerIr as T
 
 -- Implementation is derived from the paper (Dunfield and Krishnaswami 2013)
 -- https://doi.org/10.1145/2500365.2500582
@@ -69,15 +59,15 @@ type Env = Seq EnvElem
 Γ ::= ・| Γ, α | Γ, ά | Γ, ▶ ά | Γ, x:A
 -}
 data Cxt = Cxt
-    { env :: Env
+    { env        :: Env
     -- ^ Local scope context  Γ
-    , sig :: Map LIdent Type
+    , sig        :: Map LIdent Type
     -- ^ Top-level signatures x : A
-    , binds :: Map LIdent Exp
+    , binds      :: Map LIdent Exp
     -- ^ Top-level binds x : e
     , next_tevar :: Int
     -- ^ Counter to distinguish ά
-    , data_injs :: Map UIdent Type
+    , data_injs  :: Map UIdent Type
     -- ^ Data injections (constructors) K/inj : A
     }
     deriving (Show, Eq)
@@ -102,20 +92,11 @@ initCxt defs =
         , next_tevar = 0
         , data_injs =
             Map.fromList
-                [ (name, foldr TAll t $ unboundedTVars t)
+                [ (name, t)
                 | DData (Data _ injs) <- defs
                 , Inj name t <- injs
                 ]
         }
-  where
-    unboundedTVars = uncurry (Set.\\) . go (mempty, mempty)
-      where
-        go (unbounded, bounded) = \case
-            TAll tvar t -> go (unbounded, Set.insert tvar bounded) t
-            TVar tvar -> (Set.insert tvar unbounded, bounded)
-            TFun t1 t2 -> foldl go (unbounded, bounded) [t1, t2]
-            TData _ typs -> foldl go (unbounded, bounded) typs
-            _ -> (unbounded, bounded)
 
 typecheck :: Program -> Err (T.Program' Type)
 typecheck (Program defs) = do
@@ -160,13 +141,31 @@ typecheckDataType (Data typ injs) = do
     injs' <- mapM (\i -> typecheckInj i name tvars) injs
     pure (T.Data typ injs')
   where
-    go tvars = \case
+    go tvars t = case t of
         TAll tvar t -> go (tvar : tvars) t
-        TData name typs
-            | Right tvars' <- mapM toTVar typs
-            , all (`elem` tvars) tvars' ->
-                pure (name, tvars')
-        _ -> throwError $ unwords ["Bad data type definition: ", ppT typ]
+        TApp _ _
+            | Right tvars' <- mapM toTVar ts
+            , all (`elem` tvars) tvars' -> pure (name, tvars')
+            | otherwise -> throwError $ unwords ["Bad data type definition: ", ppT typ]
+          where
+            (name, ts) = uncurryTApp t
+
+
+uncurryTApp :: Type -> (UIdent, [Type])
+uncurryTApp = skipForalls . go []
+  where
+    go vars t = \case
+        TApp t1 t2  -> go (t2 : vars) t1
+        TIdent name -> (name, vars)
+
+    skipForalls :: (Type -> Type) -> Type -> Type
+    skipForalls f t = case t of
+        TAll tvar t -> TAll tvar (skipForalls f t)
+        TIdent _    -> f t
+        TApp _ _    -> f t
+        _           -> error "BAD"
+
+
 
 -- TODO remove some checks
 typecheckInj :: Inj -> UIdent -> [TVar] -> Err (T.Inj' Type)
@@ -191,13 +190,13 @@ typecheckInj (Inj inj_name inj_typ) name tvars
   where
     boundTVars :: [TVar] -> Type -> Bool
     boundTVars tvars' = \case
-        TAll tvar t -> boundTVars (tvar : tvars') t
-        TFun t1 t2 -> on (&&) (boundTVars tvars') t1 t2
-        TVar tvar -> elem tvar tvars'
-        TData "Int" _ -> True
+        TAll tvar t    -> boundTVars (tvar : tvars') t
+        TFun t1 t2     -> on (&&) (boundTVars tvars') t1 t2
+        TVar tvar      -> elem tvar tvars'
+        TData "Int" _  -> True
         TData "Char" _ -> True
-        TData _ typs -> all (boundTVars tvars) typs
-        TEVar _ -> error "TEVar in data type declaration"
+        TData _ typs   -> all (boundTVars tvars) typs
+        TEVar _        -> error "TEVar in data type declaration"
 
 ---------------------------------------------------------------------------
 
@@ -296,11 +295,11 @@ checkPattern patt t_patt = case patt of
 
         getArgs = \case
             TAll _ t -> getArgs t
-            t -> go [] t
+            t        -> go [] t
           where
             go acc = \case
                 TFun t1 t2 -> go (snoc t1 acc) t2
-                _ -> acc
+                _          -> acc
 
 {- | Γ ⊢ e ↓ A ⊣ Δ
 Under input context Γ, e infers output type A, with output context ∆
@@ -628,10 +627,10 @@ instantiateR a alpha = gets env >>= \env -> go env a alpha
 
 frees :: Type -> [TEVar]
 frees = \case
-    TVar _ -> []
-    TEVar tevar -> [tevar]
-    TFun t1 t2 -> on (++) frees t1 t2
-    TAll _ t -> frees t
+    TVar _       -> []
+    TEVar tevar  -> [tevar]
+    TFun t1 t2   -> on (++) frees t1 t2
+    TAll _ t     -> frees t
     TData _ typs -> concatMap frees typs
 
 -- | [ά/α]A
@@ -663,7 +662,7 @@ findSolved :: TEVar -> Env -> Maybe Type
 findSolved _ Empty = Nothing
 findSolved tevar (xs :|> x) = case x of
     EnvTEVarSolved tevar' t | tevar == tevar' -> Just t
-    _ -> findSolved tevar xs
+    _                                         -> findSolved tevar xs
 
 {- | Γ ⊢ A
   Under context Γ, type A is well-formed
@@ -696,11 +695,11 @@ wellFormed env = \case
 
 isMono :: Type -> Bool
 isMono = \case
-    TAll{} -> False
-    TFun t1 t2 -> on (&&) isMono t1 t2
+    TAll{}       -> False
+    TFun t1 t2   -> on (&&) isMono t1 t2
     TData _ typs -> all isMono typs
-    TVar _ -> True
-    TEVar _ -> True
+    TVar _       -> True
+    TEVar _      -> True
 
 fresh :: Tc TEVar
 fresh = do
@@ -713,18 +712,24 @@ isComplete = isNothing . S.findIndexL unSolvedTEVar
   where
     unSolvedTEVar = \case
         EnvTEVar _ -> True
-        _ -> False
+        _          -> False
 
-getDataId :: Type -> Type
-getDataId typ = case typ of
-    TAll _ t -> getDataId t
-    TFun _ t -> getDataId t
-    TData{} -> typ
+getTIdent :: Type -> Type
+getTIdent = fst . uncurryTApp . skipVars . skipForalls
+  where
+    skipVars = \case
+      TFun _  t -> skipVars t
+      t         -> t
+
+    skipForalls = \case
+        TAll _ t -> skipForalls t
+        t        -> t
+
 
 toTVar :: Type -> Err TVar
 toTVar = \case
     TVar tvar -> pure tvar
-    _ -> throwError "Not a type variable"
+    _         -> throwError "Not a type variable"
 
 insertEnv :: EnvElem -> Tc ()
 insertEnv x = modifyEnv (:|> x)
@@ -741,7 +746,7 @@ lookupEnv x = gets (findId . env)
     findId Empty = Nothing
     findId (ys :|> y) = case y of
         EnvVar x' t | x == x' -> Just t
-        _ -> findId ys
+        _                     -> findId ys
 
 lookupInj :: UIdent -> Tc (Maybe Type)
 lookupInj x = gets (Map.lookup x . data_injs)
@@ -785,14 +790,14 @@ applyType' cxt typ
     typ' = case typ of
         TData name typs -> TData name $ map (applyType' cxt) typs
         -- [Γ]α = α
-        TVar _ -> typ
+        TVar _          -> typ
         -- [Γ[ά=τ]]ά = [Γ[ά=τ]]τ
         -- [Γ[ά]]ά = [Γ[ά]]ά
-        TEVar tevar -> fromMaybe typ $ findSolved tevar cxt
+        TEVar tevar     -> fromMaybe typ $ findSolved tevar cxt
         -- [Γ](A → B) = [Γ]A → [Γ]B
-        TFun t1 t2 -> on TFun (applyType' cxt) t1 t2
+        TFun t1 t2      -> on TFun (applyType' cxt) t1 t2
         -- [Γ](∀α. A) = (∀α. [Γ]A)
-        TAll tvar t -> TAll tvar $ applyType' cxt t
+        TAll tvar t     -> TAll tvar $ applyType' cxt t
 
 applyExp :: T.Exp' Type -> Tc (T.Exp' Type)
 applyExp exp = case exp of
@@ -820,10 +825,10 @@ applyBranch (T.Branch (p, t) e) = do
 
 applyPattern :: T.Pattern' Type -> Tc (T.Pattern' Type)
 applyPattern = \case
-    T.PVar id -> T.PVar <$> apply id
+    T.PVar id       -> T.PVar <$> apply id
     T.PLit (lit, t) -> T.PLit . (lit,) <$> apply t
-    T.PInj name ps -> T.PInj name <$> apply ps
-    p -> pure p
+    T.PInj name ps  -> T.PInj name <$> apply ps
+    p               -> pure p
 
 applyPair :: (Apply a, Apply b) => (a, b) -> Tc (a, b)
 applyPair (x, y) = liftA2 (,) (apply x) (apply y)
@@ -855,12 +860,12 @@ ppT = \case
             ++ unwords (map ppT typs)
             ++ " )"
 ppEnvElem = \case
-    EnvVar (LIdent s) t -> s ++ ":" ++ ppT t
-    EnvTVar (MkTVar (LIdent s)) -> "tvar_" ++ s
-    EnvTEVar (MkTEVar (LIdent s)) -> "tevar_" ++ s
+    EnvVar (LIdent s) t                   -> s ++ ":" ++ ppT t
+    EnvTVar (MkTVar (LIdent s))           -> "tvar_" ++ s
+    EnvTEVar (MkTEVar (LIdent s))         -> "tevar_" ++ s
     EnvTEVarSolved (MkTEVar (LIdent s)) t -> "tevar_" ++ s ++ "=" ++ ppT t
-    EnvMark (MkTEVar (LIdent s)) -> "▶" ++ "tevar_" ++ s
+    EnvMark (MkTEVar (LIdent s))          -> "▶" ++ "tevar_" ++ s
 
 ppEnv = \case
-    Empty -> "·"
+    Empty      -> "·"
     (xs :|> x) -> ppEnv xs ++ " (" ++ ppEnvElem x ++ ")"

@@ -44,7 +44,7 @@ rnType :: Type -> Rn Type
 rnType = \case
     TVar (MkTVar name)   -> TVar . MkTVar <$> getName name
     TFun t1 t2           -> onM TFun (localNames . rnType) t1 t2
-    TApp t1 t2           -> onM TFun (localNames . rnType) t1 t2
+    TApp t1 t2           -> onM TApp (localNames . rnType) t1 t2
     TAll (MkTVar name) t -> liftA2 (TAll . MkTVar) (newName name) (rnType t)
     typ                  -> pure typ
 
