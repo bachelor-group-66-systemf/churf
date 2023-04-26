@@ -3,7 +3,7 @@
 
 module AnnForall (annotateForall) where
 
-import           Auxiliary            (partitionDefs)
+import           Auxiliary            (onM, partitionDefs)
 import           Control.Applicative  (Applicative (liftA2))
 import           Control.Monad.Except (throwError)
 import           Data.Function        (on)
@@ -21,32 +21,36 @@ annotateForall (Program defs) = do
     ss' = map (DSig . annSig) ss
     (ds, ss, bs) = partitionDefs defs
 
-
 annData :: Data -> Err Data
 annData (Data typ injs) = do
-  (typ', tvars) <- annTyp typ
-  pure (Data typ' $ map (annInj tvars) injs)
-
+    (typ', tvars) <- annTyp typ
+    pure (Data typ' $ map (annInj tvars) injs)
   where
-    annTyp typ = do
-        (bounded, ts) <- boundedTVars mempty typ
-        unbounded <- Set.fromList <$> mapM assertTVar ts
-        let diff = unbounded Set.\\ bounded
-            typ' = foldr TAll typ diff
-        (typ', ) . fst <$> boundedTVars mempty typ'
-      where
-        boundedTVars tvars typ = case typ of
-          TAll tvar t -> boundedTVars (Set.insert tvar tvars) t
-          TData _ ts  -> pure (tvars, ts)
-          _           -> throwError "Misformed data declaration"
-
-        assertTVar typ = case typ of
-            TVar tvar -> pure tvar
-            _         -> throwError $ unwords [ "Misformed data declaration:"
-                                              , "Non type variable argument"
-                                              ]
     annInj tvars (Inj n t) =
         Inj n $ foldr TAll t (unboundedTVars t Set.\\ tvars)
+
+    annTyp typ = do
+        bs <- bound typ
+        us <- unbound typ
+        pure (foldr TAll typ $ Set.difference bs us, bs)
+      where
+        bound = \case
+          TAll tvar t -> Set.insert tvar <$> bound t
+          TApp _ _    -> pure mempty
+          TIdent _    -> pure mempty
+          _           -> throwError "Misformed data declaration"
+
+        unbound t = case skipForalls t of
+            TApp t1 t2 -> onM Set.union unbound t1 t2
+            TVar tvar  -> pure (Set.singleton tvar)
+            TIdent _   -> pure mempty
+            _          -> throwError "Misformed data declaration"
+
+        skipForalls = \case
+            TAll _ t -> skipForalls t
+            t        -> t
+
+
 
 annSig :: Sig -> Sig
 annSig (Sig name typ) = Sig name $ annType typ
@@ -84,7 +88,7 @@ unboundedTVars' bs typ = tvars.unbounded Set.\\ tvars.bounded
                             }
       TVar tvar    -> uTVars $ Set.singleton tvar
       TFun t1 t2   -> uTVars $ on Set.union (unboundedTVars' bs) t1  t2
-      TData _ typs -> uTVars $ foldr (Set.union . unboundedTVars' bs) mempty typs
+      TApp t1 t2   -> uTVars $ on Set.union (unboundedTVars' bs) t1  t2
       _            -> TVars { bounded = mempty, unbounded = mempty }
 
 data TVars = TVars

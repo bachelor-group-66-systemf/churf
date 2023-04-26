@@ -43,8 +43,8 @@ rnSig (Sig name typ) = liftA2 Sig (getName name) (rnType typ)
 rnType :: Type -> Rn Type
 rnType = \case
     TVar (MkTVar name)   -> TVar . MkTVar <$> getName name
-    TData name ts        -> TData name <$> localNames (mapM rnType ts)
     TFun t1 t2           -> onM TFun (localNames . rnType) t1 t2
+    TApp t1 t2           -> onM TFun (localNames . rnType) t1 t2
     TAll (MkTVar name) t -> liftA2 (TAll . MkTVar) (newName name) (rnType t)
     typ                  -> pure typ
 
