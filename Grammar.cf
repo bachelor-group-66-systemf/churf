@@ -25,6 +25,8 @@ Bind. Bind ::= LIdent [LIdent] "=" Exp;
          TApp.     Type1 ::= Type1 Type2;
          TFun.     Type1 ::= Type2 "->" Type1;        -- A → A
          TAll.     Type  ::= "forall" TVar "." Type; -- ∀α. A 
+internal TData.    Type  ::= UIdent [Type];
+internal TEVar.    Type  ::= TEVar;
 
          MkTVar.  TVar  ::= LIdent;
 internal MkTEVar. TEVar ::= LIdent;
@@ -82,7 +84,7 @@ separator Branch ";" ;
 separator Inj ";";
 
 separator LIdent "";
-separator Type2 " ";
+separator Type " ";
 separator TVar " ";
 separator nonempty Pattern1 " ";
 

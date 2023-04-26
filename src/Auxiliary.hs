@@ -5,10 +5,11 @@
 module Auxiliary (module Auxiliary) where
 
 import Control.Monad.Error.Class (liftEither)
-import Control.Monad.Except (MonadError, liftM2)
+import Control.Monad.Except (MonadError, liftM2, throwError)
 import Data.Either.Combinators (maybeToRight)
 import Data.List (foldl')
 import Grammar.Abs
+import Grammar.Print (printTree)
 import Prelude hiding ((>>), (>>=))
 
 (>>) a b = a ++ " " ++ b
@@ -54,8 +55,8 @@ litType :: Lit -> Type
 litType (LInt _) = int
 litType (LChar _) = char
 
-int = TData "Int" []
-char = TData "Int" []
+int = TIdent "Int"
+char = TIdent "Char"
 
 tupSequence :: Monad m => (m a, b) -> m (a, b)
 tupSequence (ma, b) = (,b) <$> ma
@@ -73,3 +74,15 @@ partitionDefs defs = (datas, sigs, binds)
     datas = [d | DData d <- defs]
     sigs = [s | DSig s <- defs]
     binds = [b | DBind b <- defs]
+
+convertData :: (MonadError String m, Monad m) => Type -> m (UIdent, [Type])
+convertData = \case
+    t@(TApp _ _)
+        | (TIdent ident : vars) <- flattenType t ->
+            return (ident, vars)
+    t -> throwError $ unwords ["Bad data type definition: ", printTree t]
+
+flattenType :: Type -> [Type]
+flattenType (TFun a b) = flattenType a <> flattenType b
+flattenType (TApp a b) = flattenType a <> flattenType b
+flattenType a = [a]

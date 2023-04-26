@@ -22,7 +22,7 @@ import Data.Map qualified as M
 import Data.Maybe (fromJust)
 import Data.Set (Set)
 import Data.Set qualified as S
-import Debug.Trace (trace)
+import Debug.Trace (trace, traceShow)
 import Grammar.Abs
 import Grammar.Print (printTree)
 import TypeChecker.TypeCheckerIr qualified as T
@@ -70,7 +70,7 @@ replace m def@(TVar (MkTVar (LIdent a))) = case M.lookup (coerce a) m of
     Just t -> TVar . MkTVar . LIdent $ coerce t
     Nothing -> def
 replace m (TFun t1 t2) = (TFun `on` replace m) t1 t2
-replace m (TData name ts) = TData name (map (replace m) ts)
+replace m (TApp t1 t2) = (TApp `on` replace m) t1 t2
 replace m def@(TAll (MkTVar forall_) t) = case M.lookup (coerce forall_) m of
     Just found -> TAll (MkTVar $ coerce found) (replace m t)
     Nothing -> def
@@ -142,17 +142,19 @@ checkDef (x : xs) = case x of
         return $ T.DBind b' : xs'
     (DData d) -> do
         xs' <- checkDef xs
-        return $ T.DData (coerceData d) : xs'
+        d <- coerceData d
+        return $ T.DData d : xs'
     (DSig _) -> checkDef xs
   where
-    coerceData (Data t injs) =
-        T.Data t $ map (\(Inj name typ) -> T.Inj (coerce name) typ) injs
+    coerceData (Data t injs) = do
+        (ident, ts) <- convertData t
+        return $ T.Data (TData ident ts) $ map (\(Inj name typ) -> T.Inj (coerce name) typ) injs
 
 freeOrdered :: Type -> [T.Ident]
 freeOrdered (TVar (MkTVar a)) = return (coerce a)
 freeOrdered (TAll (MkTVar bound) t) = return (coerce bound) ++ freeOrdered t
 freeOrdered (TFun a b) = freeOrdered a ++ freeOrdered b
-freeOrdered (TData _ a) = concatMap freeOrdered a
+freeOrdered (TApp a b) = freeOrdered a ++ freeOrdered b
 freeOrdered _ = mempty
 
 checkBind :: Bind -> Infer (T.Bind' Type)
@@ -187,20 +189,38 @@ checkBind (Bind name args e) = do
 
 checkData :: (MonadState Env m, Monad m, MonadError Error m) => Data -> m ()
 checkData err@(Data typ injs) = do
-    (name, tvars) <- go (skipForalls typ)
+    (name, tvars) <- go typ
     dataErr (mapM_ (\i -> checkInj i name tvars) injs) err
   where
-    go = \case
-        TData name typs
-            | Right tvars' <- mapM toTVar typs ->
-                pure (name, tvars')
-        _ ->
-            uncatchableErr $
-                unwords ["Bad data type definition: ", printTree typ]
+    go :: MonadError Error m => Type -> m (UIdent, [TVar])
+    go t = do
+        (ident, typs) <- convertData t
+        -- Not super clean
+        unless
+            (all isTVar typs)
+            ( uncatchableErr $
+                unwords
+                    [ "Bad data type definition: "
+                    , printTree t
+                    ]
+            )
+        return (ident, map (\(TVar t) -> t) typs)
+
+isTVar :: Type -> Bool
+isTVar (TVar _) = True
+isTVar _ = False
+
+convertData :: (MonadError Error m, Monad m) => Type -> m (UIdent, [Type])
+convertData = \case
+    TAll _ t -> convertData t
+    t@(TApp _ _)
+        | (TIdent ident : vars) <- flattenType t ->
+            return (ident, vars)
+    t -> uncatchableErr $ unwords ["Bad data type definition: ", printTree t]
 
 checkInj :: (MonadError Error m, MonadState Env m, Monad m) => Inj -> UIdent -> [TVar] -> m ()
 checkInj (Inj c inj_typ) name tvars
-    | TData name' typs <- returnType inj_typ
+    | Right (name', typs) <- convertData (returnType inj_typ)
     , Right tvars' <- mapM toTVar typs
     , name' == name
     , tvars' == tvars = do
@@ -212,16 +232,16 @@ checkInj (Inj c inj_typ) name tvars
                 "with type"
                 quote $ printTree t
                 "already exist"
-            Nothing -> insertInj (coerce c) inj_typ
+            Nothing -> insertInj (coerce c) (TData name (map TVar tvars))
     | otherwise =
         uncatchableErr $
             unwords
                 [ "Bad type constructor: "
                 , show name
                 , "\nExpected: "
-                , printTree . TData name $ map TVar tvars
+                , show . TData name $ map TVar tvars
                 , "\nActual: "
-                , printTree $ returnType inj_typ
+                , show $ returnType inj_typ
                 ]
 
 toTVar :: Type -> Either Error TVar
@@ -519,9 +539,9 @@ unify t0 t1 =
                 catchableErr $
                     Aux.do
                         "Can not unify"
-                        quote $ printTree $ replace m a
+                        quote $ show $ replace m a
                         "with"
-                        quote $ printTree $ replace m b
+                        quote $ show $ replace m b
 
 {- | Check if a type is contained in another type.
 I.E. { a = a -> b } is an unsolvable constraint since there is no substitution
@@ -648,8 +668,10 @@ instance FreeVars Type where
     free (TAll (MkTVar bound) t) =
         S.singleton (coerce bound) `S.intersection` free t
     free (TFun a b) = free a `S.union` free b
+    free (TApp a b) = free a `S.union` free b
     free (TData _ a) = free a
     free (TEVar _) = S.empty
+    free (TIdent _) = S.empty
 
 instance FreeVars a => FreeVars [a] where
     free = let f acc x = acc `S.union` free x in foldl' f S.empty
@@ -665,8 +687,9 @@ instance SubstType Type where
                 Nothing -> TAll (MkTVar i) (apply sub t)
                 Just _ -> apply sub t
             TFun a b -> TFun (apply sub a) (apply sub b)
+            TApp a b -> TApp (apply sub a) (apply sub b)
             TData name a -> TData name (apply sub a)
-            TEVar (MkTEVar _) -> t
+            _ -> t
 
 instance FreeVars (Map T.Ident Type) where
     free :: Map T.Ident Type -> Set T.Ident
@@ -781,6 +804,7 @@ existInj n = gets (M.lookup n . injections)
 
 flattenType :: Type -> [Type]
 flattenType (TFun a b) = flattenType a <> flattenType b
+flattenType (TApp a b) = flattenType a <> flattenType b
 flattenType a = [a]
 
 typeLength :: Type -> Int

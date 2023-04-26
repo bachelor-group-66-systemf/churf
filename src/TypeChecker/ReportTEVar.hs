@@ -13,7 +13,8 @@ import Grammar.Print (printTree)
 import TypeChecker.TypeCheckerIr hiding (Type (..))
 
 data Type
-    = TLit Ident
+    = TIdent Ident
+    | TApp Type Type
     | TVar TVar
     | TData Ident [Type]
     | TFun Type Type
@@ -76,5 +77,7 @@ instance ReportTEVar G.Type Type where
         G.TVar (G.MkTVar i) -> pure $ TVar (MkTVar $ coerce i)
         G.TData name typs -> TData (coerce name) <$> reportTEVar typs
         G.TFun t1 t2 -> liftA2 TFun (reportTEVar t1) (reportTEVar t2)
+        G.TApp t1 t2 -> liftA2 TApp (reportTEVar t1) (reportTEVar t2)
         G.TAll (G.MkTVar i) t -> TAll (MkTVar $ coerce i) <$> reportTEVar t
         G.TEVar tevar -> throwError ("Found TEVar: " ++ printTree tevar)
+        G.TIdent ident -> pure . TIdent $ coerce ident

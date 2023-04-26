@@ -1,4 +1,5 @@
 {-# LANGUAGE LambdaCase #-}
+
 module Monomorphizer.MorbIr where
 
 import Grammar.Print
@@ -49,7 +50,6 @@ data Lit
     deriving (Show, Ord, Eq)
 
 data Type = TLit TIR.Ident | TFun Type Type | TData TIR.Ident [Type]
-
     deriving (Show, Ord, Eq)
 
 flattenType :: Type -> [Type]
@@ -180,4 +180,3 @@ instance Print Lit where
     prt i = \case
         LInt int -> prt i int
         LChar char -> prt i char
-
