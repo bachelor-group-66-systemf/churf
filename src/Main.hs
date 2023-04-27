@@ -1,39 +1,47 @@
 {-# LANGUAGE OverloadedRecordDot #-}
 
-
 module Main where
 
-import           AnnForall                   (annotateForall)
-import           Codegen.Codegen             (generateCode)
-import           Compiler                    (compile)
-import           Control.Monad               (when, (<=<))
-import           Data.List.Extra             (isSuffixOf)
-import           Data.Maybe                  (fromJust, isNothing)
-import           Desugar.Desugar             (desugar)
-import           GHC.IO.Handle.Text          (hPutStrLn)
-import           Grammar.ErrM                (Err)
-import           Grammar.Layout              (resolveLayout)
-import           Grammar.Par                 (myLexer, pProgram)
-import           Grammar.Print               (Print, printTree)
-import           LambdaLifter                (lambdaLift)
-import           Monomorphizer.Monomorphizer (monomorphize)
-import           Renamer.Renamer             (rename)
-import           ReportForall                (reportForall)
-import           System.Console.GetOpt       (ArgDescr (NoArg, ReqArg),
-                                              ArgOrder (RequireOrder),
-                                              OptDescr (Option), getOpt,
-                                              usageInfo)
-import           System.Directory            (createDirectory, doesPathExist,
-                                              getDirectoryContents,
-                                              removeDirectoryRecursive,
-                                              setCurrentDirectory)
-import           System.Environment          (getArgs)
-import           System.Exit                 (ExitCode (ExitFailure),
-                                              exitFailure, exitSuccess,
-                                              exitWith)
-import           System.IO                   (stderr)
-import           System.Process              (spawnCommand, waitForProcess)
-import           TypeChecker.TypeChecker     (TypeChecker (Bi, Hm), typecheck)
+import AnnForall (annotateForall)
+import Codegen.Codegen (generateCode)
+import Compiler (compile)
+import Control.Monad (when, (<=<))
+import Data.List.Extra (isSuffixOf)
+import Data.Maybe (fromJust, isNothing)
+import Desugar.Desugar (desugar)
+import GHC.IO.Handle.Text (hPutStrLn)
+import Grammar.ErrM (Err)
+import Grammar.Layout (resolveLayout)
+import Grammar.Par (myLexer, pProgram)
+import Grammar.Print (Print, printTree)
+import LambdaLifter (lambdaLift)
+import Monomorphizer.Monomorphizer (monomorphize)
+import Renamer.Renamer (rename)
+import ReportForall (reportForall)
+import System.Console.GetOpt (
+    ArgDescr (NoArg, ReqArg),
+    ArgOrder (RequireOrder),
+    OptDescr (Option),
+    getOpt,
+    usageInfo,
+ )
+import System.Directory (
+    createDirectory,
+    doesPathExist,
+    getDirectoryContents,
+    removeDirectoryRecursive,
+    setCurrentDirectory,
+ )
+import System.Environment (getArgs)
+import System.Exit (
+    ExitCode (ExitFailure),
+    exitFailure,
+    exitSuccess,
+    exitWith,
+ )
+import System.IO (stderr)
+import System.Process (spawnCommand, waitForProcess)
+import TypeChecker.TypeChecker (TypeChecker (Bi, Hm), typecheck)
 
 main :: IO ()
 main = getArgs >>= parseArgs >>= uncurry main'
@@ -80,63 +88,64 @@ chooseTypechecker s options = options{typechecker = tc}
     tc = case s of
         "hm" -> pure Hm
         "bi" -> pure Bi
-        _    -> Nothing
+        _ -> Nothing
 
 data Options = Options
-    { help        :: Bool
-    , debug       :: Bool
+    { help :: Bool
+    , debug :: Bool
     , typechecker :: Maybe TypeChecker
     }
 
 main' :: Options -> String -> IO ()
 main' opts s =
-  let
-    log :: (Print a, Show a) => a -> IO ()
-    log = printToErr . if opts.debug then show else printTree
-  in do
-    file <- readFile s
+    let
+        log :: (Print a, Show a) => a -> IO ()
+        log = printToErr . if opts.debug then show else printTree
+     in
+        do
+            file <- readFile s
 
-    printToErr "-- Parse Tree -- "
-    parsed <- fromErr . pProgram . resolveLayout True $ myLexer file
-    log parsed
+            printToErr "-- Parse Tree -- "
+            parsed <- fromErr . pProgram . resolveLayout True $ myLexer (file ++ prelude)
+            log parsed
 
-    printToErr "-- Desugar --"
-    let desugared = desugar parsed
-    log desugared
+            printToErr "-- Desugar --"
+            let desugared = desugar parsed
+            log desugared
 
-    printToErr "\n-- Renamer --"
-    _ <- fromErr $ reportForall (fromJust opts.typechecker) desugared
-    renamed <- fromErr $ (rename <=< annotateForall) desugared
-    log renamed
+            printToErr "\n-- Renamer --"
+            _ <- fromErr $ reportForall (fromJust opts.typechecker) desugared
+            renamed <- fromErr $ (rename <=< annotateForall) desugared
+            log renamed
 
-    printToErr "\n-- TypeChecker --"
-    typechecked <- fromErr $ typecheck (fromJust opts.typechecker) renamed
-    log typechecked
+            printToErr "\n-- TypeChecker --"
+            typechecked <- fromErr $ typecheck (fromJust opts.typechecker) renamed
+            log typechecked
 
-    printToErr "\n-- Lambda Lifter --"
-    let lifted = lambdaLift typechecked
-    log lifted
+            printToErr "\n-- Lambda Lifter --"
+            let lifted = lambdaLift typechecked
+            log lifted
 
-    printToErr "\n -- Monomorphizer --"
-    let monomorphized = monomorphize lifted
-    log monomorphized
+            printToErr "\n -- Monomorphizer --"
+            let monomorphized = monomorphize lifted
+            log monomorphized
 
-    printToErr "\n -- Compiler --"
-    generatedCode <- fromErr $ generateCode monomorphized
+            printToErr "\n -- Compiler --"
+            generatedCode <- fromErr $ generateCode monomorphized
 
-    check <- doesPathExist "output"
-    when check (removeDirectoryRecursive "output")
-    createDirectory "output"
-    when opts.debug $ do
-        writeFile "output/llvm.ll" generatedCode
-        debugDotViz
+            check <- doesPathExist "output"
+            when check (removeDirectoryRecursive "output")
+            createDirectory "output"
+            when opts.debug $ do
+                writeFile "output/llvm.ll" generatedCode
+                debugDotViz
 
-    compile generatedCode
-    printToErr "Compilation done!"
-    printToErr "\n-- Program output --"
-    print =<< spawnWait "./output/hello_world"
+            compile generatedCode
+            printToErr "Compilation done!"
+            printToErr "\n-- Program output --"
+            print =<< spawnWait "./output/hello_world"
 
-    exitSuccess
+            exitSuccess
 
 debugDotViz :: IO ()
 debugDotViz = do
@@ -156,3 +165,5 @@ printToErr = hPutStrLn stderr
 
 fromErr :: Err a -> IO a
 fromErr = either (\s -> printToErr s >> exitFailure) pure
+
+prelude = "const x y = x\n\ndata Bool () where\n  True : Bool ()\n  False : Bool ()\n\nlt : Int -> Int -> Bool ()\nlt = \\x. \\y. const True (x + y)"
