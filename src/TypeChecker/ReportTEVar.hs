@@ -78,7 +78,6 @@ instance ReportTEVar G.Type Type where
     reportTEVar = \case
         G.TLit lit -> pure $ TLit (coerce lit)
         G.TVar (G.MkTVar i) -> pure $ TVar (MkTVar $ coerce i)
-        G.TData (G.UIdent "Bool") _ -> pure $ TLit (coerce "Bool")
         G.TData name typs -> TData (coerce name) <$> reportTEVar typs
         G.TFun t1 t2 -> liftA2 TFun (reportTEVar t1) (reportTEVar t2)
         G.TAll (G.MkTVar i) t -> TAll (MkTVar $ coerce i) <$> reportTEVar t

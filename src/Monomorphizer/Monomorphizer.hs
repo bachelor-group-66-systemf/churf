@@ -383,11 +383,7 @@ createNewData ((consIdent, consType, polyData) : input) o =
             (M.Data newDataType [newCons])
             o
   where
-    polyDataIdent = case polyData of
-        T.Data (T.TData i _) _ -> i
-        T.Data (T.TLit i) _ -> i
-        t -> error $ "Data type is :" ++ show t ++ " which should be impossible"
-
+    T.Data (T.TData polyDataIdent _) _ = polyData
     newDataType = getDataType consType
     newDataName = newName newDataType polyDataIdent
     newCons = M.Inj consIdent consType

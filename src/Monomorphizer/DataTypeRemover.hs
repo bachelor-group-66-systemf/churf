@@ -1,6 +1,7 @@
 module Monomorphizer.DataTypeRemover (removeDataTypes) where
-import qualified Monomorphizer.MorbIr as M1
-import qualified Monomorphizer.MonomorphizerIr as M2
+
+import Monomorphizer.MonomorphizerIr qualified as M2
+import Monomorphizer.MorbIr qualified as M1
 import TypeChecker.TypeCheckerIr (Ident (Ident))
 
 removeDataTypes :: M1.Program -> M2.Program
@@ -17,9 +18,10 @@ pCons :: M1.Inj -> M2.Inj
 pCons (M1.Inj ident t) = M2.Inj ident (pType t)
 
 pType :: M1.Type -> M2.Type
-pType   (M1.TLit ident) = M2.TLit ident
-pType   (M1.TFun t1 t2) = M2.TFun (pType t1) (pType t2)
-pType   d               = M2.TLit (Ident (newName d)) -- This is the step
+pType (M1.TLit ident) = M2.TLit ident
+pType (M1.TFun t1 t2) = M2.TFun (pType t1) (pType t2)
+pType (M1.TData (Ident "Bool") _) = M2.TLit (Ident "Bool")
+pType d = M2.TLit (Ident (newName d)) -- This is the step
 
 newName :: M1.Type -> String
 newName (M1.TLit (Ident str)) = str
@@ -36,24 +38,23 @@ pExpT :: M1.ExpT -> M2.ExpT
 pExpT (exp, t) = (pExp exp, pType t)
 
 pExp :: M1.Exp -> M2.Exp
-pExp (M1.EVar ident)          = M2.EVar  ident
-pExp (M1.ELit lit)            = M2.ELit  (pLit lit)
-pExp (M1.ELet bind expt)      = M2.ELet  (pBind bind) (pExpT expt)
-pExp (M1.EApp e1 e2)          = M2.EApp  (pExpT e1)   (pExpT e2)
-pExp (M1.EAdd e1 e2)          = M2.EAdd  (pExpT e1)   (pExpT e2)
+pExp (M1.EVar ident) = M2.EVar ident
+pExp (M1.ELit lit) = M2.ELit (pLit lit)
+pExp (M1.ELet bind expt) = M2.ELet (pBind bind) (pExpT expt)
+pExp (M1.EApp e1 e2) = M2.EApp (pExpT e1) (pExpT e2)
+pExp (M1.EAdd e1 e2) = M2.EAdd (pExpT e1) (pExpT e2)
 pExp (M1.ECase expT branches) = M2.ECase (pExpT expT) (map pBranch branches)
 
 pBranch :: M1.Branch -> M2.Branch
 pBranch (M1.Branch (patt, t) expt) = M2.Branch (pPattern patt, pType t) (pExpT expt)
 
 pPattern :: M1.Pattern -> M2.Pattern
-pPattern (M1.PVar id)          = M2.PVar (pId id)
-pPattern (M1.PLit (lit, t))    = M2.PLit (pLit lit, pType t)
+pPattern (M1.PVar id) = M2.PVar (pId id)
+pPattern (M1.PLit (lit, t)) = M2.PLit (pLit lit, pType t)
 pPattern (M1.PInj ident patts) = M2.PInj ident (map pPattern patts)
-pPattern M1.PCatch             = M2.PCatch
-pPattern (M1.PEnum ident)      = M2.PEnum ident
+pPattern M1.PCatch = M2.PCatch
+pPattern (M1.PEnum ident) = M2.PEnum ident
 
 pLit :: M1.Lit -> M2.Lit
-pLit (M1.LInt v)  = M2.LInt v
+pLit (M1.LInt v) = M2.LInt v
 pLit (M1.LChar c) = M2.LChar c
-
