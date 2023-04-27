@@ -166,4 +166,4 @@ printToErr = hPutStrLn stderr
 fromErr :: Err a -> IO a
 fromErr = either (\s -> printToErr s >> exitFailure) pure
 
-prelude = "const x y = x\n\ndata Bool () where\n  True : Bool ()\n  False : Bool ()\n\nlt : Int -> Int -> Bool ()\nlt = \\x. \\y. const True (x + y)"
+prelude = "\n\nconst x y = x\n\ndata Bool () where\n  True : Bool ()\n  False : Bool ()\n\nlt : Int -> Int -> Bool ()\nlt = \\x. \\y. const True (x + y)"

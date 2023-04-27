@@ -1,0 +1,9 @@
+# Full optimization Churf
+File: output/hello_world, 100 runs gave average: 0.025261127948760988s
+
+# O2 Haskell
+File: ./Bench, 100 runs gave average:            0.05629507303237915s
+
+# 03 Haskell
+File: ./Bench, 100 runs gave average:            0.05490849256515503s
+File: ./Bench, 100 runs gave average:            0.05323728561401367s

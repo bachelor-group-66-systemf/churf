@@ -2,16 +2,15 @@
 
 module TypeChecker.ReportTEVar where
 
-import           Auxiliary                 (onM)
-import           Control.Applicative       (Applicative (liftA2), liftA3)
-import           Control.Monad.Except      (MonadError (throwError))
-import           Data.Coerce               (coerce)
-import           Data.Tuple.Extra          (secondM)
-import qualified Grammar.Abs               as G
-import           Grammar.ErrM              (Err)
-import           Grammar.Print             (printTree)
-import           TypeChecker.TypeCheckerIr hiding (Type (..))
-
+import Auxiliary (onM)
+import Control.Applicative (Applicative (liftA2), liftA3)
+import Control.Monad.Except (MonadError (throwError))
+import Data.Coerce (coerce)
+import Data.Tuple.Extra (secondM)
+import Grammar.Abs qualified as G
+import Grammar.ErrM (Err)
+import Grammar.Print (printTree)
+import TypeChecker.TypeCheckerIr hiding (Type (..))
 
 data Type
     = TLit Ident
@@ -30,20 +29,20 @@ instance ReportTEVar (Program' G.Type) (Program' Type) where
 instance ReportTEVar (Def' G.Type) (Def' Type) where
     reportTEVar = \case
         DBind bind -> DBind <$> reportTEVar bind
-        DData dat  -> DData <$> reportTEVar dat
+        DData dat -> DData <$> reportTEVar dat
 
 instance ReportTEVar (Bind' G.Type) (Bind' Type) where
     reportTEVar (Bind id vars rhs) = liftA3 Bind (reportTEVar id) (reportTEVar vars) (reportTEVar rhs)
 
 instance ReportTEVar (Exp' G.Type) (Exp' Type) where
     reportTEVar exp = case exp of
-        EVar name        -> pure $ EVar name
-        EInj name        -> pure $ EInj name
-        ELit lit         -> pure $ ELit lit
-        ELet bind e      -> liftA2 ELet (reportTEVar bind) (reportTEVar e)
-        EApp e1 e2       -> onM EApp reportTEVar e1 e2
-        EAdd e1 e2       -> onM EAdd reportTEVar e1 e2
-        EAbs name e      -> EAbs name <$> reportTEVar e
+        EVar name -> pure $ EVar name
+        EInj name -> pure $ EInj name
+        ELit lit -> pure $ ELit lit
+        ELet bind e -> liftA2 ELet (reportTEVar bind) (reportTEVar e)
+        EApp e1 e2 -> onM EApp reportTEVar e1 e2
+        EAdd e1 e2 -> onM EAdd reportTEVar e1 e2
+        EAbs name e -> EAbs name <$> reportTEVar e
         ECase e branches -> liftA2 ECase (reportTEVar e) (reportTEVar branches)
 
 instance ReportTEVar (Branch' G.Type) (Branch' Type) where
@@ -54,10 +53,10 @@ instance ReportTEVar (Pattern' G.Type, G.Type) (Pattern' Type, Type) where
 
 instance ReportTEVar (Pattern' G.Type) (Pattern' Type) where
     reportTEVar = \case
-        PVar name    -> pure $ PVar name
-        PLit lit     -> pure $ PLit lit
-        PCatch       -> pure PCatch
-        PEnum name   -> pure $ PEnum name
+        PVar name -> pure $ PVar name
+        PLit lit -> pure $ PLit lit
+        PCatch -> pure PCatch
+        PEnum name -> pure $ PEnum name
         PInj name ps -> PInj name <$> reportTEVar ps
 
 instance ReportTEVar (Data' G.Type) (Data' Type) where
@@ -77,9 +76,9 @@ instance ReportTEVar a b => ReportTEVar [a] [b] where
 
 instance ReportTEVar G.Type Type where
     reportTEVar = \case
-        G.TLit lit            -> pure $ TLit (coerce lit)
-        G.TVar (G.MkTVar i)   -> pure $ TVar (MkTVar $ coerce i)
-        G.TData name typs     -> TData (coerce name) <$> reportTEVar typs
-        G.TFun t1 t2          -> liftA2 TFun (reportTEVar t1) (reportTEVar t2)
+        G.TLit lit -> pure $ TLit (coerce lit)
+        G.TVar (G.MkTVar i) -> pure $ TVar (MkTVar $ coerce i)
+        G.TData name typs -> TData (coerce name) <$> reportTEVar typs
+        G.TFun t1 t2 -> liftA2 TFun (reportTEVar t1) (reportTEVar t2)
         G.TAll (G.MkTVar i) t -> TAll (MkTVar $ coerce i) <$> reportTEVar t
-        G.TEVar tevar         -> throwError ("Found TEVar: " ++ printTree tevar)
+        G.TEVar tevar -> throwError ("Found TEVar: " ++ printTree tevar)
