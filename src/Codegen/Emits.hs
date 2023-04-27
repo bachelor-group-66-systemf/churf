@@ -331,6 +331,8 @@ exprToValue = \case
     (MIR.ELit i, _t) -> pure $ case i of
         (MIR.LInt i) -> VInteger i
         (MIR.LChar i) -> VChar $ ord i
+    (MIR.EVar (TIR.Ident "True"), _t) -> pure $ VInteger 1
+    (MIR.EVar (TIR.Ident "False"), _t) -> pure $ VInteger 0
     (MIR.EVar name, t) -> do
         funcs <- gets functions
         cons <- gets constructors
