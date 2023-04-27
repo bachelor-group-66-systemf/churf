@@ -37,11 +37,11 @@ newtype Ident = Ident String
     deriving (C.Eq, C.Ord, C.Show, C.Read, IsString)
 
 data Pattern' t
-    = PVar (Id' t) -- TODO should be Ident
-    | PLit (Lit, t) -- TODO should be Lit
+    = PVar Ident
+    | PLit Lit
     | PCatch
     | PEnum Ident
-    | PInj Ident [Pattern' t] -- TODO should be (Pattern' t, t)
+    | PInj Ident [(Pattern' t, t)]
     deriving (C.Eq, C.Ord, C.Show, C.Read, Functor)
 
 data Exp' t
