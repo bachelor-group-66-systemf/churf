@@ -74,9 +74,8 @@ instance Print t => Print (Program' t) where
     prt i (Program sc) = prt i sc
 
 instance Print t => Print (Bind' t) where
-    prt i (Bind sig@(name, _) parms rhs) = concatD
+    prt i (Bind sig parms rhs) = concatD
                 [ prtSig sig
-                , prt i name
                 , prt i parms
                 , doc $ showString "="
                 , prt i rhs
@@ -88,7 +87,6 @@ prtSig (name, t) =
         [ prt 0 name
         , doc $ showString ":"
         , prt 0 t
-        , doc $ showString ";"
         ]
 
 instance Print t => Print (ExpT' t) where
