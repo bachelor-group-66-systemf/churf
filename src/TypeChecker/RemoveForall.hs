@@ -30,13 +30,14 @@ removeForall (Program defs) = Program $ map (DData . rfData) ds
         ELit lit    -> ELit lit
         EVar name   -> EVar name
         EInj name   -> EInj name
-    rfBranch (Branch (p, t) e) = Branch (rfPattern p, rfType t) (rfExpT e)
+    rfBranch (Branch p e) = Branch (rfPatternT p) (rfExpT e)
+    rfPatternT (p, t) = (rfPattern p, rfType t)
     rfPattern = \case
-        PVar id       -> PVar (rfId id)
-        PLit (lit, t) -> PLit (lit, rfType t)
-        PCatch        -> PCatch
-        PEnum name    -> PEnum name
-        PInj name ps  -> PInj name (map rfPattern ps)
+        PVar name    -> PVar name
+        PLit lit     -> PLit lit
+        PCatch       -> PCatch
+        PEnum name   -> PEnum name
+        PInj name ps -> PInj name (map rfPatternT ps)
 
 rfType :: R.Type -> Type
 rfType = \case

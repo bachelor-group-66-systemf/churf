@@ -32,9 +32,8 @@ import           TypeChecker.TypeCheckerIr     (Ident (Ident))
 
 import           Control.Monad.Reader          (MonadReader (ask, local),
                                                 Reader, asks, runReader, when)
-import           Control.Monad.State           (MonadState,
-                                                StateT (runStateT), gets,
-                                                modify)
+import           Control.Monad.State           (MonadState, StateT (runStateT),
+                                                gets, modify)
 import           Data.Coerce                   (coerce)
 import qualified Data.Map                      as Map
 import           Data.Maybe                    (fromJust)
@@ -50,7 +49,7 @@ newtype EnvM a = EnvM (StateT Output (Reader Env) a)
 
 type Output = Map.Map Ident Outputted
 
--- | Data structure describing outputted top-level information, that is 
+-- | Data structure describing outputted top-level information, that is
 -- Binds, Polymorphic Data types (monomorphized in a later step) and
 -- Marked bind, which means that it is in the process of monomorphization
 -- and should not be monomorphized again.
@@ -220,18 +219,18 @@ morphBranch (T.Branch (p, pt) (e, et)) = do
   pt' <- getMonoFromPoly pt
   et' <- getMonoFromPoly et
   env <- ask
-  (p', newLocals)  <- morphPattern pt' (locals env) p
+  (p', newLocals)  <- morphPattern pt' (locals env) (p, pt)
   local (const env { locals = newLocals }) $ do
     e' <- morphExp et' e
     return $ M.Branch (p', pt') (e', et')
 
 -- | Morphs pattern (pattern => expression), gives the newly bound local variables.
-morphPattern :: M.Type -> Set.Set Ident -> T.Pattern -> EnvM (M.Pattern, Set.Set Ident)
-morphPattern expectedType ls = \case
-  T.PVar (ident, t) -> do t' <- getMonoFromPoly t
-                          return (M.PVar (ident, t'), Set.insert ident ls)
-  T.PLit (lit, t) ->   do t' <- getMonoFromPoly t
-                          return (M.PLit (convertLit lit, t'), ls)
+morphPattern :: M.Type -> Set.Set Ident -> (T.Pattern, T.Type) -> EnvM (M.Pattern, Set.Set Ident)
+morphPattern expectedType ls (p, t) = case p of
+  T.PVar ident -> do t' <- getMonoFromPoly t
+                     return (M.PVar (ident, t'), Set.insert ident ls)
+  T.PLit lit ->   do t' <- getMonoFromPoly t
+                     return (M.PLit (convertLit lit, t'), ls)
   T.PCatch -> return (M.PCatch, ls)
   -- Constructor ident
   T.PEnum ident   -> do morphCons expectedType ident

@@ -153,10 +153,13 @@ instance Print t => Print [Inj' t] where
     prt i [x] = prt i x
     prt i (x : xs) = prPrec i 0 $ concatD [prt i x, doc $ showString "\n  ", prt i xs]
 
+instance Print t => Print (Pattern' t, t) where
+    prt i (p, t) = prPrec i 1 (concatD [prt i p, prt i t])
+
 instance Print t => Print (Pattern' t) where
     prt i = \case
         PVar name -> prPrec i 1 (concatD [prt 0 name])
-        PLit (lit, _) -> prPrec i 1 (concatD [prt 0 lit])
+        PLit lit -> prPrec i 1 (concatD [prt 0 lit])
         PCatch -> prPrec i 1 (concatD [doc (showString "_")])
         PEnum name -> prPrec i 1 (concatD [prt 0 name])
         PInj uident patterns -> prPrec i 0 (concatD [prt 0 uident, prt 1 patterns])

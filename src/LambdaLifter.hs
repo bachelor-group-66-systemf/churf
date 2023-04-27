@@ -86,8 +86,8 @@ freeVarsBranch localVars (Branch (patt, t) exp) = (frees, AnnBranch (patt, t) ex
     freeVarsOfPattern = Set.fromList . go []
       where
         go acc = \case
-            PVar (n,_) -> snoc n acc
-            PInj _ ps  ->  foldl go acc ps
+            PVar n    -> snoc n acc
+            PInj _ ps ->  foldl go acc $ map fst ps
 
 
 

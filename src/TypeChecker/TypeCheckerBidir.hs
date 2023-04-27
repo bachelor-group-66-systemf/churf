@@ -209,7 +209,7 @@ checkPattern patt t_patt = case patt of
         --  Γ ⊢ x ↑ A ⊣ Γ,(x:A)
         PVar x -> do
             insertEnv $ EnvVar x t_patt
-            apply (T.PVar (coerce x, t_patt), t_patt)
+            apply (T.PVar (coerce x), t_patt)
 
         --  -------------
         --  Γ ⊢ _ ↑ A ⊣ Γ
@@ -220,7 +220,7 @@ checkPattern patt t_patt = case patt of
         --  Γ ⊢ τ ↑ B ⊣ Δ
         PLit lit -> do
           subtype (litType lit) t_patt
-          apply (T.PLit (lit, t_patt), t_patt)
+          apply (T.PLit lit, t_patt)
 
         --  Γ ∋ (K : A)  Γ ⊢ A <: B ⊣ Δ
         --  ---------------------------
@@ -249,7 +249,7 @@ checkPattern patt t_patt = case patt of
             subtype (sub $ getDataId t_inj) t_patt
             let check p t = checkPattern p =<< apply (sub t)
             ps' <- zipWithM check ps ts
-            apply (T.PInj (coerce name) (map fst ps'), t_patt)
+            apply (T.PInj (coerce name) ps', t_patt)
           where
             substituteTVarsOf = \case
                 TAll tvar t -> do
@@ -780,10 +780,9 @@ applyBranch (T.Branch (p, t) e) = do
 
 applyPattern :: T.Pattern' Type -> Tc (T.Pattern' Type)
 applyPattern = \case
-    T.PVar id       -> T.PVar <$> apply id
-    T.PLit (lit, t) -> T.PLit . (lit, ) <$> apply t
-    T.PInj name ps  -> T.PInj name <$> apply ps
-    p               -> pure p
+    T.PVar id      -> T.PVar <$> apply id
+    T.PInj name ps -> T.PInj name <$> apply ps
+    p              -> pure p
 
 applyPair :: (Apply a, Apply b) => (a, b) -> Tc (a, b)
 applyPair (x, y) = liftA2 (,) (apply x) (apply y)

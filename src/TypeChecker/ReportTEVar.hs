@@ -49,13 +49,16 @@ instance ReportTEVar (Exp' G.Type) (Exp' Type) where
 instance ReportTEVar (Branch' G.Type) (Branch' Type) where
     reportTEVar (Branch (patt, t_patt) e) = liftA2 Branch (liftA2 (,) (reportTEVar patt) (reportTEVar t_patt)) (reportTEVar e)
 
+instance ReportTEVar (Pattern' G.Type, G.Type) (Pattern' Type, Type) where
+    reportTEVar (p, t) = liftA2 (,) (reportTEVar p) (reportTEVar t)
+
 instance ReportTEVar (Pattern' G.Type) (Pattern' Type) where
     reportTEVar = \case
-        PVar (name, t) -> PVar . (name,) <$> reportTEVar t
-        PLit (lit, t)  -> PLit . (lit,) <$> reportTEVar t
-        PCatch         -> pure PCatch
-        PEnum name     -> pure $ PEnum name
-        PInj name ps   -> PInj name <$> reportTEVar ps
+        PVar name    -> pure $ PVar name
+        PLit lit     -> pure $ PLit lit
+        PCatch       -> pure PCatch
+        PEnum name   -> pure $ PEnum name
+        PInj name ps -> PInj name <$> reportTEVar ps
 
 instance ReportTEVar (Data' G.Type) (Data' Type) where
     reportTEVar (Data typ injs) = liftA2 Data (reportTEVar typ) (reportTEVar injs)
