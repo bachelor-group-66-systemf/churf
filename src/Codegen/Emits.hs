@@ -228,15 +228,15 @@ emitECased t e cases = do
         emit $ Store ty val Ptr stackPtr
         emit $ Br label
         emit $ Label lbl_failPos
-    emitCases _rt ty label stackPtr vs (Branch (MIR.PLit i, t) exp) = do
+    emitCases _rt ty label stackPtr vs (Branch (MIR.PLit (i, ct), t) exp) = do
         emit $ Comment "Plit"
         let i' = case i of
-                (MIR.LInt i, _) -> VInteger i
-                (MIR.LChar i, _) -> VChar (ord i)
+                MIR.LInt i -> VInteger i
+                MIR.LChar i -> VChar (ord i)
         ns <- getNewVar
         lbl_failPos <- (\x -> TIR.Ident $ "failed_" <> show x) <$> getNewLabel
         lbl_succPos <- (\x -> TIR.Ident $ "success_" <> show x) <$> getNewLabel
-        emit $ SetVariable ns (Icmp LLEq (type2LlvmType t) vs i')
+        emit $ SetVariable ns (Icmp LLEq (type2LlvmType ct) vs i')
         emit $ BrCond (VIdent ns ty) lbl_succPos lbl_failPos
         emit $ Label lbl_succPos
         val <- exprToValue exp
@@ -255,9 +255,13 @@ emitECased t e cases = do
         emit $ Br label
         lbl_failPos <- (\x -> TIR.Ident $ "failed_" <> show x) <$> getNewLabel
         emit $ Label lbl_failPos
+    emitCases rt ty label stackPtr vs (Branch (MIR.PEnum (TIR.Ident "True"), t) exp) = do
+        emitCases rt ty label stackPtr vs (Branch (MIR.PLit (MIR.LInt 1, TLit "Bool"), t) exp)
+    emitCases rt ty label stackPtr vs (Branch (MIR.PEnum (TIR.Ident "False"), _) exp) = do
+        emitCases rt ty label stackPtr vs (Branch (MIR.PLit (MIR.LInt 0, TLit "Bool"), t) exp)
     emitCases _rt ty label stackPtr _vs (Branch (MIR.PEnum _id, _) exp) = do
         -- //TODO Penum wrong, acts as a catch all
-        emit $ Comment "Penum"
+        emit $ Comment $ "Penum " <> show _id
         val <- exprToValue exp
         emit $ Store ty val Ptr stackPtr
         emit $ Br label
@@ -290,7 +294,10 @@ emitApp rt e1 e2 = appEmitter e1 e2 []
                                 <|> Global <$ Map.lookup (name, t) funcs
                     -- this piece of code could probably be improved, i.e remove the double `const Global`
                     args' = map (first valueGetType . dupe) args
-                    call = Call FastCC (type2LlvmType rt) visibility name args'
+                let call =
+                        case name of
+                            TIR.Ident ('l' : 't' : '$' : _) -> Icmp LLSlt I64 (snd (head args')) (snd (args' !! 1))
+                            _ -> Call FastCC (type2LlvmType rt) visibility name args'
                 emit $ Comment $ show rt
                 emit $ SetVariable vs call
             x -> error $ "The unspeakable happened: " <> show x

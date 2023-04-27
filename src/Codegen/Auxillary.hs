@@ -9,6 +9,7 @@ type2LlvmType :: MIR.Type -> LLVMType
 type2LlvmType (MIR.TLit id@(TIR.Ident name)) = case name of
     "Int" -> I64
     "Char" -> I8
+    "Bool" -> I1
     _ -> CustomType id
 type2LlvmType (MIR.TFun t xs) = do
     let (t', xs') = function2LLVMType xs [type2LlvmType t]

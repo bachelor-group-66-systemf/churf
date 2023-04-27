@@ -11,7 +11,8 @@ import Control.Monad.State (
  )
 import Data.List (sortBy)
 import Grammar.ErrM (Err)
-import Monomorphizer.MonomorphizerIr as MIR (Def (DBind, DData), Program (..))
+import Monomorphizer.MonomorphizerIr as MIR (Bind (..), Data (..), Def (DBind, DData), Program (..), Type (TLit))
+import TypeChecker.TypeCheckerIr (Ident (..))
 
 {- | Compiles an AST and produces a LLVM Ir string.
   An easy way to actually "compile" this output is to
@@ -19,8 +20,14 @@ import Monomorphizer.MonomorphizerIr as MIR (Def (DBind, DData), Program (..))
 -}
 generateCode :: MIR.Program -> Err String
 generateCode (MIR.Program scs) = do
-  let codegen = initCodeGenerator scs
-  llvmIrToString . instructions <$> execStateT (compileScs (sortBy lowData scs)) codegen
+  let tree = filter (not . detectPrelude) (sortBy lowData scs)
+  let codegen = initCodeGenerator tree
+  llvmIrToString . instructions <$> execStateT (compileScs tree) codegen
+
+detectPrelude :: Def -> Bool
+detectPrelude (DData (Data (TLit (Ident "Bool")) _)) = True
+detectPrelude (DBind (Bind (Ident ('l' : 't' : '$' : _), _) _ _)) = True
+detectPrelude _ = False
 
 lowData :: Def -> Def -> Ordering
 lowData (DData _) (DBind _) = LT
