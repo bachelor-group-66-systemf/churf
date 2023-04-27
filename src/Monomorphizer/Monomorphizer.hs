@@ -263,9 +263,9 @@ morphPattern p expectedType = case p of
   T.PVar ident     -> return (M.PVar (ident, expectedType), Set.singleton ident)
   T.PLit lit       -> return (M.PLit (convertLit lit, expectedType), Set.empty)
   T.PCatch         -> return (M.PCatch, Set.empty)
-  T.PEnum ident    -> do morphCons expectedType ident
+  T.PEnum ident    -> do --morphCons expectedType ident
                          return (M.PEnum ident, Set.empty)
-  T.PInj ident pts -> do morphCons expectedType ident
+  T.PInj ident pts -> do --morphCons expectedType ident
                          ts' <- mapM (getMonoFromPoly . snd) pts
                          let pts' = zip (map fst pts) ts'
                          psSets <- mapM (uncurry morphPattern) pts'
