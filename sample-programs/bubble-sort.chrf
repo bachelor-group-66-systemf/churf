@@ -1,0 +1,11 @@
+data List (a) where
+    Cons : a -> List (a) -> List (a)
+    Nil  : List (a)
+
+bubblesort : List (a) -> List (a)
+bubblesort xs = case xs of
+    Nil    => Nil
+    Cons x => case x of
+        Nil => Cons x Nil
+        Cons y => 
+

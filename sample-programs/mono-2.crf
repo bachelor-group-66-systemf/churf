@@ -5,6 +5,9 @@ data Either(a b) where
 unwrapLeft x = case x of
     Left y => y
 
+unwrapRight x = case x of
+    Right y => y
+
 wow = Left 5
 
 main = unwrapLeft wow

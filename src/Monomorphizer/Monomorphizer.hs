@@ -46,7 +46,7 @@ import Control.Monad.State (
  )
 import Data.Coerce (coerce)
 import Data.Map qualified as Map
-import Data.Maybe (fromJust)
+import Data.Maybe (fromJust, catMaybes)
 import Data.Set qualified as Set
 import Debug.Trace
 import Grammar.Print (printTree)
@@ -101,6 +101,10 @@ markBind ident = modify (Map.insert ident Marked)
 -- | Check if bind has been touched or not.
 isBindMarked :: Ident -> EnvM Bool
 isBindMarked ident = gets (Map.member ident)
+
+-- | Checks if constructor is outputted.
+isConsMarked :: Ident -> EnvM Bool
+isConsMarked ident = gets (Map.member ident)
 
 -- | Finds main bind.
 getMain :: EnvM T.Bind
@@ -228,7 +232,7 @@ morphExp expectedType exp = case exp of
         t' <- getMonoFromPoly t
         bs' <- mapM morphBranch bs
         exp' <- morphExp t' exp
-        return $ M.ECase (exp', t') bs'
+        return $ M.ECase (exp', t') (catMaybes bs')
     T.EVar ident -> do
         isLocal <- localExists ident
         if isLocal
@@ -248,28 +252,39 @@ morphExp expectedType exp = case exp of
     T.ELet (T.Bind{}) _ -> error "lets not possible yet"
 
 -- | Monomorphizes case-of branches.
-morphBranch :: T.Branch -> EnvM M.Branch
+morphBranch :: T.Branch -> EnvM (Maybe M.Branch)
 morphBranch (T.Branch (p, pt) (e, et)) = do
   pt' <- getMonoFromPoly pt
   et' <- getMonoFromPoly et
   env <- ask
-  (p', newLocals)  <- morphPattern p pt'
-  local (const env { locals = Set.union (locals env) newLocals }) $ do
-    e' <- morphExp et' e
-    return $ M.Branch (p', pt') (e', et')
+  maybeMorphedPattern <- morphPattern p pt'
+  case maybeMorphedPattern of
+    Nothing -> return Nothing
+    Just (p', newLocals) -> 
+      local (const env { locals = Set.union (locals env) newLocals }) $ do
+        e' <- morphExp et' e
+        return $ Just (M.Branch (p', pt') (e', et'))
 
-morphPattern :: T.Pattern -> M.Type -> EnvM (M.Pattern, Set.Set Ident)
+morphPattern :: T.Pattern -> M.Type -> EnvM (Maybe (M.Pattern, Set.Set Ident))
 morphPattern p expectedType = case p of
-  T.PVar ident     -> return (M.PVar (ident, expectedType), Set.singleton ident)
-  T.PLit lit       -> return (M.PLit (convertLit lit, expectedType), Set.empty)
-  T.PCatch         -> return (M.PCatch, Set.empty)
+  T.PVar ident     -> return $ Just (M.PVar (ident, expectedType), Set.singleton ident)
+  T.PLit lit       -> return $ Just (M.PLit (convertLit lit, expectedType), Set.empty)
+  T.PCatch         -> return $ Just (M.PCatch, Set.empty)
   T.PEnum ident    -> do --morphCons expectedType ident
-                         return (M.PEnum ident, Set.empty)
+                         return $ Just (M.PEnum ident, Set.empty)
   T.PInj ident pts -> do --morphCons expectedType ident
-                         ts' <- mapM (getMonoFromPoly . snd) pts
-                         let pts' = zip (map fst pts) ts'
-                         psSets <- mapM (uncurry morphPattern) pts'
-                         return (M.PInj ident (map fst psSets), Set.unions $ map snd psSets)
+                         isMarked <- isConsMarked ident
+                         if isMarked
+                            then do
+                              ts' <- mapM (getMonoFromPoly . snd) pts
+                              let pts' = zip (map fst pts) ts'
+                              psSets <- mapM (uncurry morphPattern) pts'
+                              let maybePsSets = sequence psSets
+                              case maybePsSets of
+                                Nothing      -> return Nothing
+                                Just psSets' -> return $ Just 
+                                  (M.PInj ident (map fst psSets'), Set.unions $ map snd psSets')
+                            else return Nothing
 
 -- | Creates a new identifier for a function with an assigned type.
 newFuncName :: M.Type -> T.Bind -> Ident

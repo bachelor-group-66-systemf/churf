@@ -1,0 +1,23 @@
+data List (a) where
+    Nil : List (a)
+    Cons : a -> List (a) -> List (a)
+
+insert : Int -> List (Int) -> List (Int)
+insert x xs = case xs of
+    Cons z zs => case (lt x z) of
+        True => Cons x (Cons z zs)
+        False => Cons z (insert x zs)
+    Nil => Cons x Nil
+        
+insertionSort : List (Int) -> List (Int)
+insertionSort xs = case xs of
+    Cons y ys => case ys of
+        _ => insert y (insertionSort ys)
+        Nil => xs
+    Nil => Nil
+
+main = head (insertionSort (Cons 5 (Cons 4 (Cons 3 (Cons 2 (Cons 1 Nil))))))
+
+head xs = case xs of
+    Cons x _ => x
+
