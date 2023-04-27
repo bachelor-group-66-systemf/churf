@@ -173,7 +173,8 @@ emitECased t e cases = do
     mapM_ (emitCases rt ty label stackPtr vs) cs
     -- crashLbl <- TIR.Ident . ("crash_" <>) . show <$> getNewLabel
     -- emit $ Label crashLbl
-    emit . UnsafeRaw $ "call i32 (ptr, ...) @printf(ptr noundef @.non_exhaustive_patterns, i64 noundef 6, i64 noundef 6)\n"
+    var_num <- getVarCount
+    emit . UnsafeRaw $ "call i32 (ptr, ...) @printf(ptr noundef @.non_exhaustive_patterns, i64 noundef " <> show var_num <> ", i64 noundef 6)\n"
     emit . UnsafeRaw $ "call void @cheap_dispose()\n"
     emit . UnsafeRaw $ "call i32 @exit(i32 noundef 1)\n"
     mapM_ (const increaseVarCount) [0 .. 1]
@@ -259,13 +260,31 @@ emitECased t e cases = do
         emitCases rt ty label stackPtr vs (Branch (MIR.PLit (MIR.LInt 1, TLit "Bool"), t) exp)
     emitCases rt ty label stackPtr vs (Branch (MIR.PEnum (TIR.Ident "False"), _) exp) = do
         emitCases rt ty label stackPtr vs (Branch (MIR.PLit (MIR.LInt 0, TLit "Bool"), t) exp)
-    emitCases _rt ty label stackPtr _vs (Branch (MIR.PEnum _id, _) exp) = do
+    emitCases rt ty label stackPtr vs (Branch (MIR.PEnum consId, _) exp) = do
         -- //TODO Penum wrong, acts as a catch all
-        emit $ Comment $ "Penum " <> show _id
+        emit $ Comment "Penum"
+        cons <- gets constructors
+        let r = fromJust $ Map.lookup consId cons
+
+        lbl_failPos <- (\x -> TIR.Ident $ "failed_" <> show x) <$> getNewLabel
+        lbl_succPos <- (\x -> TIR.Ident $ "success_" <> show x) <$> getNewLabel
+
+        consVal <- getNewVar
+        emit $ SetVariable consVal (ExtractValue rt vs 0)
+
+        consCheck <- getNewVar
+        emit $ SetVariable consCheck (Icmp LLEq I8 (VIdent consVal I8) (VInteger $ numCI r))
+        emit $ BrCond (VIdent consCheck ty) lbl_succPos lbl_failPos
+        emit $ Label lbl_succPos
+
+        castPtr <- getNewVar
+        casted <- getNewVar
+        emit $ SetVariable castPtr (Alloca rt)
+        emit $ Store rt vs Ptr castPtr
+        emit $ SetVariable casted (Load (CustomType (coerce consId)) Ptr castPtr)
         val <- exprToValue exp
         emit $ Store ty val Ptr stackPtr
         emit $ Br label
-        lbl_failPos <- (\x -> TIR.Ident $ "failed_" <> show x) <$> getNewLabel
         emit $ Label lbl_failPos
     emitCases _ ty label stackPtr _ (Branch (MIR.PCatch, _) exp) = do
         emit $ Comment "Pcatch"
