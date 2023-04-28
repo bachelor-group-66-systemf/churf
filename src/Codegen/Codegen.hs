@@ -21,7 +21,7 @@ import TypeChecker.TypeCheckerIr (Ident (..))
 generateCode :: MIR.Program -> Bool -> Err String
 generateCode (MIR.Program scs) addGc = do
   let tree = filter (not . detectPrelude) (sortBy lowData scs)
-  let codegen = initCodeGenerator tree
+  let codegen = initCodeGenerator addGc tree
   llvmIrToString . instructions <$> execStateT (compileScs tree) codegen
 
 detectPrelude :: Def -> Bool

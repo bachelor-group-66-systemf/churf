@@ -133,7 +133,8 @@ data LLVMIr
     | Bitcast LLVMType LLVMValue LLVMType
     | Ret LLVMType LLVMValue
     | Comment String
-    | Malloca Integer
+    | Malloc Integer
+    | GcMalloc Integer
     | UnsafeRaw String -- This should generally be avoided, and proper
     -- instructions should be used in its place
     deriving (Show, Eq, Ord)
@@ -223,7 +224,10 @@ llvmIrToString = go 0
                     , ")\n"
                     ]
             (Alloca t) -> unwords ["alloca", toIr t, "\n"]
-            (Malloca t) -> 
+            (Malloc t) -> 
+                concat
+                    [ "call ptr @malloc(i64 ", show t, ")\n"]
+            (GcMalloc t) -> 
                 concat
                     [ "call ptr @cheap_alloc(i64 ", show t, ")\n"]
             (Store t1 val t2 (Ident id2)) ->

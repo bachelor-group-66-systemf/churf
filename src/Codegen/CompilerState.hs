@@ -22,6 +22,7 @@ data CodeGenerator = CodeGenerator
     , constructors :: Map TIR.Ident ConstructorInfo
     , variableCount :: Integer
     , labelCount :: Integer
+    , gcEnabled :: Bool
     }
 
 -- | A state type synonym
@@ -115,15 +116,16 @@ getTypes bs = Map.fromList $ go bs
     variantTypes fi = init $ map type2LlvmType (flattenType fi)
     biggestVariant ts = 8 + maximum (sum . (\(Inj _ fi) -> typeByteSize <$> variantTypes fi) <$> ts)
 
-initCodeGenerator :: [MIR.Def] -> CodeGenerator
-initCodeGenerator scs =
+initCodeGenerator :: Bool -> [MIR.Def] -> CodeGenerator
+initCodeGenerator addGc scs =
     CodeGenerator
-        { instructions = defaultStart
+        { instructions = defaultStart <> if addGc then gcStart else []
         , functions = getFunctions scs
         , constructors = getConstructors scs
         , customTypes = getTypes scs
         , variableCount = 0
         , labelCount = 0
+        , gcEnabled = addGc
         }
 
 defaultStart :: [LLVMIr]
@@ -135,7 +137,11 @@ defaultStart =
     , UnsafeRaw "declare i32 @printf(ptr noalias nocapture, ...)\n"
     , UnsafeRaw "declare i32 @exit(i32 noundef)\n"
     , UnsafeRaw "declare ptr @malloc(i32 noundef)\n"
-    , UnsafeRaw "declare external void @cheap_init()\n"
+    ]
+
+gcStart :: [LLVMIr]
+gcStart =
+    [ UnsafeRaw "declare external void @cheap_init()\n"
     , UnsafeRaw "declare external ptr @cheap_alloc(i64)\n"
     , UnsafeRaw "declare external void @cheap_dispose()\n"
     , UnsafeRaw "declare external ptr @cheap_the()\n"

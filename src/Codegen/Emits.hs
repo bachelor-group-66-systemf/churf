@@ -77,7 +77,8 @@ compileScs [] = do
                         Just s -> do
                             emit $ Comment "Malloc and store"
                             heapPtr <- getNewVar
-                            emit $ SetVariable heapPtr (Malloca s)
+                            useGc <- gets gcEnabled
+                            emit $ SetVariable heapPtr (if useGc then GcMalloc s else Malloc s)
                             emit $ Store arg_t' (VIdent (TIR.Ident arg_n) arg_t') Ptr heapPtr
                             emit $ Store (Ref arg_t') (VIdent heapPtr arg_t') Ptr elemPtr
                         Nothing -> do
@@ -103,10 +104,11 @@ compileScs (MIR.DBind (MIR.Bind (name, t) args exp) : xs) = do
     emit . Comment $ show name <> ": " <> show exp
     let args' = map (second type2LlvmType) args
     emit $ Define FastCC t_return name args'
-    when (name == "main") (mapM_ emit firstMainContent)
+    useGc <- gets gcEnabled
+    when (name == "main") (mapM_ emit (firstMainContent useGc))
     functionBody <- exprToValue exp
     if name == "main"
-        then mapM_ emit $ lastMainContent functionBody
+        then mapM_ emit $ lastMainContent useGc functionBody
         else emit $ Ret t_return functionBody
     emit DefineEnd
     modify $ \s -> s{variableCount = 0}
@@ -126,18 +128,24 @@ compileScs (MIR.DData (MIR.Data typ ts) : xs) = do
         ts
     compileScs xs
 
-firstMainContent :: [LLVMIr]
-firstMainContent =
+firstMainContent :: Bool -> [LLVMIr]
+firstMainContent True =
     [ UnsafeRaw "%prof = call ptr @cheap_the()\n"
     , UnsafeRaw "call void @cheap_set_profiler(ptr %prof, i1 true)\n"
     , UnsafeRaw "call void @cheap_init()\n"
     ]
+firstMainContent False = []
 
-lastMainContent :: LLVMValue -> [LLVMIr]
-lastMainContent var =
+lastMainContent :: Bool -> LLVMValue -> [LLVMIr]
+lastMainContent True var =
     [ UnsafeRaw $
         "call i32 (ptr, ...) @printf(ptr noundef @.str, i64 noundef " <> toIr var <> ")\n"
     , UnsafeRaw "call void @cheap_dispose()\n"
+    , Ret I64 (VInteger 0)
+    ]
+lastMainContent False var =
+    [ UnsafeRaw $
+        "call i32 (ptr, ...) @printf(ptr noundef @.str, i64 noundef " <> toIr var <> ")\n"
     , Ret I64 (VInteger 0)
     ]
 
@@ -175,7 +183,8 @@ emitECased t e cases = do
     -- emit $ Label crashLbl
     var_num <- getVarCount
     emit . UnsafeRaw $ "call i32 (ptr, ...) @printf(ptr noundef @.non_exhaustive_patterns, i64 noundef " <> show var_num <> ", i64 noundef 6)\n"
-    emit . UnsafeRaw $ "call void @cheap_dispose()\n"
+    useGc <- gets gcEnabled
+    when useGc (emit . UnsafeRaw $ "call void @cheap_dispose()\n")
     emit . UnsafeRaw $ "call i32 @exit(i32 noundef 1)\n"
     mapM_ (const increaseVarCount) [0 .. 1]
     emit $ Br label
