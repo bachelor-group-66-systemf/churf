@@ -170,11 +170,12 @@ prelude :: String
 prelude =
     unlines
         [ "\n"
-        , "const : a -> b -> a"
-        , "const x y = x"
+        , "customHelperFunctionCuzPoorImplementation : Bool -> Int -> Bool"
+        , "customHelperFunctionCuzPoorImplementation x y = x"
         , "data Bool () where"
         , "    False : Bool ()"
         , "    True  : Bool ()"
         , "lt : Int -> Int -> Bool ()"
-        , "lt x y = const True (x + y)"
+        , "lt x y = customHelperFunctionCuzPoorImplementation True (x + y)"
+        , "\n"
         ]
