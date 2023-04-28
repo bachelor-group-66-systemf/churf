@@ -170,7 +170,7 @@ prelude :: String
 prelude =
     unlines
         [ "\n"
-        , "customHelperFunctionCuzPoorImplementation : Bool -> Int -> Bool"
+        , "customHelperFunctionCuzPoorImplementation : Bool () -> Int -> Bool ()"
         , "customHelperFunctionCuzPoorImplementation x y = x"
         , "data Bool () where"
         , "    False : Bool ()"
