@@ -27,3 +27,9 @@ hmd FILE:
 
 bid FILE:
     cabal run language -- -d -t bi {{FILE}}
+
+hmdm FILE:
+    cabal run language -- -d -t hm -m {{FILE}}
+
+bidm FILE:
+    cabal run language -- -d -t bi -m {{FILE}}

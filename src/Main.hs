@@ -65,6 +65,7 @@ flags :: [OptDescr (Options -> Options)]
 flags =
     [ Option ['d'] ["debug"] (NoArg enableDebug) "Print debug messages."
     , Option ['t'] ["type-checker"] (ReqArg chooseTypechecker "bi/hm") "Choose type checker. Possible options are bi and hm"
+    , Option ['m'] ["disable-gc"] (NoArg disableGC) "Disables the garbage collector and uses malloc instead."
     , Option [] ["help"] (NoArg enableHelp) "Print this help message"
     ]
 
@@ -73,6 +74,7 @@ initOpts =
     Options
         { help = False
         , debug = False
+        , gc = True
         , typechecker = Nothing
         }
 
@@ -81,6 +83,9 @@ enableHelp opts = opts{help = True}
 
 enableDebug :: Options -> Options
 enableDebug opts = opts{debug = True}
+
+disableGC :: Options -> Options
+disableGC opts = opts{gc = False}
 
 chooseTypechecker :: String -> Options -> Options
 chooseTypechecker s options = options{typechecker = tc}
@@ -93,6 +98,7 @@ chooseTypechecker s options = options{typechecker = tc}
 data Options = Options
     { help :: Bool
     , debug :: Bool
+    , gc :: Bool
     , typechecker :: Maybe TypeChecker
     }
 
