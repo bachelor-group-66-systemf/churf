@@ -9,7 +9,7 @@ module TypeChecker.TypeCheckerBidir (typecheck) where
 import           Auxiliary                 (int, litType, maybeToRightM, snoc)
 import           Control.Applicative       (Applicative (liftA2), (<|>))
 import           Control.Monad.Except      (ExceptT, MonadError (throwError),
-                                            runExceptT, unless, zipWithM,
+                                            forM, runExceptT, unless, zipWithM,
                                             zipWithM_)
 import           Control.Monad.Extra       (fromMaybeM)
 import           Control.Monad.State       (MonadState, State, evalState, gets,
@@ -193,6 +193,30 @@ check (EAbs x e) (TFun a b) = do
     putEnv env_l
     apply (T.EAbs (coerce x) e', TFun a b)
 
+                    --FIXME
+--  Γ ⊢ e ↑ A ⊣ Θ   Θ ⊢ Π ∷ [Θ]A ↓ C ⊣ Δ
+--  ------------------------------------ Case
+--  Γ ⊢ case e of Π ↓ C ⊣ Δ
+check (ECase scrut pi) c = do
+   (scrut', a) <- infer scrut
+   case pi of
+     [] -> do
+         subtype a c
+         apply (T.ECase (scrut', a) [], a)
+     _  -> do
+         pi' <- forM pi $ \(Branch p e) -> do
+             p' <- checkPattern p =<< apply a
+             e' <- check e c
+             pure (T.Branch p' e')
+         apply (T.ECase (scrut', a) pi', c)
+       where
+         go (pi, b) (Branch p e) = do
+             p' <- checkPattern p =<< apply a
+             e'@(_, b') <- infer e
+             subtype b' b
+             apply (T.Branch p' e' : pi, b')
+
+
 --  Γ,α ⊢ e ↓ A ⊣ Θ   Θ ⊢ [Θ]A <: [Θ]B ⊣ Δ
 --  -------------------------------------- Sub
 --  Γ ⊢ e ↑ B ⊣ Δ
@@ -201,6 +225,9 @@ check e b = do
     b' <- apply b
     subtype a b'
     apply (e', b)
+
+
+
 
 checkPattern :: Pattern -> Type -> Tc (T.Pattern' Type, Type)
 checkPattern patt t_patt = case patt of
