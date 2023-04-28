@@ -605,7 +605,7 @@ instantiateR a alpha = gets env >>= \env -> go env a alpha
         let (env_l, _) = splitOn (EnvMark epsilon') env
         putEnv env_l
 
-    go _ a alpha = error $ "Trying to instantiateR: " ++ ppT a ++ " <: "
+    go _ a alpha = throwError $ "Trying to instantiateR: " ++ ppT a ++ " <: "
                            ++ ppT (TEVar alpha)
 
 ---------------------------------------------------------------------------
