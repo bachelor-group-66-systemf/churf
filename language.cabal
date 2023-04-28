@@ -36,6 +36,7 @@ executable language
       Renamer.Renamer
       TypeChecker.TypeChecker
       AnnForall
+      OrderDefs
       TypeChecker.TypeCheckerHm
       TypeChecker.TypeCheckerBidir
       TypeChecker.TypeCheckerIr
@@ -90,6 +91,7 @@ Test-suite language-testsuite
       Grammar.Skel
       Grammar.ErrM
       Grammar.Layout
+      OrderDefs
       Auxiliary
       Monomorphizer.Monomorphizer
       Monomorphizer.MonomorphizerIr

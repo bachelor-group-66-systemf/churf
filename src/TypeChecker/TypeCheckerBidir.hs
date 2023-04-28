@@ -11,7 +11,7 @@ import           Control.Applicative       (Applicative (liftA2), (<|>))
 import           Control.Monad.Except      (ExceptT, MonadError (throwError),
                                             forM, runExceptT, unless, zipWithM,
                                             zipWithM_)
-import           Control.Monad.Extra       (fromMaybeM)
+import           Control.Monad.Extra       (fromMaybeM, ifM)
 import           Control.Monad.State       (MonadState, State, evalState, gets,
                                             modify)
 import           Data.Coerce               (coerce)
@@ -52,11 +52,12 @@ type Env = Seq EnvElem
 -- | Ordered context
 -- Γ ::= ・| Γ, α | Γ, ά | Γ, ▶ ά | Γ, x:A
 data Cxt = Cxt
-    { env        :: Env             -- ^ Local scope context  Γ
-    , sig        :: Map LIdent Type -- ^ Top-level signatures x : A
-    , binds      :: Map LIdent Exp  -- ^ Top-level binds x : e
-    , next_tevar :: Int             -- ^ Counter to distinguish ά
-    , data_injs  :: Map UIdent Type -- ^ Data injections (constructors) K/inj : A
+    { env         :: Env             -- ^ Local scope context  Γ
+    , sig         :: Map LIdent Type -- ^ Top-level signatures x : A
+    , binds       :: Map LIdent Exp  -- ^ Top-level binds x : e
+    , next_tevar  :: Int             -- ^ Counter to distinguish ά
+    , data_injs   :: Map UIdent Type -- ^ Data injections (constructors) K/inj : A
+    , currentBind :: LIdent          -- ^ Used for recursive functions
     } deriving (Show, Eq)
 
 newtype Tc a = Tc { runTc :: ExceptT String (State Cxt) a }
@@ -77,6 +78,7 @@ initCxt defs = Cxt
                                         | DData (Data _ injs) <- defs
                                         , Inj name t <- injs
                                         ]
+            , currentBind = ""
             }
   where
     unboundedTVars = uncurry (Set.\\)  . go (mempty, mempty)
@@ -102,6 +104,7 @@ typecheckBinds cxt = flip evalState cxt
 
 typecheckBind :: Bind -> Tc (T.Bind' Type)
 typecheckBind (Bind name vars rhs) = do
+    modify $ \cxt -> cxt { currentBind = name }
     bind'@(T.Bind (name, typ) _ _) <- lookupSig name >>= \case
         Just t  -> do
             (rhs', _) <- check (foldr EAbs rhs vars) t
@@ -297,14 +300,16 @@ checkPattern patt t_patt = case patt of
 infer :: Exp -> Tc (T.ExpT' Type)
 infer (ELit lit) = apply (T.ELit lit, litType lit)
 
---  Γ ∋ (x : A)         Γ ∌ (x : A)
---  ------------- Var   --------------------- Var'
+--  Γ ∋ (x : A)         Γ ⊢ rec(x)
+--  ------------- Var   --------------------- VarRec
 --  Γ ⊢ x ↓ A ⊣ Γ       Γ ⊢ x ↓ ά ⊣ Γ,(x : ά)
 infer (EVar x) = do
-    a <- fromMaybeM extend $ liftA2 (<|>) (lookupEnv x) (lookupSig x)
+    a <- ifM (gets $ (x==) . currentBind) varRec var
     apply (T.EVar (coerce x), a)
   where
-    extend = do
+    var = maybeToRightM "Can't infer" =<<
+          liftA2 (<|>) (lookupEnv x) (lookupSig x)
+    varRec = do
         alpha <- TEVar <$> fresh
         insertEnv (EnvVar x alpha)
         pure alpha
