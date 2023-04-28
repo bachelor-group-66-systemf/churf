@@ -137,7 +137,7 @@ main' opts s =
             log monomorphized
 
             printToErr "\n -- Compiler --"
-            generatedCode <- fromErr $ generateCode monomorphized
+            generatedCode <- fromErr $ generateCode monomorphized (gc opts)
 
             check <- doesPathExist "output"
             when check (removeDirectoryRecursive "output")
@@ -146,7 +146,7 @@ main' opts s =
                 writeFile "output/llvm.ll" generatedCode
                 debugDotViz
 
-            compile generatedCode
+            compile generatedCode (gc opts)
             printToErr "Compilation done!"
             printToErr "\n-- Program output --"
             print =<< spawnWait "./output/hello_world"

@@ -18,8 +18,8 @@ import TypeChecker.TypeCheckerIr (Ident (..))
   An easy way to actually "compile" this output is to
   Simply pipe it to LLI
 -}
-generateCode :: MIR.Program -> Err String
-generateCode (MIR.Program scs) = do
+generateCode :: MIR.Program -> Bool -> Err String
+generateCode (MIR.Program scs) addGc = do
   let tree = filter (not . detectPrelude) (sortBy lowData scs)
   let codegen = initCodeGenerator tree
   llvmIrToString . instructions <$> execStateT (compileScs tree) codegen

@@ -29,5 +29,5 @@ compileClang =
             , "-"
             ]
 
-compile :: String -> IO String
-compile s = optimize s >>= compileClang
+compile :: String -> Bool -> IO String
+compile s addGc = optimize s >>= compileClang
