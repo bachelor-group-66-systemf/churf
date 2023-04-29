@@ -1,11 +1,9 @@
-data Maybe () where {
+data Maybe () where
     Just : Int -> Maybe () 
     Nothing : Maybe () 
-};
 
-demoFunc x = case x of {
-    Just x => x + 24;
-    Nothing => 0;
-};
+demoFunc x = case x of
+    Just x => x + 24
+    Nothing => 0
 
-main = demoFunc Nothing ;
+main = demoFunc Nothing
