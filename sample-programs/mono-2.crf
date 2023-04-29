@@ -1,13 +1,16 @@
-data Either(a b) where
-    Left: a -> Either (a b)
-    Right: b -> Either (a b)
+data Either (a b) where
+    Left  : a -> Either (a b)
+    Right : b -> Either (a b)
 
+unwrapLeft : Either (a b) -> a
 unwrapLeft x = case x of
     Left y => y
 
+unwrapRight : Either (a b) -> b
 unwrapRight x = case x of
     Right y => y
 
+wow : Either (Int Char)
 wow = Left 5
 
 main = unwrapLeft wow
