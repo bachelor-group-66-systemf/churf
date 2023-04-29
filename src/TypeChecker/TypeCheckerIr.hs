@@ -191,5 +191,6 @@ type Inj = Inj' Type
 type Exp = Exp' Type
 type ExpT = ExpT' Type
 type Id = Id' Type
+pattern TVar' s = TVar (MkTVar s)
 pattern DBind' id vars expt = DBind (Bind id vars expt)
 pattern DData' typ injs = DData (Data typ injs)
