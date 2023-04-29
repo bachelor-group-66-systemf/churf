@@ -34,7 +34,7 @@ executable language
       Renamer.Renamer
       TypeChecker.TypeChecker
       TypeChecker.TypeCheckerHm
-      TypeChecker.TypeCheckerBidir
+      -- TypeChecker.TypeCheckerBidir
       TypeChecker.TypeCheckerIr
       TypeChecker.RemoveTEVar
       LambdaLifter
