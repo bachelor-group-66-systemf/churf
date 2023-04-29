@@ -28,17 +28,6 @@ lambdaLift (Program ds) = Program (datatypes ++ binds)
                                        _       -> False
     binds = map DBind $ (collectScs . abstract . freeVars) [b | DBind b <- ds]
 
--- lambdaLift (Program defs) = trace (printTree abst) $ Program $ datatypes ++ ll binds
---   where
---     abst = abstract frees
---     frees = freeVars [b | DBind b@(Bind (Ident s, _) _ _) <- binds, s == "f"]
---
---     ll = map DBind . collectScs . abstract . freeVars . map (\(DBind b) -> b)
---     (binds, datatypes) = partition isBind defs
---     isBind = \case
---       DBind _ -> True
---       _       -> False
-
 -- | Annotate free variables
 freeVars :: [Bind] -> [ABind]
 freeVars binds = [ let ae  = freeVarsExp [] e
@@ -172,9 +161,9 @@ abstractAnnExp Ann {frees, term = (annae, typ) } = case annae of
     AAbs x annae' -> do
         i <- nextNumber
         rhs <- abstractAnnExp annae''
-        let sc_name = Ident ("sc_" ++ show i)
-            sc      = (ELet (Bind (sc_name, typ) vars rhs) (EVar sc_name, typ), typ)
-        pure $ foldl applyFree sc frees
+        let sc_name  = Ident ("sc_" ++ show i)
+            e@(_, t) = foldl applyFree (EVar sc_name, typ) frees
+        pure (ELet (Bind (sc_name, typ) vars rhs) e ,t)
 
       where
         vars = frees <| (x, t_x) <|| ys

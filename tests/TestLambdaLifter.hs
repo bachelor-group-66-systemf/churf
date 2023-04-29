@@ -58,49 +58,41 @@ abs_1 = undefined
 
 
 
-runPrintFree = print $ freeVarsExp [] (EAbs "x" (EVar "x", TVar' "a"), TVar' "a")
-
+runFreeVars = either putStrLn print (runFree s2)
 runAbstract = either putStrLn (putStrLn . printTree) (runAbs s2)
-  where
-    s = unlines [ "add : Int -> Int -> Int"
-                , "f : Int -> Int -> Int"
-                , "f x y = add x y"
-                , "f = \\x. (\\y. add x y)"
-                ]
-
-    s2 = unlines [ "data List (a) where"
-                 , "    Nil  : List (a)"
-                 , "    Cons : a -> List (a) -> List (a)"
-                 , "map : (a -> b) -> List (a) -> List (b)"
-                 , "add : Int -> Int -> Int"
-
-                 , "f : List (Int)"
-                 , "f = (\\x.\\ys. map (\\y. add y x) ys) 4 (Cons 1 (Cons 2 Nil))"
-                 ]
+runCollect = either putStrLn (putStrLn . printTree) (run s2)
 
 
-runCollect = either putStrLn (putStrLn . printTree) (run s)
-  where
-    s = unlines [ "data List (a) where"
-                , "    Nil  : List (a)"
-                , "    Cons : a -> List (a) -> List (a)"
-                , "add : Int -> Int -> Int"
-                , "map : (a -> b) -> List (a) -> List (b)"
-                , "map f xs = case xs of"
-                , "    Nil       => Nil"
-                , "    Cons x xs => Cons (f x) (map f xs)"
+s1 = unlines [ "add : Int -> Int -> Int"
+             , "f : Int -> Int -> Int"
+             , "f x y = add x y"
+             , "f = \\x. (\\y. add x y)"
+             ]
 
-                , "f : List (Int)"
-                , "f = (\\x.\\ys. map (\\y. add y x) ys) 4 (Cons 1 (Cons 2 Nil))"
-                ]
+s2 = unlines [ "data List (a) where"
+             , "    Nil  : List (a)"
+             , "    Cons : a -> List (a) -> List (a)"
+             , "add : Int -> Int -> Int"
+             , "map : (a -> b) -> List (a) -> List (b)"
+          -- , "map f xs = case xs of"
+          -- , "    Nil       => Nil"
+          -- , "    Cons x xs => Cons (f x) (map f xs)"
+
+             , "f : List (Int)"
+             , "f = (\\x.\\ys. map (\\y. add y x) ys) 4 (Cons 1 (Cons 2 Nil))"
+             ]
+
+s3 = "main = (\\plussq. (\\f. f (f 0)) (plussq 3)) (\\x. \\y. y + x + x)"
+
 
 
 run = fmap collectScs . runAbs
 
-runAbs s = do
-  Program ds <- run' s
-  pure $ (abstract . freeVars) [b | DBind b <- ds]
+runAbs = fmap abstract . runFree
 
+runFree s = do
+  Program ds <- run' s
+  pure $ freeVars [b | DBind b <- ds]
 
 run' =   fmap removeForall
       . reportTEVar
