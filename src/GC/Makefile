@@ -43,10 +43,10 @@ game:
 wrapper_test:
 	rm -f lib/event.o lib/profiler.o lib/heap.o lib/coll.a tests/wrapper_test.out
 # compile object files
-	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -O3 -g -c -o lib/event.o lib/event.cpp -fPIC
-	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -O3 -g -c -o lib/profiler.o lib/profiler.cpp -fPIC
-	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -O3 -g -c -o lib/heap.o lib/heap.cpp -fPIC
-	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -O3 -g -c -o lib/cheap.o lib/cheap.cpp -fPIC
+	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -g -c -o lib/event.o lib/event.cpp -fPIC
+	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -g -c -o lib/profiler.o lib/profiler.cpp -fPIC
+	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -g -c -o lib/heap.o lib/heap.cpp -fPIC
+	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -g -c -o lib/cheap.o lib/cheap.cpp -fPIC
 # compile object files into library
 	ar rcs lib/gcoll.a lib/event.o lib/profiler.o lib/heap.o lib/cheap.o
 	clang -stdlib=libc++ $(WFLAGS) $(LIB_INCL) -o tests/wrapper_test.out tests/wrapper_test.c lib/gcoll.a -lstdc++
@@ -75,6 +75,12 @@ static_lib:
 # create test program
 static_lib_test: static_lib
 	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -o tests/extern_lib.out tests/extern_lib.cpp lib/gcoll.a
+
+alloc_free_list: static_lib
+	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -o tests/alloc_fl.out tests/alloc_free_list.cpp lib/gcoll.a
+
+linked_list_test: static_lib
+	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -o tests/linkedlist.out tests/linkedlist.cpp lib/gcoll.a
 
 wrapper:
 # remove old files 
