@@ -16,7 +16,7 @@ namespace GC {
     {
         FunctionCalls   = (GC::AllocStart | GC::CollectStart | GC::MarkStart | GC::SweepStart),
         ChunkOps        = (GC::ChunkMarked | GC::ChunkSwept | GC::ChunkFreed | GC::NewChunk | GC::ReusedChunk),
-        AllOps          = ~0
+        AllOps          = 0xFFFFFF
     };
 
     struct ProfilerEvent

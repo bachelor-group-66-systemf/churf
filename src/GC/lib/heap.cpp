@@ -43,6 +43,11 @@ namespace GC
 		heap.m_heap_top = heap.m_heap;
 	}
 
+	void Heap::set_profiler_log_options(RecordOption flags)
+	{
+		Profiler::set_log_options(flags);
+	}
+
 	/**
 	 * Disposes the heap and the profiler at program exit
 	 * which also triggers a heap log file dumped if the
