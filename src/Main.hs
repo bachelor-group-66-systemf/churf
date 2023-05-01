@@ -134,6 +134,7 @@ main' opts s =
             check <- doesPathExist "output"
             when check (removeDirectoryRecursive "output")
             createDirectory "output"
+            createDirectory "output/logs"
             when opts.debug $ do
                 writeFile "output/llvm.ll" generatedCode
                 debugDotViz
