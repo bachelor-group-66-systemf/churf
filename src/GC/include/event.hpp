@@ -1,9 +1,6 @@
 #pragma once
 
 #include <ctime>
-#include <iostream>
-#include <list>
-#include <time.h>
 
 #include "chunk.hpp"
 
@@ -14,16 +11,18 @@ namespace GC
     */
     enum GCEventType
     {
-        HeapInit,
-        AllocStart,
-        CollectStart,
-        MarkStart,
-        ChunkMarked,
-        ChunkSwept,
-        ChunkFreed,
-        NewChunk,
-        ReusedChunk,
-        ProfilerDispose
+        HeapInit        = 1 << 0,
+        AllocStart      = 1 << 1,
+        CollectStart    = 1 << 2,
+        MarkStart       = 1 << 3,
+        SweepStart      = 1 << 4,
+        ChunkMarked     = 1 << 5,
+        ChunkSwept      = 1 << 6,
+        ChunkFreed      = 1 << 7,
+        NewChunk        = 1 << 8,
+        ReusedChunk     = 1 << 9,
+        ProfilerDispose = 1 << 10,
+        FreeStart       = 1 << 11
     };
 
     /**

@@ -7,9 +7,9 @@
 extern "C" {
 #endif
 
-// #define DEBUG
+#define WRAPPER_DEBUG
 
-#ifdef DEBUG
+#ifdef WRAPPER_DEBUG
 typedef struct cheap
 {
     void *obj;
@@ -19,11 +19,15 @@ struct cheap;
 typedef struct cheap cheap_t;
 #endif
 
+#define FuncCallsOnly   0x1E
+#define ChunkOpsOnly    0x3E0
+
 cheap_t *cheap_the();
 void cheap_init();
 void cheap_dispose();
 void *cheap_alloc(unsigned long size);
 void cheap_set_profiler(cheap_t *cheap, bool mode);
+void cheap_profiler_log_options(cheap_t *cheap, unsigned long flag);
 
 #ifdef __cplusplus
 }
