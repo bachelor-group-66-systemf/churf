@@ -175,6 +175,7 @@ instance Print Type where
     prt i = \case
         TLit uident -> prPrec i 1 (concatD [prt 0 uident])
         TFun type_1 type_2 -> prPrec i 0 (concatD [prt 1 type_1, doc (showString "->"), prt 0 type_2])
+        TData uident types -> prPrec i 1 (concatD [prt 0 uident, doc (showString "("), prt 0 types, doc (showString ")")])
 
 instance Print Lit where
     prt i = \case

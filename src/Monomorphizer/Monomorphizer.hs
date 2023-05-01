@@ -64,7 +64,7 @@ Binds, Polymorphic Data types (monomorphized in a later step) and
 Marked bind, which means that it is in the process of monomorphization
 and should not be monomorphized again.
 -}
-data Outputted = Marked | Complete M.Bind | Data M.Type T.Data
+data Outputted = Marked | Complete M.Bind | Data M.Type T.Data deriving (Show)
 
 -- | Static environment.
 data Env = Env
@@ -214,6 +214,7 @@ morphExp expectedType exp = case exp of
     T.ELit lit -> return $ M.ELit (convertLit lit)
     -- Constructor
     T.EInj ident -> do
+        morphCons expectedType ident
         return $ M.EVar ident
     T.EApp (e1, _t1) (e2, t2) -> do
         t2' <- getMonoFromPoly t2
@@ -234,6 +235,8 @@ morphExp expectedType exp = case exp of
         bs' <- mapM morphBranch bs
         exp' <- morphExp t' exp
         return $ M.ECase (exp', t') (catMaybes bs')
+    -- Ideally constructors should be EInj, though this code handles them
+    -- as well.
     T.EVar ident -> do
         isLocal <- localExists ident
         if isLocal

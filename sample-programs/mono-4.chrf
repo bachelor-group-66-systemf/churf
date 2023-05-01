@@ -1,0 +1,12 @@
+data Either (a b) where
+    Left  : a -> Either (a b)
+    Right : b -> Either (a b)
+
+unwrap : Either (a a) -> a
+unwrap x = case x of
+    Left y  => y
+    Right y => y
+
+main : Int
+main = unwrap (Left 3)
+
