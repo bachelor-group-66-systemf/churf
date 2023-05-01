@@ -168,12 +168,12 @@ prelude :: String
 prelude =
     unlines
         [ "\n"
-        , "customHelperFunctionCuzPoorImplementation : Bool () -> Int -> Bool ()"
-        , "customHelperFunctionCuzPoorImplementation x y = x"
+        --, "customHelperFunctionCuzPoorImplementation : Bool () -> Int -> Bool ()"
+        --, "customHelperFunctionCuzPoorImplementation x y = x"
         , "data Bool () where"
         , "    False : Bool ()"
         , "    True  : Bool ()"
         , "lt : Int -> Int -> Bool ()"
-        , "lt x y = customHelperFunctionCuzPoorImplementation True (x + y)"
+        , "lt x y = True"
         , "\n"
         ]
