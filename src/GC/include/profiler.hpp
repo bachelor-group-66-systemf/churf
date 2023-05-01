@@ -43,6 +43,11 @@ namespace GC {
         std::vector<ProfilerEvent *> m_prof_events;
         RecordOption flags;
 
+        std::chrono::microseconds alloc_time {0};
+        // size_t alloc_counts {0};
+        std::chrono::microseconds collect_time {0};
+        // size_t collect_counts {0};
+
         static void record_data(GCEvent *type);
         std::ofstream create_file_stream();
         std::string get_log_folder();
@@ -60,6 +65,7 @@ namespace GC {
         static void record(GCEventType type);
         static void record(GCEventType type, size_t size);
         static void record(GCEventType type, Chunk *chunk);
+        static void record(GCEventType type, std::chrono::microseconds time);
         static void dispose();
     };
 }

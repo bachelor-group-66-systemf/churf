@@ -2,8 +2,12 @@
 #include <stdexcept>
 #include <stdlib.h>
 #include <vector>
+#include <chrono>
 
 #include "heap.hpp"
+
+#define time_now	std::chrono::high_resolution_clock::now()
+#define to_us		std::chrono::duration_cast<std::chrono::microseconds>
 
 using std::cout, std::endl, std::vector, std::hex, std::dec;
 
@@ -51,131 +55,6 @@ namespace GC
 			Profiler::dispose();
 	}
 
-	void *Heap::alloc_free_list(size_t size)
-	{
-		// Singleton
-		Heap &heap = Heap::the();
-		bool profiler_enabled = heap.profiler_enabled();
-
-		if (profiler_enabled)
-			Profiler::record(AllocStart, size);
-
-		if (size == 0)
-		{
-			cout << "Heap: Cannot alloc 0B. No bytes allocated." << endl;
-			return nullptr;
-		}
-
-		// Try to find a fragmented section to recycle
-		Chunk *recycle = nullptr;
-		auto iter = heap.m_free_list.begin();
-		while (iter != heap.m_free_list.end())
-		{
-			if ((*iter)->m_size >= size)
-			{
-				recycle = *iter;
-				heap.m_free_list.erase(++iter);
-				break;
-			}
-			iter++;
-		}
-
-		// If memory fragment was found
-		if (recycle != nullptr)
-		{
-			heap.m_size += size;
-			
-			// If fragment is larger than request, split it
-			if (recycle->m_size > size)
-			{
-				auto new_part = new Chunk(size, recycle->m_start);
-				auto complement = new Chunk(
-					recycle->m_size - size,
-					(recycle->m_start + size)
-				);
-				delete recycle;
-				// TODO: add complement to free_list
-				heap.add_to_free_list(complement);
-
-				heap.m_allocated_chunks.push_back(new_part);
-
-				return (void *)(new_part->m_start);
-			}
-			
-			heap.m_allocated_chunks.push_back(recycle);
-			return (void *)(recycle->m_start);
-		}
-
-		uintptr_t *max_size = (uintptr_t *)(heap.m_heap + HEAP_SIZE);
-		uintptr_t *new_size = (uintptr_t *)(heap.m_heap_top + size);
-
-		if (new_size <= max_size)
-		{
-			auto new_chunk = new Chunk(size, (uintptr_t *)(heap.m_heap_top));
-			heap.m_allocated_chunks.push_back(new_chunk);
-
-			if (profiler_enabled)
-				Profiler::record(NewChunk, new_chunk);
-
-			heap.m_heap_top += size;
-			heap.m_size += size;
-		}
-
-		// Only throws if the allocation failed
-		throw std::runtime_error(std::string("Error: Heap out of memory"));
-	}
-
-	void Heap::add_to_free_list(Chunk *chunk)
-	{
-		Chunk *curr;
-		auto iter = m_free_list.begin();
-		uintptr_t *prev_start = nullptr;
-		uintptr_t *prev_end = nullptr;
-		
-		while (iter != m_free_list.end())
-		{
-			curr = *iter;
-
-			// If the curr chunk is aligned before param
-			if (curr->m_start + curr->m_size == chunk->m_start)
-			{
-				Chunk *merged = new Chunk(
-					curr->m_size + chunk->m_size,
-					curr->m_start
-				);
-				iter = m_free_list.erase(iter);
-				m_free_list.insert(iter, merged);
-				return;
-			}
-
-			// If the curr chunk is aligned after param
-			if (chunk->m_start + chunk->m_size == curr->m_start)
-			{
-				Chunk *merged = new Chunk(
-					curr->m_size + chunk->m_size,
-					chunk->m_start
-				);
-				iter = m_free_list.erase(iter);
-				m_free_list.insert(iter, merged);
-				return;
-			}
-			
-			// If the first chunk starts after param
-			if (prev_start == nullptr && curr->m_start > chunk->m_start)
-			{
-				m_free_list.insert(iter, chunk);
-				return;
-			}
-
-			prev_start = curr->m_start;
-			prev_end = prev_start + curr->m_size;
-			iter++;
-		}
-
-		// This is only reachable if the chunk is at the end
-		m_free_list.push_back(chunk);
-	}
-
 	/**
 	 * Allocates a given amount of bytes on the heap.
 	 *
@@ -187,6 +66,7 @@ namespace GC
 	 */
 	void *Heap::alloc(size_t size)
 	{
+		auto a_start = time_now;
 		// Singleton
 		Heap &heap = Heap::the();
 		bool profiler_enabled = heap.profiler_enabled();
@@ -202,6 +82,8 @@ namespace GC
 
 		if (heap.m_size + size > HEAP_SIZE)
 		{
+			// auto a_ms = to_us(c_start - a_start);
+			// Profiler::record(AllocStart, a_ms);
 			heap.collect();
 			// If memory is not enough after collect, crash with OOM error
 			if (heap.m_size + size > HEAP_SIZE)
@@ -218,6 +100,9 @@ namespace GC
 		{
 			if (profiler_enabled)
 				Profiler::record(ReusedChunk, reused_chunk);
+			auto a_end = time_now;
+			auto a_ms = to_us(a_end - a_start);
+			Profiler::record(AllocStart, a_ms);
 			return static_cast<void *>(reused_chunk->m_start);
 		}
 
@@ -231,6 +116,9 @@ namespace GC
 		if (profiler_enabled)
 			Profiler::record(NewChunk, new_chunk);
 
+		auto a_end = time_now;
+		auto a_ms = to_us(a_end - a_start);
+		Profiler::record(AllocStart, a_ms);
 		return new_chunk->m_start;
 	}
 
@@ -306,6 +194,8 @@ namespace GC
 	 */
 	void Heap::collect()
 	{
+		auto c_start = time_now;
+
 		Heap &heap = Heap::the();
 
 		if (heap.profiler_enabled())
@@ -325,6 +215,10 @@ namespace GC
 		sweep(heap);
 
 		free(heap);
+		
+		auto c_end = time_now;
+		
+		Profiler::record(CollectStart, to_us(c_end - c_start));
 	}
 
 	/**

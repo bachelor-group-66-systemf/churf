@@ -52,22 +52,10 @@ void clear_list(Node *head)
     }
 }
 
-void run_list_test1()
+void run_list_test()
 {
-    Node *list_a = create_list(10);
-    print_list(list_a);
-}
-
-void run_list_test2()
-{
-    Node *list_b = create_list(10);
-    print_list(list_b);
-}
-
-void run_list_test3()
-{
-    Node *list_c = create_list(10);
-    print_list(list_c);
+    Node *list = create_list(10);
+    print_list(list);
 }
 
 int main()
@@ -77,9 +65,8 @@ int main()
     heap.set_profiler(true);
     GC::Profiler::set_log_options(GC::FunctionCalls);
 
-    run_list_test1();
-    run_list_test2();
-    run_list_test3();
+    for (int i = 0; i < 10; i++)
+        run_list_test();
 
     GC::Heap::dispose();
 
