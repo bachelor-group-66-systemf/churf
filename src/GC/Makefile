@@ -18,7 +18,7 @@ file:
 heap:
 	$(CC) $(WFLAGS) $(STDFLAGS) $(LIB_INCL) lib/heap.cpp
 
-h_test:
+h_test: static_lib
 	rm -f tests/h_test.out
 #	$(CC) $(WFLAGS) $(STDFLAGS) $(LIB_INCL) tests/h_test.cpp lib/heap.cpp lib/profiler.cpp lib/event.cpp -o tests/h_test.out
 	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -O3 -g -o tests/h_test.out tests/h_test.cpp lib/gcoll.a

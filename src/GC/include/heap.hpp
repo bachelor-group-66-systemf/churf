@@ -7,8 +7,8 @@
 #include "chunk.hpp"
 #include "profiler.hpp"
 
-#define HEAP_SIZE 160 //65536
-#define FREE_THRESH (uint) 0
+#define HEAP_SIZE 65536
+#define FREE_THRESH (uint) 100
 #define HEAP_DEBUG
 
 namespace GC
@@ -69,9 +69,6 @@ namespace GC
 		// Temporary
 		Chunk *try_recycle_chunks_new(size_t size);
 		void free_overlap_new(Heap &heap);
-#ifndef HEAP_DEBUG
-		void add_to_free_list(Chunk *chunk);
-#endif
 	public:
 		/**
 		 * These are the only five functions which are exposed
@@ -85,7 +82,6 @@ namespace GC
 		static void init();
 		static void dispose();
 		static void *alloc(size_t size);
-		static void *alloc_free_list(size_t size);
 		void set_profiler(bool mode);
 
 		// Stop the compiler from generating copy-methods
@@ -93,7 +89,6 @@ namespace GC
 		Heap& operator=(Heap const&) = delete;
 
 #ifdef HEAP_DEBUG
-		void add_to_free_list(Chunk *chunk);
 		void collect(CollectOption flags); // conditional collection
 		void check_init();		  // print dummy things
 		void print_contents();	  // print dummy things

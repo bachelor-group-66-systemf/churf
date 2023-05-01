@@ -114,12 +114,26 @@ namespace GC
         // profiler.m_events.push_back(event);
     }
 
+    void Profiler::record(GCEventType type, std::chrono::microseconds time)
+    {
+        Profiler &prof = Profiler::the();
+        if (type == AllocStart)
+        {
+            prof.alloc_time += time;
+        }
+        else if (type == CollectStart)
+        {
+            prof.collect_time += time;
+        }
+    }
+
     void Profiler::dump_prof_trace()
     {
         Profiler &prof = Profiler::the();
         prof.m_prof_events.push_back(prof.m_last_prof_event);
         auto start = prof.m_prof_events.begin();
         auto end = prof.m_prof_events.end();
+        int allocs = 0, collects = 0;
 
         char buffer[22];
         std::ofstream fstr = prof.create_file_stream();
@@ -128,11 +142,22 @@ namespace GC
         {
             auto event = *start++;
 
+            if (event->m_type == AllocStart)
+                allocs += event->m_n;
+            else if (event->m_type == CollectStart)
+                collects += event->m_n;
+
             fstr << "\n--------------------------------\n"
-                << Profiler::type_to_string(event->m_type)
-                << "\nTimes:\t" << event->m_n; 
+                << Profiler::type_to_string(event->m_type) << " "
+                << event->m_n << " times:"; 
         }
         fstr << "\n--------------------------------";
+
+        fstr << "\n\nTime spent on allocations:\t" << prof.alloc_time.count() << " microseconds"
+            << "\nAllocation cycles:\t" << allocs
+            << "\nTime spent on collections:\t" << prof.collect_time.count() << " microseconds"
+            << "\nCollection cycles:\t" << collects
+            << "\n--------------------------------";
     }
 
     /**
