@@ -11,8 +11,8 @@ pkgs.haskellPackages.developPackage {
                   ghc 
                   jasmin 
                   llvmPackages_15.libllvm 
-                  clang
 #                  texlive.combined.scheme-full
+                  graphviz
                 ])
     ++
     (with pkgs.haskellPackages; [ cabal-install
