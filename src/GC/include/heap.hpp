@@ -7,8 +7,8 @@
 #include "chunk.hpp"
 #include "profiler.hpp"
 
-#define HEAP_SIZE 65536
-#define FREE_THRESH (uint) 100
+#define HEAP_SIZE 240240240
+#define FREE_THRESH (uint)100
 #define HEAP_DEBUG
 
 namespace GC
@@ -16,14 +16,15 @@ namespace GC
 	/**
 	 * Flags for the collect overlead for conditional
 	 * collection (mark/sweep/free/all).
-	*/
-	enum CollectOption {
-		MARK		= 1 << 0,
-		SWEEP		= 1 << 1,
-		MARK_SWEEP 	= 1 << 2,
-		FREE		= 1 << 3,
-		COLLECT_ALL	= 0b1111 // all flags above
-	}; 
+	 */
+	enum CollectOption
+	{
+		MARK = 1 << 0,
+		SWEEP = 1 << 1,
+		MARK_SWEEP = 1 << 2,
+		FREE = 1 << 3,
+		COLLECT_ALL = 0b1111 // all flags above
+	};
 
 	/**
 	 * The heap class to represent the heap for the
@@ -32,7 +33,7 @@ namespace GC
 	 * inside the heap class. The heap is represented
 	 * by a char array of size 65536 and can enable
 	 * a profiler to track the actions on the heap.
-	*/
+	 */
 	class Heap
 	{
 	private:
@@ -44,11 +45,11 @@ namespace GC
 		}
 
 		char *const m_heap;
-		size_t m_size {0};
-		char *m_heap_top {nullptr};
+		size_t m_size{0};
+		char *m_heap_top{nullptr};
 		// static Heap *m_instance {nullptr};
-		uintptr_t *m_stack_top {nullptr};
-		bool m_profiler_enable {false};
+		uintptr_t *m_stack_top{nullptr};
+		bool m_profiler_enable{false};
 
 		std::vector<Chunk *> m_allocated_chunks;
 		std::vector<Chunk *> m_freed_chunks;
@@ -69,6 +70,7 @@ namespace GC
 		// Temporary
 		Chunk *try_recycle_chunks_new(size_t size);
 		void free_overlap_new(Heap &heap);
+
 	public:
 		/**
 		 * These are the only five functions which are exposed
@@ -86,13 +88,13 @@ namespace GC
 		void set_profiler_log_options(RecordOption flags);
 
 		// Stop the compiler from generating copy-methods
-		Heap(Heap const&) = delete;
-		Heap& operator=(Heap const&) = delete;
+		Heap(Heap const &) = delete;
+		Heap &operator=(Heap const &) = delete;
 
 #ifdef HEAP_DEBUG
-		void collect(CollectOption flags); // conditional collection
-		void check_init();		  // print dummy things
-		void print_contents();	  // print dummy things
+		void collect(CollectOption flags);		 // conditional collection
+		void check_init();						 // print dummy things
+		void print_contents();					 // print dummy things
 		void print_allocated_chunks(Heap *heap); // print the contents in m_allocated_chunks
 		void print_summary();
 #endif

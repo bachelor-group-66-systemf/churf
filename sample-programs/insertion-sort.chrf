@@ -16,8 +16,15 @@ insertionSort xs = case xs of
         Nil => xs
     Nil => Nil
 
-main = head (insertionSort (Cons 5 (Cons 4 (Cons 3 (Cons 2 (Cons 1 Nil))))))
+main = head (insertionSort (revRange 1250))
 
 head xs = case xs of
     Cons x _ => x
 
+revRange x = case x of 
+    0 => Cons x Nil
+    x => Cons x (revRange (x + minusOne))
+
+-- represents minus one :)
+minusOne : Int ;
+minusOne = 9223372036854775807 + 9223372036854775807 + 1;

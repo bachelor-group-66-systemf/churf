@@ -1,42 +1,39 @@
 module Codegen.CompilerState where
 
-import Auxiliary (snoc)
-import Codegen.Auxillary (type2LlvmType, typeByteSize)
-import Codegen.LlvmIr as LIR (LLVMIr (UnsafeRaw), LLVMType)
-import Control.Monad.State (
-    StateT,
-    gets,
-    modify,
- )
-import Data.Map (Map)
-import Data.Map qualified as Map
-import Grammar.ErrM (Err)
-import Monomorphizer.MonomorphizerIr as MIR
-import TypeChecker.TypeCheckerIr qualified as TIR
+import           Auxiliary                     (snoc)
+import           Codegen.Auxillary             (type2LlvmType, typeByteSize)
+import           Codegen.LlvmIr                as LIR (LLVMIr (UnsafeRaw),
+                                                       LLVMType)
+import           Control.Monad.State           (StateT, gets, modify)
+import           Data.Map                      (Map)
+import qualified Data.Map                      as Map
+import           Grammar.ErrM                  (Err)
+import           Monomorphizer.MonomorphizerIr as MIR
+import qualified TypeChecker.TypeCheckerIr     as TIR
 
 -- | The record used as the code generator state
 data CodeGenerator = CodeGenerator
-    { instructions :: [LLVMIr]
-    , functions :: Map MIR.Id FunctionInfo
-    , customTypes :: Map LLVMType Integer
-    , constructors :: Map TIR.Ident ConstructorInfo
+    { instructions  :: [LLVMIr]
+    , functions     :: Map MIR.Id FunctionInfo
+    , customTypes   :: Map LLVMType Integer
+    , constructors  :: Map TIR.Ident ConstructorInfo
     , variableCount :: Integer
-    , labelCount :: Integer
-    , gcEnabled :: Bool
+    , labelCount    :: Integer
+    , gcEnabled     :: Bool
     }
 
 -- | A state type synonym
 type CompilerState a = StateT CodeGenerator Err a
 
 data FunctionInfo = FunctionInfo
-    { numArgs :: Int
+    { numArgs   :: Int
     , arguments :: [Id]
     }
     deriving (Show)
 data ConstructorInfo = ConstructorInfo
-    { numArgsCI :: Int
-    , argumentsCI :: [Id]
-    , numCI :: Integer
+    { numArgsCI    :: Int
+    , argumentsCI  :: [Id]
+    , numCI        :: Integer
     , returnTypeCI :: MIR.Type
     }
     deriving (Show)
@@ -146,4 +143,5 @@ gcStart =
     , UnsafeRaw "declare external void @cheap_dispose()\n"
     , UnsafeRaw "declare external ptr @cheap_the()\n"
     , UnsafeRaw "declare external void @cheap_set_profiler(ptr, i1)\n"
+    , UnsafeRaw "declare external void @cheap_profiler_log_options(ptr, i64)\n"
     ]

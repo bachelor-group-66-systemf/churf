@@ -1,9 +1,6 @@
 module Compiler (compile) where
 
-import System.Process.Extra (
-    readCreateProcess,
-    shell,
- )
+import           System.Process.Extra (readCreateProcess, shell)
 
 -- spawnWait s = spawnCommand s >>= \s >>= waitForProcess
 
@@ -31,7 +28,9 @@ compileClang True =
             , "src/GC/lib/event.cpp"
             , "src/GC/lib/heap.cpp"
             , "src/GC/lib/profiler.cpp"
-            , "-Wall -Wextra -g -std=gnu++20 -stdlib=libstdc++ -O3"
+            , "-Wall -Wextra -g -std=gnu++20 -stdlib=libstdc++"
+            , "-O3"
+            --, "-tailcallopt"
             , "-Isrc/GC/include"
             , "-x"
             , "ir" -- , "-Lsrc/GC/lib -l:gcoll.a"
