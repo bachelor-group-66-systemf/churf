@@ -21,23 +21,23 @@ void test_init()
 
 /* Uncomment ONLY if run with DEBUG defined in cheap.h */
 
-// cheap_t *test_the()
-// {
-//     printf("----- IN TEST_THE -----------------------------\n");
+cheap_t *test_the()
+{
+    printf("----- IN TEST_THE -----------------------------\n");
 
-//     cheap_t *fst_heap = cheap_the();
+    cheap_t *fst_heap = cheap_the();
 
-//     printf("Heap 1:\t%p\n", fst_heap->obj);
+    printf("Heap 1:\t%p\n", fst_heap->obj);
 
-//     cheap_t *snd_heap = cheap_the();
+    cheap_t *snd_heap = cheap_the();
 
-//     printf("Heap 2:\t%p\n", snd_heap->obj);
+    printf("Heap 2:\t%p\n", snd_heap->obj);
 
-//     printf("----- EXIT TEST_THE ---------------------------\n");
+    printf("----- EXIT TEST_THE ---------------------------\n");
 
-//     free(snd_heap);
-//     return fst_heap;
-// }
+    free(snd_heap);
+    return fst_heap;
+}
 
 void test_profiler(cheap_t *heap)
 {
@@ -45,6 +45,7 @@ void test_profiler(cheap_t *heap)
 
     cheap_set_profiler(heap, false);
     cheap_set_profiler(heap, true);
+    cheap_profiler_log_options(heap, FuncCallsOnly);
 
     printf("----- EXIT TEST_PROFILER ----------------------\n");
 }
@@ -79,8 +80,8 @@ int main()
     test_init();
 
     /* Uncomment ONLY if run with DEBUG defined in cheap.h */
-    // cheap_t *heap = test_the();
-    // test_profiler(heap);
+    cheap_t *heap = test_the();
+    test_profiler(heap);
 
     Object *o = test_alloc();
     printf("Object size: %lu\n", sizeof(Object));

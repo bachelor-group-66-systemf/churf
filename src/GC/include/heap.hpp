@@ -83,6 +83,7 @@ namespace GC
 		static void dispose();
 		static void *alloc(size_t size);
 		void set_profiler(bool mode);
+		void set_profiler_log_options(RecordOption flags);
 
 		// Stop the compiler from generating copy-methods
 		Heap(Heap const&) = delete;
