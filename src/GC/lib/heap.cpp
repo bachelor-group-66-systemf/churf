@@ -36,6 +36,7 @@ namespace GC
 // clang complains because arg for __b_f_a is not 0 which is "unsafe"
 #pragma clang diagnostic ignored "-Wframe-address"
 		heap.m_stack_top = static_cast<uintptr_t *>(__builtin_frame_address(1));
+		heap.m_heap_top = heap.m_heap;
 	}
 
 	/**
@@ -48,6 +49,131 @@ namespace GC
 		Heap &heap = Heap::the();
 		if (heap.profiler_enabled())
 			Profiler::dispose();
+	}
+
+	void *Heap::alloc_free_list(size_t size)
+	{
+		// Singleton
+		Heap &heap = Heap::the();
+		bool profiler_enabled = heap.profiler_enabled();
+
+		if (profiler_enabled)
+			Profiler::record(AllocStart, size);
+
+		if (size == 0)
+		{
+			cout << "Heap: Cannot alloc 0B. No bytes allocated." << endl;
+			return nullptr;
+		}
+
+		// Try to find a fragmented section to recycle
+		Chunk *recycle = nullptr;
+		auto iter = heap.m_free_list.begin();
+		while (iter != heap.m_free_list.end())
+		{
+			if ((*iter)->m_size >= size)
+			{
+				recycle = *iter;
+				heap.m_free_list.erase(++iter);
+				break;
+			}
+			iter++;
+		}
+
+		// If memory fragment was found
+		if (recycle != nullptr)
+		{
+			heap.m_size += size;
+			
+			// If fragment is larger than request, split it
+			if (recycle->m_size > size)
+			{
+				auto new_part = new Chunk(size, recycle->m_start);
+				auto complement = new Chunk(
+					recycle->m_size - size,
+					(recycle->m_start + size)
+				);
+				delete recycle;
+				// TODO: add complement to free_list
+				heap.add_to_free_list(complement);
+
+				heap.m_allocated_chunks.push_back(new_part);
+
+				return (void *)(new_part->m_start);
+			}
+			
+			heap.m_allocated_chunks.push_back(recycle);
+			return (void *)(recycle->m_start);
+		}
+
+		uintptr_t *max_size = (uintptr_t *)(heap.m_heap + HEAP_SIZE);
+		uintptr_t *new_size = (uintptr_t *)(heap.m_heap_top + size);
+
+		if (new_size <= max_size)
+		{
+			auto new_chunk = new Chunk(size, (uintptr_t *)(heap.m_heap_top));
+			heap.m_allocated_chunks.push_back(new_chunk);
+
+			if (profiler_enabled)
+				Profiler::record(NewChunk, new_chunk);
+
+			heap.m_heap_top += size;
+			heap.m_size += size;
+		}
+
+		// Only throws if the allocation failed
+		throw std::runtime_error(std::string("Error: Heap out of memory"));
+	}
+
+	void Heap::add_to_free_list(Chunk *chunk)
+	{
+		Chunk *curr;
+		auto iter = m_free_list.begin();
+		uintptr_t *prev_start = nullptr;
+		uintptr_t *prev_end = nullptr;
+		
+		while (iter != m_free_list.end())
+		{
+			curr = *iter;
+
+			// If the curr chunk is aligned before param
+			if (curr->m_start + curr->m_size == chunk->m_start)
+			{
+				Chunk *merged = new Chunk(
+					curr->m_size + chunk->m_size,
+					curr->m_start
+				);
+				iter = m_free_list.erase(iter);
+				m_free_list.insert(iter, merged);
+				return;
+			}
+
+			// If the curr chunk is aligned after param
+			if (chunk->m_start + chunk->m_size == curr->m_start)
+			{
+				Chunk *merged = new Chunk(
+					curr->m_size + chunk->m_size,
+					chunk->m_start
+				);
+				iter = m_free_list.erase(iter);
+				m_free_list.insert(iter, merged);
+				return;
+			}
+			
+			// If the first chunk starts after param
+			if (prev_start == nullptr && curr->m_start > chunk->m_start)
+			{
+				m_free_list.insert(iter, chunk);
+				return;
+			}
+
+			prev_start = curr->m_start;
+			prev_end = prev_start + curr->m_size;
+			iter++;
+		}
+
+		// This is only reachable if the chunk is at the end
+		m_free_list.push_back(chunk);
 	}
 
 	/**
@@ -79,7 +205,11 @@ namespace GC
 			heap.collect();
 			// If memory is not enough after collect, crash with OOM error
 			if (heap.m_size + size > HEAP_SIZE)
+			{
+				if (profiler_enabled)
+					Profiler::dispose();
 				throw std::runtime_error(std::string("Error: Heap out of memory"));
+			}
 		}
 
 		// If a chunk was recycled, return the old chunk address
@@ -271,8 +401,10 @@ namespace GC
 	 */
 	void Heap::sweep(Heap &heap)
 	{
-		auto iter = heap.m_allocated_chunks.begin();
 		bool profiler_enabled = heap.m_profiler_enable;
+		if (profiler_enabled)
+			Profiler::record(SweepStart);
+		auto iter = heap.m_allocated_chunks.begin();
 		// This cannot "iter != stop", results in seg fault, since the end gets updated, I think.
 		while (iter != heap.m_allocated_chunks.end())
 		{
@@ -292,6 +424,7 @@ namespace GC
 					Profiler::record(ChunkSwept, chunk);
 				heap.m_freed_chunks.push_back(chunk);
 				iter = heap.m_allocated_chunks.erase(iter);
+				heap.m_size -= chunk->m_size;
 			}
 		}
 	}
@@ -311,6 +444,9 @@ namespace GC
 	 */
 	void Heap::free(Heap &heap)
 	{
+		bool profiler_enabled = heap.m_profiler_enable;
+		if (profiler_enabled)
+			Profiler::record(FreeStart);
 		if (heap.m_freed_chunks.size() > FREE_THRESH)
 		{
 			bool profiler_enabled = heap.profiler_enabled();
