@@ -36,7 +36,6 @@ import Control.Monad.Reader (
     Reader,
     asks,
     runReader,
-    when,
  )
 import Control.Monad.State (
     MonadState,
@@ -46,9 +45,9 @@ import Control.Monad.State (
  )
 import Data.Coerce (coerce)
 import Data.Map qualified as Map
-import Data.Maybe (fromJust, catMaybes)
+import Data.Maybe (catMaybes)
 import Data.Set qualified as Set
-import Debug.Trace
+--import Debug.Trace
 import Grammar.Print (printTree)
 
 {- | EnvM is the monad containing the read-only state as well as the
@@ -114,19 +113,21 @@ getMain = asks (\env -> case Map.lookup (T.Ident "main") (input env) of
                         )
 
 {- | Makes a kv pair list of polymorphic to monomorphic mappings, throws runtime
-error when encountering different structures between the two arguments.
+error when encountering different structures between the two arguments. Debug:
+First argument is the name of the bind.
 -}
-mapTypes :: T.Type -> M.Type -> [(Ident, M.Type)]
-mapTypes (T.TLit _) (M.TLit _) = []
-mapTypes (T.TVar (T.MkTVar i1)) tm = [(i1, tm)]
-mapTypes (T.TFun pt1 pt2) (M.TFun mt1 mt2) =
-    mapTypes pt1 mt1
-        ++ mapTypes pt2 mt2
-mapTypes (T.TData tIdent pTs) (M.TData mIdent mTs) =
+mapTypes :: Ident -> T.Type -> M.Type -> [(Ident, M.Type)]
+mapTypes _ident (T.TLit _) (M.TLit _) = []
+mapTypes _ident (T.TVar (T.MkTVar i1)) tm = [(i1, tm)]
+mapTypes ident (T.TFun pt1 pt2) (M.TFun mt1 mt2) =
+    mapTypes ident pt1 mt1
+        ++ mapTypes ident pt2 mt2
+mapTypes ident (T.TData tIdent pTs) (M.TData mIdent mTs) =
     if tIdent /= mIdent
         then error "the data type names of monomorphic and polymorphic data types does not match"
-        else foldl (\xs (p, m) -> mapTypes p m ++ xs) [] (zip pTs mTs)
-mapTypes t1 t2 = error $ "structure of types not the same: '" ++ printTree t1 ++ "', '" ++ printTree t2 ++ "'"
+        else foldl (\xs (p, m) -> mapTypes ident p m ++ xs) [] (zip pTs mTs)
+mapTypes ident t1 t2 = error $ "in bind: '" ++ printTree ident ++ "', " ++
+  "structure of types not the same: '" ++ printTree t1 ++ "', '" ++ printTree t2 ++ "'"
 
 -- | Gets the mapped monomorphic type of a polymorphic type in the current context.
 getMonoFromPoly :: T.Type -> EnvM M.Type
@@ -149,12 +150,12 @@ getMonoFromPoly t = do
 Returns the annotated bind name.
 -}
 morphBind :: M.Type -> T.Bind -> EnvM Ident
-morphBind expectedType b@(T.Bind (Ident str, btype) args (exp, expt)) =
+morphBind expectedType b@(T.Bind (ident, btype) args (exp, expt)) =
     local
         ( \env ->
             env
                 { locals = Set.fromList (map fst args)
-                , polys = Map.fromList (mapTypes btype expectedType)
+                , polys = Map.fromList (mapTypes ident btype expectedType)
                 }
         )
         $ do
@@ -398,7 +399,7 @@ createNewData ((consIdent, consType, polyData) : input) o =
 
 -- | Gets the Data Type of a constructor type (a -> Just a becomes Just a).
 getDataType :: M.Type -> M.Type
-getDataType (M.TFun t1 t2) = getDataType t2
+getDataType (M.TFun _t1 t2) = getDataType t2
 getDataType tData@(M.TData _ _) = tData
 getDataType _ = error "???"
 
