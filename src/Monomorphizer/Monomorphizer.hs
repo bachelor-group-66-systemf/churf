@@ -150,7 +150,10 @@ getMonoFromPoly t = do
 Returns the annotated bind name.
 -}
 morphBind :: M.Type -> T.Bind -> EnvM Ident
-morphBind expectedType b@(T.Bind (ident, btype) args (exp, expt)) =
+morphBind expectedType b@(T.Bind (ident, btype) args (exp, expt)) = do
+    -- The "new name" is used to find out if it is already marked or not.
+    let name' = newFuncName expectedType b
+    bindMarked <- isBindMarked (coerce name')
     local
         ( \env ->
             env
@@ -159,9 +162,6 @@ morphBind expectedType b@(T.Bind (ident, btype) args (exp, expt)) =
                 }
         )
         $ do
-            -- The "new name" is used to find out if it is already marked or not.
-            let name' = newFuncName expectedType b
-            bindMarked <- isBindMarked (coerce name')
             -- Return with right name if already marked
             if bindMarked
                 then return name'
