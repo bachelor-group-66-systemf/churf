@@ -104,7 +104,7 @@ main' opts s =
             file <- readFile s
 
             printToErr "-- Parse Tree -- "
-            parsed <- fromErr . pProgram . resolveLayout True $ myLexer file -- (file ++ prelude)
+            parsed <- fromErr . pProgram . resolveLayout True $ myLexer (file ++ prelude)
             log parsed
 
             printToErr "-- Desugar --"
