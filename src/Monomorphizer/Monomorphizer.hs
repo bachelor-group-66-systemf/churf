@@ -253,7 +253,18 @@ morphExp expectedType exp = case exp of
                         -- New bind to process
                         newBindName <- morphBind expectedType bind'
                         return $ M.EVar (coerce newBindName)
-    T.ELet (T.Bind{}) _ -> error "lets not possible yet"
+    T.ELet (T.Bind (identB, tB) args (expB, tExpB)) (exp, tExp) ->
+      if length args > 0 then error "only constants in lets allowed"
+      else do
+        tB' <- getMonoFromPoly tB
+        tExpB' <- getMonoFromPoly tExpB
+        tExp' <- getMonoFromPoly tExp
+        expB' <- morphExp tExpB' expB
+        exp' <- morphExp tExp' exp
+        return $ M.ELet (M.Bind (identB, tB') [] (expB', tExpB')) (exp', tExp')
+
+-- ELet (Bind' t) (ExpT' t)
+-- Bind (Id' t) [Id' t] (ExpT' t)
 
 -- | Monomorphizes case-of branches.
 morphBranch :: T.Branch -> EnvM (Maybe M.Branch)
