@@ -47,7 +47,6 @@ import Data.Coerce (coerce)
 import Data.Map qualified as Map
 import Data.Maybe (catMaybes)
 import Data.Set qualified as Set
---import Debug.Trace
 import Grammar.Print (printTree)
 
 {- | EnvM is the monad containing the read-only state as well as the
@@ -232,8 +231,8 @@ morphExp expectedType exp = case exp of
         morphExp t' exp
     T.ECase (exp, t) bs -> do
         t' <- getMonoFromPoly t
-        bs' <- mapM morphBranch bs
         exp' <- morphExp t' exp
+        bs' <- mapM morphBranch bs
         return $ M.ECase (exp', t') (catMaybes bs')
     -- Ideally constructors should be EInj, though this code handles them
     -- as well.
@@ -262,9 +261,6 @@ morphExp expectedType exp = case exp of
         expB' <- morphExp tExpB' expB
         exp' <- morphExp tExp' exp
         return $ M.ELet (M.Bind (identB, tB') [] (expB', tExpB')) (exp', tExp')
-
--- ELet (Bind' t) (ExpT' t)
--- Bind (Id' t) [Id' t] (ExpT' t)
 
 -- | Monomorphizes case-of branches.
 morphBranch :: T.Branch -> EnvM (Maybe M.Branch)
