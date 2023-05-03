@@ -163,7 +163,6 @@ checkBind (Bind name args e) = do
     case M.lookup (coerce name) s of
         Just (Just typSig) -> do
             let genInfSig = generalize mempty infSig
-            (trace ("Inferred: " ++ printTree infSig ++ "\nGeneralized inferred: " ++ printTree genInfSig ++ "\nGiven: " ++ printTree typSig ++ "\n") pure ())
             sub <- genInfSig `unify` typSig
             unless
                 (genInfSig <<= typSig)
@@ -289,7 +288,9 @@ algoW = \case
             Nothing -> do
                 sig <- gets sigs
                 case M.lookup (coerce i) sig of
-                    Just (Just t) -> return (nullSubst, (T.EVar $ coerce i, t))
+                    Just (Just t) -> do
+                        t <- freshen t
+                        return (nullSubst, (T.EVar $ coerce i, t))
                     Just Nothing -> do
                         fr <- fresh
                         return (nullSubst, (T.EVar $ coerce i, fr))
@@ -300,7 +301,9 @@ algoW = \case
     EInj i -> do
         constr <- gets injections
         case M.lookup (coerce i) constr of
-            Just t -> return (nullSubst, (T.EVar $ coerce i, t))
+            Just t -> do
+                t <- freshen t
+                return (nullSubst, (T.EVar $ coerce i, t))
             Nothing ->
                 uncatchableErr $ Aux.do
                     "Constructor:"
@@ -344,8 +347,12 @@ algoW = \case
     EApp e0 e1 -> do
         fr <- fresh
         (s0, (e0', t0)) <- algoW e0
+        traceShow e0 pure ()
+        trace ("S0: " ++ show s0) pure ()
         applySt s0 $ do
             (s1, (e1', t1)) <- algoW e1
+            traceShow e1 pure ()
+            trace ("S1: " ++ show s1) pure ()
             s2 <- unify (apply s1 t0) (TFun t1 fr)
             let t = apply s2 fr
             let comp = s2 `compose` s1 `compose` s0
@@ -590,77 +597,48 @@ fresh = do
     modify (\st -> st{count = succ (count st)})
     return $ TVar $ MkTVar $ LIdent $ show n
 
-{-
-
-The following definition of id should type check
-id : forall a. a -> a
-id x = (x : a)
-
-but not this one, according to haskell atleast
-
-id : a -> a
-id x = (x : a)
-
-currently this is not the case, the TAll pattern match is incorrectly implemented.
--}
 -- Is the left a subtype of the right
 (<<=) :: Type -> Type -> Bool
-(<<=) a b = case (a,b) of
+(<<=) a b = case (a, b) of
     (TVar _, _) -> True
-    (TFun a b,TFun c d) -> a <<= c && b <<= d
+    (TFun a b, TFun c d) -> a <<= c && b <<= d
     (TAll tvar1 t1, TAll tvar2 t2) -> ungo [tvar1, tvar2] t1 t2
     (TAll tvar t1, t2) -> ungo [tvar] t1 t2
     (t1, TAll tvar t2) -> ungo [tvar] t1 t2
-    (TData n1 ts1, TData n2 ts2) -> n1 == n2
-                                    && length ts1 == length ts2
-                                    && and (zipWith (<<=) ts1 ts2)
-    (t1,t2) -> t1 == t2
+    (TData n1 ts1, TData n2 ts2) ->
+        n1 == n2
+            && length ts1 == length ts2
+            && and (zipWith (<<=) ts1 ts2)
+    (t1, t2) -> t1 == t2
   where
     ungo :: [TVar] -> Type -> Type -> Bool
     ungo tvars t1 t2 = case run (go tvars t1 t2) of
-        Right (b,_) -> b
+        Right (b, _) -> b
         _ -> False
+    -- TODO: Fix the following
+    -- Maybe locally using the Infer monad can cause trouble.
+    -- Since the fresh count starts from zero
     go :: [TVar] -> Type -> Type -> Infer Bool
     go tvars t1 t2 = do
-            fr <- fresh
-            let sub = M.fromList [(coerce x, fr) | (MkTVar x) <- tvars]
-            return (apply sub t1 <<= apply sub t2)
-
-{-
-
-typSig = TAll (MkTVar "a") (TAll (MkTVar "b") ((TVar (MkTVar "a") `TFun` (TVar (MkTVar "b")))))
-
-infSig = generalize mempty $ TFun (TVar $ MkTVar "x") (TVar $ MkTVar "x")
-
-a = TAll (MkTVar "a") (TFun (TVar $ MkTVar "a") (TVar $ MkTVar "a"))
-b = TAll (MkTVar "b") (TFun (TVar $ MkTVar "b") (TVar $ MkTVar "b"))
-int = TFun (TLit "Int") (TLit "Int")
--}
+        fr <- fresh
+        let sub = M.fromList [(coerce x, fr) | (MkTVar x) <- tvars]
+        return (apply sub t1 <<= apply sub t2)
 
 skipForalls :: Type -> Type
 skipForalls = \case
     TAll _ t -> skipForalls t
     t -> t
 
-foralls :: Type -> [T.Ident]
-foralls (TAll (MkTVar a) t) = coerce a : foralls t
-foralls _ = []
-
-mkForall :: Type -> Type
-mkForall t = case map (TAll . MkTVar . coerce) $ S.toList $ free t of
-    [] -> t
-    (x : xs) ->
-        let f acc [] = acc
-            f acc (x : xs) = f (x acc) xs
-            (y : ys) = reverse $ x : xs
-         in f (y t) ys
-
-skolemize :: Type -> Type
-skolemize (TVar (MkTVar a)) = TEVar $ MkTEVar a
-skolemize (TAll x t) = TAll x (skolemize t)
-skolemize (TFun t1 t2) = (TFun `on` skolemize) t1 t2
-skolemize (TData n ts) = TData n (map skolemize ts)
-skolemize t = t
+freshen :: Type -> Infer Type
+freshen (TAll (MkTVar (LIdent var)) t) = do
+    fr <- fresh
+    let getName (TVar (MkTVar (LIdent i))) = i
+    let sub = (M.singleton (coerce $ getName fr) fr)
+    return $ TAll (MkTVar . coerce $ getName fr) (apply sub (coerce t))
+freshen (TFun t1 t2) = TFun <$> freshen t1 <*> freshen t2
+freshen (TData name tvars) = TData name <$> mapM freshen tvars
+freshen (TVar _) = fresh
+freshen t = return t
 
 -- | A class for substitutions
 class SubstType t where
@@ -932,6 +910,3 @@ quote s = "'" ++ s ++ "'"
 
 letters :: [T.Ident]
 letters = map T.Ident $ [1 ..] >>= flip replicateM ['a' .. 'z']
-
-ctrace :: (Monad m, Show a) => String -> a -> m ()
-ctrace str a = trace (str ++ ": " ++ show a) pure ()
