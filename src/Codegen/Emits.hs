@@ -1,22 +1,22 @@
-{-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Codegen.Emits where
 
-import           Codegen.Auxillary
-import           Codegen.CompilerState
-import           Codegen.LlvmIr                as LIR
-import           Control.Applicative           ((<|>))
-import           Control.Monad                 (when)
-import           Control.Monad.State           (gets, modify)
-import qualified Data.Bifunctor                as BI
-import           Data.Char                     (ord)
-import           Data.Coerce                   (coerce)
-import qualified Data.Map                      as Map
-import           Data.Maybe                    (fromJust, fromMaybe)
-import           Data.Tuple.Extra              (dupe, first, second)
-import           Monomorphizer.MonomorphizerIr as MIR
-import qualified TypeChecker.TypeCheckerIr     as TIR
+import Codegen.Auxillary
+import Codegen.CompilerState
+import Codegen.LlvmIr as LIR
+import Control.Applicative ((<|>))
+import Control.Monad (when)
+import Control.Monad.State (gets, modify)
+import Data.Bifunctor qualified as BI
+import Data.Char (ord)
+import Data.Coerce (coerce)
+import Data.Map qualified as Map
+import Data.Maybe (fromJust, fromMaybe)
+import Data.Tuple.Extra (dupe, first, second)
+import Monomorphizer.MonomorphizerIr as MIR
+import TypeChecker.TypeCheckerIr qualified as TIR
 
 compileScs :: [MIR.Def] -> CompilerState ()
 compileScs [] = do
@@ -148,12 +148,12 @@ lastMainContent False var =
     ]
 
 compileExp :: ExpT -> CompilerState ()
-compileExp (MIR.ELit lit, _t)   = emitLit lit
-compileExp (MIR.EAdd e1 e2, t)  = emitAdd t e1 e2
-compileExp (MIR.EVar name, _t)  = emitIdent name
-compileExp (MIR.EApp e1 e2, t)  = emitApp t e1 e2
+compileExp (MIR.ELit lit, _t) = emitLit lit
+compileExp (MIR.EAdd e1 e2, t) = emitAdd t e1 e2
+compileExp (MIR.EVar name, _t) = emitIdent name
+compileExp (MIR.EApp e1 e2, t) = emitApp t e1 e2
 compileExp (MIR.ELet bind e, _) = emitLet bind e
-compileExp (MIR.ECase e cs, t)  = emitECased t e (map (t,) cs)
+compileExp (MIR.ECase e cs, t) = emitECased t e (map (t,) cs)
 
 emitLet :: MIR.Bind -> ExpT -> CompilerState ()
 emitLet (MIR.Bind id [] innerExp) e = do
@@ -226,10 +226,10 @@ emitECased t e cases = do
                                 emit $ SetVariable deref (ExtractValue botT' (VIdent casted Ptr) i)
                                 emit $ SetVariable x (Load topT' Ptr deref)
                             else emit $ SetVariable x (ExtractValue botT' (VIdent casted Ptr) i)
-                    PLit (_l, _t) -> undefined
-                    PInj _id _ps -> undefined
+                    PLit (_l, _t) -> error "Nested pattern matching to be implemented"
+                    PInj _id _ps -> error "Nested pattern matching to be implemented"
                     PCatch -> pure ()
-                    PEnum _id -> undefined
+                    PEnum _id -> error "Nested pattern matching to be implemented"
             )
             cs
         val <- exprToValue exp
@@ -239,7 +239,7 @@ emitECased t e cases = do
     emitCases _rt ty label stackPtr vs (Branch (MIR.PLit (i, ct), t) exp) = do
         emit $ Comment "Plit"
         let i' = case i of
-                MIR.LInt i  -> VInteger i
+                MIR.LInt i -> VInteger i
                 MIR.LChar i -> VChar (ord i)
         ns <- getNewVar
         lbl_failPos <- (\x -> TIR.Ident $ "failed_" <> show x) <$> getNewLabel
@@ -339,7 +339,7 @@ emitLit :: MIR.Lit -> CompilerState ()
 emitLit i = do
     -- !!this should never happen!!
     let (i', t) = case i of
-            (MIR.LInt i'')  -> (VInteger i'', I64)
+            (MIR.LInt i'') -> (VInteger i'', I64)
             (MIR.LChar i'') -> (VChar $ ord i'', I8)
     varCount <- getNewVar
     emit $ Comment "This should not have happened!"
@@ -355,7 +355,7 @@ emitAdd t e1 e2 = do
 exprToValue :: ExpT -> CompilerState LLVMValue
 exprToValue = \case
     (MIR.ELit i, _t) -> pure $ case i of
-        (MIR.LInt i)  -> VInteger i
+        (MIR.LInt i) -> VInteger i
         (MIR.LChar i) -> VChar $ ord i
     (MIR.EVar (TIR.Ident "True"), _t) -> pure $ VInteger 1
     (MIR.EVar (TIR.Ident "False"), _t) -> pure $ VInteger 0
