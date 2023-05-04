@@ -7,10 +7,11 @@
 #include <stdexcept>
 #include <stdlib.h>
 #include <vector>
+#include <unordered_map>
 
 #include "heap.hpp"
 
-using std::cout, std::endl, std::vector, std::hex, std::dec;
+using std::cout, std::endl, std::vector, std::hex, std::dec, std::unordered_map;
 
 namespace GC
 {
@@ -83,7 +84,11 @@ namespace GC
 		{
 			heap.collect();
 			// If memory is not enough after collect, crash with OOM error
-			throw std::runtime_error(std::string("Error: Heap out of memory"));
+			if (heap.m_size > HEAP_SIZE)
+			{
+				throw std::runtime_error(std::string("Error: Heap out of memory"));
+			}
+			//throw std::runtime_error(std::string("Error: Heap out of memory"));
 		}
 
 		// If a chunk was recycled, return the old chunk address
@@ -100,6 +105,7 @@ namespace GC
 		auto new_chunk = new Chunk(size, (uintptr_t *)(heap.m_heap + heap.m_size));
 
 		heap.m_size += size;
+		heap.m_total_size += size;
 		heap.m_allocated_chunks.push_back(new_chunk);
 
 		if (profiler_enabled)
@@ -133,7 +139,8 @@ namespace GC
 			//auto chunk = Heap::get_at(heap.m_freed_chunks, i);
 			auto chunk = heap.m_freed_chunks[i];
 			auto iter = heap.m_freed_chunks.begin();
-			advance(iter, i);
+			i++;
+			//advance(iter, i);
 			if (chunk->m_size > size)
 			{
 				// Split the chunk, use one part and add the remaining part to
@@ -212,8 +219,12 @@ namespace GC
 
 		uintptr_t *stack_top = heap.m_stack_top;
 
-		auto work_list = heap.m_allocated_chunks;
-		mark(stack_bottom, stack_top, work_list);
+		//auto work_list = heap.m_allocated_chunks;
+		//mark(stack_bottom, stack_top, work_list);
+
+		// Testing mark_hash, previous woking implementation above
+		create_table();
+		mark_hash(stack_bottom, stack_top);
 
 		sweep(heap);
 
@@ -281,6 +292,37 @@ namespace GC
 		}
 	}
 
+	void Heap::create_table() 
+	{
+		Heap &heap = Heap::the();
+		unordered_map<uintptr_t, Chunk*> chunk_table;
+		for (auto chunk : heap.m_allocated_chunks) {
+			auto pair = std::make_pair(reinterpret_cast<uintptr_t>(chunk->m_start), chunk);
+			heap.m_chunk_table.insert(pair);		
+		}
+	}
+
+	void Heap::mark_hash(uintptr_t *start, const uintptr_t* const end) 
+	{
+		Heap &heap = Heap::the();
+		for (; start <= end; start++) 
+		{
+			auto search = heap.m_chunk_table.find(*start);
+			if (search != heap.m_chunk_table.end())
+			{
+				Chunk *chunk = search->second;
+				auto c_start = reinterpret_cast<uintptr_t>(chunk->m_start);
+				auto c_size = reinterpret_cast<uintptr_t>(chunk->m_size);
+				auto c_end = reinterpret_cast<uintptr_t*>(c_start + c_size);
+				if (!chunk->m_marked) 
+				{
+					chunk->m_marked = true;
+					mark_hash(chunk->m_start, c_end);
+				}
+			}
+		}
+	}
+
 
 	/**
 	 * Sweeps the heap, unmarks the marked chunks for the next cycle,
@@ -343,6 +385,7 @@ namespace GC
 				heap.m_freed_chunks.pop_back();
 				if (profiler_enabled)
 					Profiler::record(ChunkFreed, chunk);
+				heap.m_size -= chunk->m_size;
 				delete chunk;
 			}
 		}
@@ -405,6 +448,7 @@ namespace GC
 			{
 				if (profiler_enabled)
 					Profiler::record(ChunkFreed, chunk);
+				heap.m_size -= chunk->m_size;
 				delete chunk;
 			}
 			else

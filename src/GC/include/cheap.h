@@ -7,7 +7,7 @@
 extern "C" {
 #endif
 
-// #define DEBUG
+#define DEBUG
 
 #ifdef DEBUG
 typedef struct cheap
