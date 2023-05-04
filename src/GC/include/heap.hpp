@@ -1,8 +1,6 @@
 #pragma once
 
-#include <assert.h>
-#include <iostream>
-#include <setjmp.h>
+#include <list>
 #include <stdlib.h>
 #include <vector>
 #include <unordered_map>
@@ -10,9 +8,9 @@
 #include "chunk.hpp"
 #include "profiler.hpp"
 
-#define HEAP_SIZE 2097152 //256 //65536 //2097152
-#define FREE_THRESH (uint) 100000 //1000
-#define DEBUG
+#define HEAP_SIZE 65536
+#define FREE_THRESH (uint) 100
+#define HEAP_DEBUG
 
 namespace GC
 {
@@ -21,12 +19,12 @@ namespace GC
 	 * collection (mark/sweep/free/all).
 	*/
 	enum CollectOption {
-		MARK=0x1,
-		SWEEP=0x2,
-		MARK_SWEEP = 0x3,
-		FREE=0x4,
-		COLLECT_ALL=0x7
-	};
+		MARK		= 1 << 0,
+		SWEEP		= 1 << 1,
+		MARK_SWEEP 	= 1 << 2,
+		FREE		= 1 << 3,
+		COLLECT_ALL	= 0b1111 // all flags above
+	}; 
 
 	/**
 	 * The heap class to represent the heap for the
@@ -48,13 +46,13 @@ namespace GC
 
 		char *const m_heap;
 		size_t m_size {0};
-		size_t m_total_size {0};
 		// static Heap *m_instance {nullptr};
 		uintptr_t *m_stack_top {nullptr};
 		bool m_profiler_enable {false};
 
 		std::vector<Chunk *> m_allocated_chunks;
 		std::vector<Chunk *> m_freed_chunks;
+		std::list<Chunk *> m_free_list;
 		std::unordered_map<uintptr_t, Chunk*> m_chunk_table;
 
 		static bool profiler_enabled();
@@ -74,7 +72,6 @@ namespace GC
 		// Temporary
 		Chunk *try_recycle_chunks_new(size_t size);
 		void free_overlap_new(Heap &heap);
-
 	public:
 		/**
 		 * These are the only five functions which are exposed
@@ -89,12 +86,13 @@ namespace GC
 		static void dispose();
 		static void *alloc(size_t size);
 		void set_profiler(bool mode);
+		void set_profiler_log_options(RecordOption flags);
 
 		// Stop the compiler from generating copy-methods
 		Heap(Heap const&) = delete;
 		Heap& operator=(Heap const&) = delete;
 
-#ifdef DEBUG
+#ifdef HEAP_DEBUG
 		void collect(CollectOption flags); // conditional collection
 		void check_init();		  // print dummy things
 		void print_contents();	  // print dummy things

@@ -80,6 +80,7 @@ int main() {
     GC::Heap::init();
     GC::Heap &gc = GC::Heap::the();
     gc.set_profiler(true);
+    GC::Profiler::set_log_options(GC::FunctionCalls);
     gc.check_init();
     auto stack_start = reinterpret_cast<uintptr_t *>(__builtin_frame_address(0));
 

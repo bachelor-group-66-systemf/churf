@@ -1,15 +1,14 @@
-#include <algorithm>
-#include <assert.h>
-#include <cstring>
-#include <execinfo.h>
 #include <iostream>
-#include <setjmp.h>
 #include <stdexcept>
 #include <stdlib.h>
 #include <vector>
 #include <unordered_map>
+#include <chrono>
 
 #include "heap.hpp"
+
+#define time_now	std::chrono::high_resolution_clock::now()
+#define to_us		std::chrono::duration_cast<std::chrono::microseconds>
 
 using std::cout, std::endl, std::vector, std::hex, std::dec, std::unordered_map;
 
@@ -42,6 +41,12 @@ namespace GC
 // clang complains because arg for __b_f_a is not 0 which is "unsafe"
 #pragma clang diagnostic ignored "-Wframe-address"
 		heap.m_stack_top = static_cast<uintptr_t *>(__builtin_frame_address(1));
+		heap.m_heap_top = heap.m_heap;
+	}
+
+	void Heap::set_profiler_log_options(RecordOption flags)
+	{
+		Profiler::set_log_options(flags);
 	}
 
 	/**
@@ -67,6 +72,7 @@ namespace GC
 	 */
 	void *Heap::alloc(size_t size)
 	{
+		auto a_start = time_now;
 		// Singleton
 		Heap &heap = Heap::the();
 		bool profiler_enabled = heap.profiler_enabled();
@@ -82,6 +88,8 @@ namespace GC
 
 		if (heap.m_size + size > HEAP_SIZE)
 		{
+			// auto a_ms = to_us(c_start - a_start);
+			// Profiler::record(AllocStart, a_ms);
 			heap.collect();
 			// If memory is not enough after collect, crash with OOM error
 			if (heap.m_size > HEAP_SIZE)
@@ -90,6 +98,13 @@ namespace GC
 			}
 			//throw std::runtime_error(std::string("Error: Heap out of memory"));
 		}
+			if (heap.m_size + size > HEAP_SIZE)
+			{
+				if (profiler_enabled)
+					Profiler::dispose();
+				throw std::runtime_error(std::string("Error: Heap out of memory"));
+			}
+		}
 
 		// If a chunk was recycled, return the old chunk address
 		Chunk *reused_chunk = heap.try_recycle_chunks(size);
@@ -97,6 +112,9 @@ namespace GC
 		{
 			if (profiler_enabled)
 				Profiler::record(ReusedChunk, reused_chunk);
+			auto a_end = time_now;
+			auto a_ms = to_us(a_end - a_start);
+			Profiler::record(AllocStart, a_ms);
 			return static_cast<void *>(reused_chunk->m_start);
 		}
 
@@ -111,6 +129,9 @@ namespace GC
 		if (profiler_enabled)
 			Profiler::record(NewChunk, new_chunk);
 
+		auto a_end = time_now;
+		auto a_ms = to_us(a_end - a_start);
+		Profiler::record(AllocStart, a_ms);
 		return new_chunk->m_start;
 	}
 
@@ -167,25 +188,6 @@ namespace GC
 	}
 
 	/**
-	 * Advances an iterator and returns an element
-	 * at position `n`.
-	 * 
-	 * @param list	The list to retrieve an element from.
-	 * 
-	 * @param n		The position to retrieve an element at.
-	 * 
-	 * @returns 	The pointer to the chunk at position n in list.
-	*/
-	// Chunk *Heap::get_at(std::vector<Chunk *> &list, size_t n)
-	// {
-	// 	auto iter = list.begin();
-	// 	if (!n)
-	// 		return *iter;
-	// 	std::advance(iter, n);
-	// 	return *iter;
-	// }
-
-	/**
 	 * Returns a bool whether the profiler is enabled
 	 * or not.
 	 * 
@@ -206,6 +208,8 @@ namespace GC
 	 */
 	void Heap::collect()
 	{
+		auto c_start = time_now;
+
 		Heap &heap = Heap::the();
 
 		if (heap.profiler_enabled())
@@ -229,6 +233,10 @@ namespace GC
 		sweep(heap);
 
 		free(heap);
+		
+		auto c_end = time_now;
+		
+		Profiler::record(CollectStart, to_us(c_end - c_start));
 	}
 
 	/**
@@ -336,8 +344,10 @@ namespace GC
 	 */
 	void Heap::sweep(Heap &heap)
 	{
-		auto iter = heap.m_allocated_chunks.begin();
 		bool profiler_enabled = heap.m_profiler_enable;
+		if (profiler_enabled)
+			Profiler::record(SweepStart);
+		auto iter = heap.m_allocated_chunks.begin();
 		// This cannot "iter != stop", results in seg fault, since the end gets updated, I think.
 		while (iter != heap.m_allocated_chunks.end())
 		{
@@ -357,6 +367,7 @@ namespace GC
 					Profiler::record(ChunkSwept, chunk);
 				heap.m_freed_chunks.push_back(chunk);
 				iter = heap.m_allocated_chunks.erase(iter);
+				heap.m_size -= chunk->m_size;
 			}
 		}
 	}
@@ -376,6 +387,9 @@ namespace GC
 	 */
 	void Heap::free(Heap &heap)
 	{
+		bool profiler_enabled = heap.m_profiler_enable;
+		if (profiler_enabled)
+			Profiler::record(FreeStart);
 		if (heap.m_freed_chunks.size() > FREE_THRESH)
 		{
 			bool profiler_enabled = heap.profiler_enabled();
@@ -458,7 +472,13 @@ namespace GC
 		}
 	}
 
-#ifdef DEBUG
+	void Heap::set_profiler(bool mode)
+	{
+		Heap &heap = Heap::the();
+		heap.m_profiler_enable = mode;
+	}
+
+#ifdef HEAP_DEBUG
 	/**
 	 * Prints the result of Heap::init() and a dummy value
 	 * for the current stack frame for reference.
@@ -607,12 +627,6 @@ namespace GC
 		{
 			cout << "NO FREED CHUNKS" << endl;
 		}
-	}
-
-	void Heap::set_profiler(bool mode)
-	{
-		Heap &heap = Heap::the();
-		heap.m_profiler_enable = mode;
 	}
 
 	void Heap::print_allocated_chunks(Heap *heap) {
