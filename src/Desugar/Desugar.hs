@@ -48,7 +48,7 @@ desugarType = \case
         let (name : tvars) = flatten t1 ++ [t2]
          in case name of
                 TIdent ident -> TData ident (map desugarType tvars)
-                _ -> error "desugarType in Desugar.hs is not implemented correctly"
+                _ -> error "desugarType is not implemented correctly"
     TLit l -> TLit l
     TVar v -> TVar v
     (TAll i t) -> TAll i (desugarType t)
