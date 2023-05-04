@@ -8,13 +8,14 @@ import           Control.Monad.State           (StateT, gets, modify)
 import           Data.Map                      (Map)
 import qualified Data.Map                      as Map
 import           Grammar.ErrM                  (Err)
+import           Monomorphizer.MonomorphizerIr (Ident (..), T)
 import           Monomorphizer.MonomorphizerIr as MIR
 import qualified TypeChecker.TypeCheckerIr     as TIR
 
 -- | The record used as the code generator state
 data CodeGenerator = CodeGenerator
     { instructions  :: [LLVMIr]
-    , functions     :: Map MIR.Id FunctionInfo
+    , functions     :: Map (T Ident) FunctionInfo
     , customTypes   :: Map LLVMType Integer
     , constructors  :: Map TIR.Ident ConstructorInfo
     , variableCount :: Integer
@@ -27,12 +28,12 @@ type CompilerState a = StateT CodeGenerator Err a
 
 data FunctionInfo = FunctionInfo
     { numArgs   :: Int
-    , arguments :: [Id]
+    , arguments :: [T Ident]
     }
     deriving (Show)
 data ConstructorInfo = ConstructorInfo
     { numArgsCI    :: Int
-    , argumentsCI  :: [Id]
+    , argumentsCI  :: [T Ident]
     , numCI        :: Integer
     , returnTypeCI :: MIR.Type
     }
@@ -63,7 +64,7 @@ getNewLabel = do
 {- | Produces a map of functions infos from a list of binds,
  which contains useful data for code generation.
 -}
-getFunctions :: [MIR.Def] -> Map Id FunctionInfo
+getFunctions :: [MIR.Def] -> Map (T Ident) FunctionInfo
 getFunctions bs = Map.fromList $ go bs
   where
     go [] = []
@@ -72,7 +73,7 @@ getFunctions bs = Map.fromList $ go bs
             : go xs
     go (_ : xs) = go xs
 
-createArgs :: [MIR.Type] -> [Id]
+createArgs :: [MIR.Type] -> [T Ident]
 createArgs xs = fst $ foldl (\(acc, l) t -> (acc ++ [(TIR.Ident ("arg_" <> show l), t)], l + 1)) ([], 0) xs
 
 {- | Produces a map of functions infos from a list of binds,

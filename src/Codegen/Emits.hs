@@ -1,22 +1,22 @@
-{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Codegen.Emits where
 
-import Codegen.Auxillary
-import Codegen.CompilerState
-import Codegen.LlvmIr as LIR
-import Control.Applicative ((<|>))
-import Control.Monad (when)
-import Control.Monad.State (gets, modify)
-import Data.Bifunctor qualified as BI
-import Data.Char (ord)
-import Data.Coerce (coerce)
-import Data.Map qualified as Map
-import Data.Maybe (fromJust, fromMaybe)
-import Data.Tuple.Extra (dupe, first, second)
-import Monomorphizer.MonomorphizerIr as MIR
-import TypeChecker.TypeCheckerIr qualified as TIR
+import           Codegen.Auxillary
+import           Codegen.CompilerState
+import           Codegen.LlvmIr                as LIR
+import           Control.Applicative           ((<|>))
+import           Control.Monad                 (when)
+import           Control.Monad.State           (gets, modify)
+import qualified Data.Bifunctor                as BI
+import           Data.Char                     (ord)
+import           Data.Coerce                   (coerce)
+import qualified Data.Map                      as Map
+import           Data.Maybe                    (fromJust, fromMaybe)
+import           Data.Tuple.Extra              (dupe, first, second)
+import           Monomorphizer.MonomorphizerIr as MIR
+import qualified TypeChecker.TypeCheckerIr     as TIR
 
 compileScs :: [MIR.Def] -> CompilerState ()
 compileScs [] = do
@@ -147,15 +147,15 @@ lastMainContent False var =
     , Ret I64 (VInteger 0)
     ]
 
-compileExp :: ExpT -> CompilerState ()
-compileExp (MIR.ELit lit, _t) = emitLit lit
-compileExp (MIR.EAdd e1 e2, t) = emitAdd t e1 e2
-compileExp (MIR.EVar name, _t) = emitIdent name
-compileExp (MIR.EApp e1 e2, t) = emitApp t e1 e2
+compileExp :: T Exp -> CompilerState ()
+compileExp (MIR.ELit lit, _t)   = emitLit lit
+compileExp (MIR.EAdd e1 e2, t)  = emitAdd t e1 e2
+compileExp (MIR.EVar name, _t)  = emitIdent name
+compileExp (MIR.EApp e1 e2, t)  = emitApp t e1 e2
 compileExp (MIR.ELet bind e, _) = emitLet bind e
-compileExp (MIR.ECase e cs, t) = emitECased t e (map (t,) cs)
+compileExp (MIR.ECase e cs, t)  = emitECased t e (map (t,) cs)
 
-emitLet :: MIR.Bind -> ExpT -> CompilerState ()
+emitLet :: MIR.Bind -> T Exp -> CompilerState ()
 emitLet (MIR.Bind id [] innerExp) e = do
     evaled <- exprToValue innerExp
     tempVar <- getNewVar
@@ -166,7 +166,7 @@ emitLet (MIR.Bind id [] innerExp) e = do
     compileExp e
 emitLet b _ = error $ "Non empty argument list in let-bind " <> show b
 
-emitECased :: MIR.Type -> ExpT -> [(MIR.Type, Branch)] -> CompilerState ()
+emitECased :: MIR.Type -> T Exp -> [(MIR.Type, Branch)] -> CompilerState ()
 emitECased t e cases = do
     let cs = snd <$> cases
     let ty = type2LlvmType t
@@ -213,10 +213,10 @@ emitECased t e cases = do
         emit $ Store rt vs Ptr castPtr
         emit $ SetVariable casted (Load (CustomType (coerce consId)) Ptr castPtr)
         enumerateOneM_
-            ( \i c -> do
+            ( \i (c, t) -> do
                 case c of
-                    PVar (x, topT) -> do
-                        let topT' = type2LlvmType topT
+                    PVar x -> do
+                        let topT' = type2LlvmType t
                         let botT' = CustomType (coerce consId)
                         emit . Comment $ "ident " <> toIr topT'
                         cTypes <- gets customTypes
@@ -226,7 +226,7 @@ emitECased t e cases = do
                                 emit $ SetVariable deref (ExtractValue botT' (VIdent casted Ptr) i)
                                 emit $ SetVariable x (Load topT' Ptr deref)
                             else emit $ SetVariable x (ExtractValue botT' (VIdent casted Ptr) i)
-                    PLit (_l, _t) -> error "Nested pattern matching to be implemented"
+                    PLit _l -> error "Nested pattern matching to be implemented"
                     PInj _id _ps -> error "Nested pattern matching to be implemented"
                     PCatch -> pure ()
                     PEnum _id -> error "Nested pattern matching to be implemented"
@@ -236,22 +236,22 @@ emitECased t e cases = do
         emit $ Store ty val Ptr stackPtr
         emit $ Br label
         emit $ Label lbl_failPos
-    emitCases _rt ty label stackPtr vs (Branch (MIR.PLit (i, ct), t) exp) = do
+    emitCases _rt ty label stackPtr vs (Branch (MIR.PLit i, t) exp) = do
         emit $ Comment "Plit"
         let i' = case i of
-                MIR.LInt i -> VInteger i
+                MIR.LInt i  -> VInteger i
                 MIR.LChar i -> VChar (ord i)
         ns <- getNewVar
         lbl_failPos <- (\x -> TIR.Ident $ "failed_" <> show x) <$> getNewLabel
         lbl_succPos <- (\x -> TIR.Ident $ "success_" <> show x) <$> getNewLabel
-        emit $ SetVariable ns (Icmp LLEq (type2LlvmType ct) vs i')
+        emit $ SetVariable ns (Icmp LLEq (type2LlvmType t) vs i')
         emit $ BrCond (VIdent ns ty) lbl_succPos lbl_failPos
         emit $ Label lbl_succPos
         val <- exprToValue exp
         emit $ Store ty val Ptr stackPtr
         emit $ Br label
         emit $ Label lbl_failPos
-    emitCases rt ty label stackPtr vs (Branch (MIR.PVar (id, _), _) exp) = do
+    emitCases rt ty label stackPtr vs (Branch (MIR.PVar id, _) exp) = do
         emit $ Comment "Pvar"
         -- //TODO this is pretty disgusting and would heavily benefit from a rewrite
         valPtr <- getNewVar
@@ -264,9 +264,9 @@ emitECased t e cases = do
         lbl_failPos <- (\x -> TIR.Ident $ "failed_" <> show x) <$> getNewLabel
         emit $ Label lbl_failPos
     emitCases rt ty label stackPtr vs (Branch (MIR.PEnum (TIR.Ident "True"), t) exp) = do
-        emitCases rt ty label stackPtr vs (Branch (MIR.PLit (MIR.LInt 1, TLit "Bool"), t) exp)
+        emitCases rt ty label stackPtr vs (Branch (MIR.PLit (MIR.LInt 1), TLit "Bool") exp)
     emitCases rt ty label stackPtr vs (Branch (MIR.PEnum (TIR.Ident "False"), _) exp) = do
-        emitCases rt ty label stackPtr vs (Branch (MIR.PLit (MIR.LInt 0, TLit "Bool"), t) exp)
+        emitCases rt ty label stackPtr vs (Branch (MIR.PLit (MIR.LInt 0), TLit "Bool") exp)
     emitCases rt ty label stackPtr vs (Branch (MIR.PEnum consId, _) exp) = do
         -- //TODO Penum wrong, acts as a catch all
         emit $ Comment "Penum"
@@ -301,10 +301,10 @@ emitECased t e cases = do
         lbl_failPos <- (\x -> TIR.Ident $ "failed_" <> show x) <$> getNewLabel
         emit $ Label lbl_failPos
 
-emitApp :: MIR.Type -> ExpT -> ExpT -> CompilerState ()
+emitApp :: MIR.Type -> (T Exp) -> (T Exp) -> CompilerState ()
 emitApp rt e1 e2 = appEmitter e1 e2 []
   where
-    appEmitter :: ExpT -> ExpT -> [ExpT] -> CompilerState ()
+    appEmitter :: (T Exp) -> (T Exp) -> [T Exp] -> CompilerState ()
     appEmitter e1 e2 stack = do
         let newStack = e2 : stack
         case e1 of
@@ -339,23 +339,23 @@ emitLit :: MIR.Lit -> CompilerState ()
 emitLit i = do
     -- !!this should never happen!!
     let (i', t) = case i of
-            (MIR.LInt i'') -> (VInteger i'', I64)
+            (MIR.LInt i'')  -> (VInteger i'', I64)
             (MIR.LChar i'') -> (VChar $ ord i'', I8)
     varCount <- getNewVar
     emit $ Comment "This should not have happened!"
     emit $ SetVariable varCount (Add t i' (VInteger 0))
 
-emitAdd :: MIR.Type -> ExpT -> ExpT -> CompilerState ()
+emitAdd :: MIR.Type -> T Exp -> T Exp -> CompilerState ()
 emitAdd t e1 e2 = do
     v1 <- exprToValue e1
     v2 <- exprToValue e2
     v <- getNewVar
     emit $ SetVariable v (Add (type2LlvmType t) v1 v2)
 
-exprToValue :: ExpT -> CompilerState LLVMValue
+exprToValue :: T Exp -> CompilerState LLVMValue
 exprToValue = \case
     (MIR.ELit i, _t) -> pure $ case i of
-        (MIR.LInt i) -> VInteger i
+        (MIR.LInt i)  -> VInteger i
         (MIR.LChar i) -> VChar $ ord i
     (MIR.EVar (TIR.Ident "True"), _t) -> pure $ VInteger 1
     (MIR.EVar (TIR.Ident "False"), _t) -> pure $ VInteger 0

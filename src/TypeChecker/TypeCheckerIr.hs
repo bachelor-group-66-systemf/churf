@@ -1,6 +1,7 @@
 {-# LANGUAGE LambdaCase      #-}
 {-# LANGUAGE PatternSynonyms #-}
 
+
 module TypeChecker.TypeCheckerIr (
     module Grammar.Abs,
     module TypeChecker.TypeCheckerIr,
@@ -48,23 +49,24 @@ data Exp' t
     = EVar Ident
     | EInj Ident
     | ELit Lit
-    | ELet (Bind' t) (ExpT' t)
-    | EApp (ExpT' t) (ExpT' t)
-    | EAdd (ExpT' t) (ExpT' t)
-    | EAbs Ident (ExpT' t)
-    | ECase (ExpT' t) [Branch' t]
+    | ELet (Bind' t) (T' Exp' t)
+    | EApp (T' Exp' t) (T' Exp' t)
+    | EAdd (T' Exp' t) (T' Exp' t)
+    | EAbs Ident (T' Exp' t)
+    | ECase (T' Exp' t) [Branch' t]
     deriving (C.Eq, C.Ord, C.Show, C.Read, Functor)
 
 newtype TVar = MkTVar Ident
     deriving (C.Eq, C.Ord, C.Show, C.Read)
 
-type Id' t = (Ident, t)
-type ExpT' t = (Exp' t, t)
+type T' a t = (a t, t)
+type T  a t = (a, t)
 
-data Bind' t = Bind (Id' t) [Id' t] (ExpT' t)
+
+data Bind' t = Bind (T Ident t) [T Ident t] (T' Exp' t)
     deriving (C.Eq, C.Ord, C.Show, C.Read, Functor)
 
-data Branch' t = Branch (Pattern' t, t) (ExpT' t)
+data Branch' t = Branch (T' Pattern' t) (T' Exp' t)
     deriving (C.Eq, C.Ord, C.Show, C.Read, Functor)
 
 instance Print Ident where
@@ -81,7 +83,7 @@ instance Print t => Print (Bind' t) where
                 , prt i rhs
                 ]
 
-prtSig :: Print t => Id' t -> Doc
+prtSig :: Print t => T Ident t -> Doc
 prtSig (name, t) =
     concatD
         [ prt 0 name
@@ -89,14 +91,14 @@ prtSig (name, t) =
         , prt 0 t
         ]
 
-instance Print t => Print (ExpT' t) where
-    prt i (e, t) =
+instance (Print a, Print t) => Print (T a t) where
+    prt i (x, t) =
         concatD
-            [ doc $ showString "("
-            , prt i e
-            , doc $ showString ":"
-            , prt 0 t
-            , doc $ showString ")"
+            [ -- doc $ showString "("
+            {- , -} prt i x
+--            , doc $ showString ":"
+--            , prt 0 t
+--            , doc $ showString ")"
             ]
 
 instance Print t => Print [Bind' t] where
@@ -104,15 +106,6 @@ instance Print t => Print [Bind' t] where
     prt i [x]      = concatD [prt i x]
     prt i (x : xs) = concatD [prt i x, doc (showString ";"), prt i xs]
 
-instance Print t => Print (Id' t) where
-    prt i (name, t) =
-        concatD
-            [ doc $ showString "("
-            , prt i name
-            , doc $ showString ","
-            , prt i t
-            , doc $ showString ")"
-            ]
 
 instance Print t => Print (Exp' t) where
     prt i = \case
@@ -151,9 +144,6 @@ instance Print t => Print [Inj' t] where
     prt i [x] = prt i x
     prt i (x : xs) = prPrec i 0 $ concatD [prt i x, doc $ showString "\n  ", prt i xs]
 
-instance Print t => Print (Pattern' t, t) where
-    prt i (p, t) = prPrec i 1 (concatD [prt i p, prt i t])
-
 instance Print t => Print (Pattern' t) where
     prt i = \case
         PVar name -> prPrec i 1 (concatD [prt 0 name])
@@ -189,8 +179,6 @@ type Branch = Branch' Type
 type Pattern = Pattern' Type
 type Inj = Inj' Type
 type Exp = Exp' Type
-type ExpT = ExpT' Type
-type Id = Id' Type
 pattern TVar' s = TVar (MkTVar s)
 pattern DBind' id vars expt = DBind (Bind id vars expt)
 pattern DData' typ injs = DData (Data typ injs)

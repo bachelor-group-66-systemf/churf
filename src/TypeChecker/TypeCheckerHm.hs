@@ -1,32 +1,32 @@
-{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE OverloadedRecordDot #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE QualifiedDo #-}
-{-# OPTIONS_GHC -Wno-incomplete-patterns #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE QualifiedDo         #-}
 
 -- | A module for type checking and inference using algorithm W, Hindley-Milner
 module TypeChecker.TypeCheckerHm where
 
-import Auxiliary (int, litType, maybeToRightM, unzip4)
-import Auxiliary qualified as Aux
-import Control.Monad.Except
-import Control.Monad.Identity (Identity, runIdentity)
-import Control.Monad.Reader
-import Control.Monad.State
-import Control.Monad.Writer
-import Data.Coerce (coerce)
-import Data.Function (on)
-import Data.List (foldl', nub, sortOn)
-import Data.List.Extra (unsnoc)
-import Data.Map (Map)
-import Data.Map qualified as M
-import Data.Maybe (fromJust)
-import Data.Set (Set)
-import Data.Set qualified as S
-import Debug.Trace (trace, traceShow)
-import Grammar.Abs
-import Grammar.Print (printTree)
-import TypeChecker.TypeCheckerIr qualified as T
+import           Auxiliary                 (int, litType, maybeToRightM, unzip4)
+import qualified Auxiliary                 as Aux
+import           Control.Monad.Except
+import           Control.Monad.Identity    (Identity, runIdentity)
+import           Control.Monad.Reader
+import           Control.Monad.State
+import           Control.Monad.Writer
+import           Data.Coerce               (coerce)
+import           Data.Function             (on)
+import           Data.List                 (foldl', nub, sortOn)
+import           Data.List.Extra           (unsnoc)
+import           Data.Map                  (Map)
+import qualified Data.Map                  as M
+import           Data.Maybe                (fromJust)
+import           Data.Set                  (Set)
+import qualified Data.Set                  as S
+import           Debug.Trace               (trace, traceShow)
+import           Grammar.Abs
+import           Grammar.Print             (printTree)
+import qualified TypeChecker.TypeCheckerIr as T
+import           TypeChecker.TypeCheckerIr (T, T')
 
 {-
 TODO
@@ -41,7 +41,7 @@ typecheck :: Program -> Either String (T.Program' Type, [Warning])
 typecheck = onLeft msg . run . checkPrg
   where
     onLeft :: (Error -> String) -> Either Error a -> Either String a
-    onLeft f (Left x) = Left $ f x
+    onLeft f (Left x)  = Left $ f x
     onLeft _ (Right x) = Right x
 
 checkPrg :: Program -> Infer (T.Program' Type)
@@ -68,13 +68,13 @@ prettify s (T.Program defs) = T.Program $ map (go s) defs
 
 replace :: Map T.Ident T.Ident -> Type -> Type
 replace m def@(TVar (MkTVar (LIdent a))) = case M.lookup (coerce a) m of
-    Just t -> TVar . MkTVar . LIdent $ coerce t
+    Just t  -> TVar . MkTVar . LIdent $ coerce t
     Nothing -> def
 replace m (TFun t1 t2) = (TFun `on` replace m) t1 t2
 replace m (TData name ts) = TData name (map (replace m) ts)
 replace m def@(TAll (MkTVar forall_) t) = case M.lookup (coerce forall_) m of
     Just found -> TAll (MkTVar $ coerce found) (replace m t)
-    Nothing -> def
+    Nothing    -> def
 replace _ t = t
 
 bindCount :: [Def] -> Infer [(Int, Def)]
@@ -128,7 +128,7 @@ preRun (x : xs) = case x of
         s <- gets sigs
         case M.lookup (coerce n) s of
             Nothing -> insertSig (coerce n) Nothing >> preRun xs
-            Just _ -> preRun xs
+            Just _  -> preRun xs
     DData d@(Data t _) -> collect (collectTVars t) >> checkData d >> preRun xs
   where
     -- Check if function body / signature has been declared already
@@ -150,11 +150,11 @@ checkDef (x : xs) = case x of
         T.Data t $ map (\(Inj name typ) -> T.Inj (coerce name) typ) injs
 
 freeOrdered :: Type -> [T.Ident]
-freeOrdered (TVar (MkTVar a)) = return (coerce a)
+freeOrdered (TVar (MkTVar a))       = return (coerce a)
 freeOrdered (TAll (MkTVar bound) t) = return (coerce bound) ++ freeOrdered t
-freeOrdered (TFun a b) = freeOrdered a ++ freeOrdered b
-freeOrdered (TData _ a) = concatMap freeOrdered a
-freeOrdered _ = mempty
+freeOrdered (TFun a b)              = freeOrdered a ++ freeOrdered b
+freeOrdered (TData _ a)             = concatMap freeOrdered a
+freeOrdered _                       = mempty
 
 -- Much cleaner implementation, unfortunately one minor bug
 -- checkBind :: Bind -> Infer (T.Bind' Type)
@@ -257,13 +257,13 @@ checkInj (Inj c inj_typ) name tvars
 toTVar :: Type -> Either Error TVar
 toTVar = \case
     TVar tvar -> pure tvar
-    _ -> uncatchableErr "Not a type variable"
+    _         -> uncatchableErr "Not a type variable"
 
 returnType :: Type -> Type
 returnType (TFun _ t2) = returnType t2
-returnType a = a
+returnType a           = a
 
-inferExp :: Exp -> Infer (T.ExpT' Type)
+inferExp :: Exp -> Infer (T' T.Exp' Type)
 inferExp e = do
     (s, (e', t)) <- algoW e
     let subbed = apply s t
@@ -274,7 +274,7 @@ class CollectTVars a where
 
 instance CollectTVars Exp where
     collectTVars (EAnn e t) = collectTVars t `S.union` collectTVars e
-    collectTVars _ = S.empty
+    collectTVars _          = S.empty
 
 instance CollectTVars Type where
     collectTVars (TVar (MkTVar i)) = S.singleton (coerce i)
@@ -287,7 +287,7 @@ instance CollectTVars Type where
 collect :: Set T.Ident -> Infer ()
 collect s = modify (\st -> st{takenTypeVars = s `S.union` takenTypeVars st})
 
-algoW :: Exp -> Infer (Subst, T.ExpT' Type)
+algoW :: Exp -> Infer (Subst, T' T.Exp' Type)
 algoW = \case
     err@(EAnn e t) -> do
         (sub0, (e', t')) <- exprErr (algoW e) err
@@ -600,12 +600,12 @@ generalize :: Map T.Ident Type -> Type -> Type
 generalize env t = go (S.toList $ free t S.\\ free env) (removeForalls t)
   where
     go :: [T.Ident] -> Type -> Type
-    go [] t = t
+    go [] t       = t
     go (x : xs) t = TAll (MkTVar (coerce x)) (go xs t)
     removeForalls :: Type -> Type
-    removeForalls (TAll _ t) = removeForalls t
+    removeForalls (TAll _ t)   = removeForalls t
     removeForalls (TFun t1 t2) = TFun (removeForalls t1) (removeForalls t2)
-    removeForalls t = t
+    removeForalls t            = t
 
 {- | Instantiate a polymorphic type. The free type variables are substituted
 with fresh ones.
@@ -643,7 +643,7 @@ fresh = do
     ungo :: [TVar] -> Type -> Type -> Bool
     ungo tvars t1 t2 = case run (go tvars t1 t2) of
         Right (b, _) -> b
-        _ -> False
+        _            -> False
     -- TODO: Fix the following
     -- Maybe locally using the Infer monad can cause trouble.
     -- Since the fresh count starts from zero
@@ -656,7 +656,7 @@ fresh = do
 skipForalls :: Type -> Type
 skipForalls = \case
     TAll _ t -> skipForalls t
-    t -> t
+    t        -> t
 
 freshen :: Type -> Infer Type
 freshen t = do
@@ -705,10 +705,10 @@ instance SubstType Type where
             TLit _ -> t
             TVar (MkTVar a) -> case M.lookup (coerce a) sub of
                 Nothing -> TVar (MkTVar $ coerce a)
-                Just t -> t
+                Just t  -> t
             TAll (MkTVar i) t -> case M.lookup (coerce i) sub of
                 Nothing -> TAll (MkTVar i) (apply sub t)
-                Just _ -> apply sub t
+                Just _  -> apply sub t
             TFun a b -> TFun (apply sub a) (apply sub b)
             TData name a -> TData name (apply sub a)
             TEVar (MkTEVar _) -> t
@@ -724,7 +724,7 @@ instance SubstType (Map T.Ident Type) where
 instance SubstType (Map T.Ident (Maybe Type)) where
     apply s = M.map (fmap $ apply s)
 
-instance SubstType (T.ExpT' Type) where
+instance SubstType (T' T.Exp' Type) where
     apply s (e, t) = (apply s e, apply s t)
 
 instance SubstType (T.Exp' Type) where
@@ -753,10 +753,10 @@ instance SubstType (T.Branch' Type) where
 instance SubstType (T.Pattern' Type) where
     apply s = \case
         T.PVar iden -> T.PVar iden
-        T.PLit lit -> T.PLit lit
+        T.PLit lit  -> T.PLit lit
         T.PInj i ps -> T.PInj i $ apply s ps
-        T.PCatch -> T.PCatch
-        T.PEnum i -> T.PEnum i
+        T.PCatch    -> T.PCatch
+        T.PEnum i   -> T.PEnum i
 
 instance SubstType (T.Pattern' Type, Type) where
     apply s (p, t) = (apply s p, apply s t)
@@ -764,7 +764,7 @@ instance SubstType (T.Pattern' Type, Type) where
 instance SubstType a => SubstType [a] where
     apply s = map (apply s)
 
-instance SubstType (T.Id' Type) where
+instance SubstType (T T.Ident Type) where
     apply s (name, t) = (name, apply s t)
 
 -- | Represents the empty substition set
@@ -797,11 +797,11 @@ withBindings xs =
 -- | Run the monadic action with a pattern
 withPattern :: (Monad m, MonadReader Ctx m) => (T.Pattern' Type, Type) -> m a -> m a
 withPattern (p, t) ma = case p of
-    T.PVar x -> withBinding x t ma
+    T.PVar x    -> withBinding x t ma
     T.PInj _ ps -> foldl' (flip withPattern) ma ps
-    T.PLit _ -> ma
-    T.PCatch -> ma
-    T.PEnum _ -> ma
+    T.PLit _    -> ma
+    T.PCatch    -> ma
+    T.PEnum _   -> ma
 
 -- | Insert a function signature into the environment
 insertSig :: T.Ident -> Maybe Type -> Infer ()
@@ -826,11 +826,11 @@ existInj n = gets (M.lookup n . injections)
 
 flattenType :: Type -> [Type]
 flattenType (TFun a b) = flattenType a <> flattenType b
-flattenType a = [a]
+flattenType a          = [a]
 
 typeLength :: Type -> Int
 typeLength (TFun _ b) = 1 + typeLength b
-typeLength _ = 1
+typeLength _          = 1
 
 {- | Catch an error if possible and add the given
 expression as addition to the error message
@@ -913,11 +913,11 @@ newtype Ctx = Ctx {vars :: Map T.Ident Type}
     deriving (Show)
 
 data Env = Env
-    { count :: Int
-    , nextChar :: Char
-    , sigs :: Map T.Ident (Maybe Type)
+    { count         :: Int
+    , nextChar      :: Char
+    , sigs          :: Map T.Ident (Maybe Type)
     , takenTypeVars :: Set T.Ident
-    , injections :: Map T.Ident Type
+    , injections    :: Map T.Ident Type
     , declaredBinds :: Set T.Ident
     }
     deriving (Show)
