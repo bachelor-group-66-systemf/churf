@@ -1,23 +1,15 @@
-data List (a) where {
-    Nil : List (a)
-    Cons : a -> List (a) -> List (a)
-};
+data List a where
+    Cons : a -> List a -> List a
+    Nil : List a
 
-main = length (Cons 1 (Cons 2 Nil)) ;
-id x = x;
-const x y = x ;
+.++ xs ys = case xs of
+    Nil => ys
+    Cons z zs => Cons z (zs ++ ys)
 
-map : (o -> g) -> List (o) -> List (g) ;
-map f xs = case xs of {
-    Nil => Nil ;
-    Cons x xs => Cons (f x) (map f xs) ;
-};
+length xs = case xs of
+    Cons x xs => 1 + length xs
 
-length : List (Int) -> Int ;
-length xs = case xs of {
-    Nil => 0 ;
-    Cons _ xs => 1 + length xs ;
-};
+main = length (list1 ++ list2)
 
-id_int : a -> b ;
-id_int x = (x : a) ;
+list1 = Cons 0 (Cons 1 (Cons 2 (Cons 3 Nil)))
+list2 = Cons 4 (Cons 5 (Cons 6 (Cons 7 Nil)))
