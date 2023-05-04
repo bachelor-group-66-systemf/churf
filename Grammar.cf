@@ -13,8 +13,10 @@ DBind. Def ::= Bind;
 DSig.  Def ::= Sig;
 DData. Def ::= Data; 
 
-Sig.   Sig ::= LIdent ":" Type;
-Bind. Bind ::= LIdent [LIdent] "=" Exp;
+internal Sig.   Sig ::= LIdent ":" Type;
+         SigS.   Sig ::= VarName ":" Type;
+internal Bind. Bind ::= LIdent [LIdent] "=" Exp;
+         BindS. Bind ::= VarName [LIdent] "=" Exp;
 
 -------------------------------------------------------------------------------
 -- * Types
@@ -42,15 +44,22 @@ Inj. Inj ::= UIdent ":" Type ;
 -- * Expressions
 -------------------------------------------------------------------------------
 
-EVar.  Exp4 ::= LIdent;
-EInj.  Exp4 ::= UIdent;
-ELit.  Exp4 ::= Lit;
-EApp.  Exp3 ::= Exp3 Exp4;
-EAdd.  Exp2 ::= Exp2 "+" Exp3;
-ELet.  Exp1  ::= "let" Bind "in" Exp1; 
-EAbs.  Exp1  ::= "\\" LIdent "." Exp1;
-ECase. Exp1  ::= "case" Exp "of" "{" [Branch] "}";
-EAnn.  Exp  ::= Exp1 ":" Type;
+internal EVar.  Exp4 ::= LIdent;
+         EVarS. Exp4 ::= VarName ;
+         EInj.  Exp4 ::= UIdent;
+         ELit.  Exp4 ::= Lit;
+         EApp.  Exp3 ::= Exp3 Exp4;
+         EAdd.  Exp2 ::= Exp2 "+" Exp3;
+         ELet.  Exp1  ::= "let" Bind "in" Exp1; 
+         EAbs.  Exp1  ::= "\\" LIdent "." Exp1;
+         ECase. Exp1  ::= "case" Exp "of" "{" [Branch] "}";
+         EAnn.  Exp  ::= Exp1 ":" Type;
+
+VSymbol. VarName ::= "." Symbol;
+VIdent. VarName ::= LIdent;
+
+infixSymbol. Exp2 ::= Exp2 Symbol Exp3 ;
+define infixSymbol e1 vn e3 = EApp (EApp (EVarS (VSymbol vn)) e1) e3;
 
 -------------------------------------------------------------------------------
 -- * LITERALS
@@ -93,6 +102,7 @@ coercions Type 1 ;
 
 token UIdent (upper (letter | digit | '_')*) ;
 token LIdent (lower (letter | digit | '_')*) ;
+token Symbol (["@#%^&*_-+=|?/<>,•"]+) ;
 
 comment "--";
 comment "{-" "-}";
