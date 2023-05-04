@@ -19,10 +19,11 @@ Node *create_list(size_t length)
     head->value = 0;
 
     Node *prev = head;
+    Node *next;
 
     for (size_t i = 1; i < length; i++)
     {
-        Node *next = allocNode;
+        next = allocNode;
         next->value = i;
         prev->next = next;
         prev = next;
@@ -52,10 +53,51 @@ void clear_list(Node *head)
     }
 }
 
-void run_list_test()
+#define LIST_SIZE   10
+
+void list_test1()
 {
-    Node *list = create_list(10);
-    print_list(list);
+    Node *list_1 = create_list(LIST_SIZE);
+    // print_list(list_1);
+}
+
+void list_test2()
+{
+    Node *list_2 = create_list(LIST_SIZE);
+    // print_list(list_2);
+}
+
+void list_test3()
+{
+    Node *list_3 = create_list(LIST_SIZE);
+    // print_list(list_3);
+}
+
+void list_test4()
+{
+    Node *list_4 = create_list(LIST_SIZE);
+    // print_list(list_4);
+}
+
+void list_test5()
+{
+    Node *list_5 = create_list(LIST_SIZE);
+    // print_list(list_5);
+}
+
+void list_test6()
+{
+    Node *list_6 = create_list(LIST_SIZE);
+    // print_list(list_6);
+}
+
+void make_test() {
+    list_test1();
+    list_test2();
+    list_test3();
+    list_test4();
+    list_test5();
+    list_test6();
 }
 
 int main()
@@ -64,9 +106,9 @@ int main()
     GC::Heap &heap = GC::Heap::the();
     heap.set_profiler(true);
     GC::Profiler::set_log_options(GC::FunctionCalls);
+    // GC::Profiler::set_log_options(GC::AllOps);
 
-    for (int i = 0; i < 10; i++)
-        run_list_test();
+    make_test();
 
     GC::Heap::dispose();
 

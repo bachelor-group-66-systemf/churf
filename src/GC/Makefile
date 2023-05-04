@@ -66,9 +66,9 @@ static_lib:
 # remove old files
 	rm -f lib/event.o lib/profiler.o lib/heap.o lib/gcoll.a tests/extern_lib.out
 # compile object files
-	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -O3 -c -o lib/event.o lib/event.cpp -fPIC
-	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -O3 -c -o lib/profiler.o lib/profiler.cpp -fPIC
-	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -O3 -c -o lib/heap.o lib/heap.cpp -fPIC
+	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -c -o lib/event.o lib/event.cpp -fPIC
+	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -c -o lib/profiler.o lib/profiler.cpp -fPIC
+	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -c -o lib/heap.o lib/heap.cpp -fPIC
 # create static library
 	ar r lib/gcoll.a lib/event.o lib/profiler.o lib/heap.o
 
@@ -81,6 +81,12 @@ alloc_free_list: static_lib
 
 linked_list_test: static_lib
 	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -o tests/linkedlist.out tests/linkedlist.cpp lib/gcoll.a
+
+revrange: static_lib
+	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -o tests/revrange.out tests/revrange.cpp lib/gcoll.a
+
+pointers: static_lib
+	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -o tests/pointers.out tests/pointers.cpp lib/gcoll.a
 
 wrapper:
 # remove old files 

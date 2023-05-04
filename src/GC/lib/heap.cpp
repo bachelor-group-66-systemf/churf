@@ -207,7 +207,7 @@ namespace GC
 			Profiler::record(CollectStart);
 
 		// get current stack frame
-		auto stack_bottom = reinterpret_cast<uintptr_t *>(__builtin_frame_address(0));
+		auto stack_bottom = reinterpret_cast<uintptr_t *>(__builtin_frame_address(2));
 
 		if (heap.m_stack_top == nullptr)
 			throw std::runtime_error(std::string("Error: Heap is not initialized, read the docs!"));
@@ -244,10 +244,13 @@ namespace GC
 	 */
 	void Heap::mark(uintptr_t *start, const uintptr_t* const end, vector<Chunk *> &worklist)
 	{
+		// cout << "\nWorklist size: " << worklist.size() << "\n";
 		Heap &heap = Heap::the();
 		bool profiler_enabled = heap.m_profiler_enable;
 		if (profiler_enabled)
 			Profiler::record(MarkStart);
+
+		vector<AddrRange *> rangeWL;
 
 		// To find adresses thats in the worklist
 		for (; start <= end; start++)
@@ -258,8 +261,8 @@ namespace GC
 			{
 				Chunk *chunk = *it;
 				auto c_start = reinterpret_cast<uintptr_t>(chunk->m_start);
-				auto c_size = reinterpret_cast<uintptr_t>(chunk->m_size);
-				auto c_end = reinterpret_cast<uintptr_t>(c_start + c_size);
+				auto c_size  = reinterpret_cast<uintptr_t>(chunk->m_size);
+				auto c_end   = reinterpret_cast<uintptr_t>(c_start + c_size);
 
 				// Check if the stack pointer points to something within the chunk
 				if (c_start <= *start && *start < c_end)
@@ -271,8 +274,22 @@ namespace GC
 						chunk->m_marked = true;
 						it = worklist.erase(it);
 
+						Chunk *next = find_pointer((uintptr_t *) c_start, (uintptr_t *) c_end, worklist);
+						while (next != NULL) {
+							if (!next->m_marked) 
+							{
+								next->m_marked = true;
+								auto c_start = reinterpret_cast<uintptr_t>(next->m_start);
+								auto c_size  = reinterpret_cast<uintptr_t>(next->m_size);
+								auto c_end   = reinterpret_cast<uintptr_t>(c_start + c_size);
+								next = find_pointer((uintptr_t *) c_start, (uintptr_t *) c_end, worklist);
+							}
+						}
+
 						// Recursively call mark, to see if the reachable chunk further points to another chunk
-						mark((uintptr_t *)c_start, (uintptr_t *)c_end, worklist);
+						// mark((uintptr_t *)c_start, (uintptr_t *)c_end, worklist);
+						// AddrRange *range = new AddrRange((uintptr_t *)c_start, (uintptr_t *)c_end); 
+						rangeWL.push_back(new AddrRange((uintptr_t *)c_start, (uintptr_t *)c_end));
 					}
 					else
 					{
@@ -285,8 +302,60 @@ namespace GC
 				}
 			}
 		}
+		mark_range(rangeWL, worklist);
+		rangeWL.clear();
 	}
 
+	void Heap::mark_range(vector<AddrRange *> &ranges, vector<Chunk *> &worklist)
+	{
+		Heap &heap = Heap::the();
+		bool profiler_enabled = heap.m_profiler_enable;
+		if (profiler_enabled)
+			Profiler::record(MarkStart);
+
+		auto iter = ranges.begin();
+		auto stop = ranges.end();
+
+		while (iter != stop)
+		{
+			auto range = *iter++;
+			uintptr_t *start = (uintptr_t *)range->start;
+			const uintptr_t *end = range->end;
+			if (start == nullptr)
+				cout << "\nstart is null\n";
+			for (; start <= end; start++)
+			{
+				auto wliter = worklist.begin();
+				auto wlstop = worklist.end();
+				while (wliter != wlstop)
+				{
+					Chunk *chunk = *wliter;
+					auto c_start = reinterpret_cast<uintptr_t>(chunk->m_start);
+					auto c_size  = reinterpret_cast<uintptr_t>(chunk->m_size);
+					auto c_end   = reinterpret_cast<uintptr_t>(c_start + c_size);
+					
+					if (c_start <= *start && *start < c_end)
+					{
+						if (!chunk->m_marked)
+						{
+							chunk->m_marked = true;
+							wliter = worklist.erase(wliter);
+							ranges.push_back(new AddrRange((uintptr_t *)c_start, (uintptr_t *)c_end));
+							stop = ranges.end();
+						}
+						else
+						{
+							wliter++;
+						}
+					}
+					else
+					{
+						wliter++;
+					}
+				}
+			}
+		}
+	}
 
 	/**
 	 * Sweeps the heap, unmarks the marked chunks for the next cycle,
@@ -304,6 +373,7 @@ namespace GC
 		if (profiler_enabled)
 			Profiler::record(SweepStart);
 		auto iter = heap.m_allocated_chunks.begin();
+		std::cout << "Chunks alloced: " << heap.m_allocated_chunks.size() << std::endl;
 		// This cannot "iter != stop", results in seg fault, since the end gets updated, I think.
 		while (iter != heap.m_allocated_chunks.end())
 		{
@@ -326,6 +396,7 @@ namespace GC
 				heap.m_size -= chunk->m_size;
 			}
 		}
+		std::cout << "Chunks left: " << heap.m_allocated_chunks.size() << std::endl;
 	}
 
 	/**
@@ -390,7 +461,7 @@ namespace GC
 		auto prev = heap.m_freed_chunks[i++];
 		prev->m_marked = true;
 		filtered.push_back(prev);
-		cout << filtered.back()->m_start << endl;
+		// cout << filtered.back()->m_start << endl;
 		for (; i < heap.m_freed_chunks.size(); i++)
 		{
 			prev = filtered.back();
@@ -430,6 +501,27 @@ namespace GC
 	{
 		Heap &heap = Heap::the();
 		heap.m_profiler_enable = mode;
+	}
+
+	Chunk* find_pointer(uintptr_t *start, const uintptr_t* const end, vector<Chunk *> &worklist) {
+		for (; start <= end; start++) {
+			auto it = worklist.begin();
+			auto stop = worklist.end();
+			while (it != stop)
+			{
+				Chunk *chunk = *it;
+				auto c_start = reinterpret_cast<uintptr_t>(chunk->m_start);
+				auto c_size  = reinterpret_cast<uintptr_t>(chunk->m_size);
+				auto c_end   = reinterpret_cast<uintptr_t>(c_start + c_size);
+
+				// Check if the stack pointer points to something within the chunk
+				if (c_start <= *start && *start < c_end)
+				{
+					return chunk;	
+				}
+				return NULL;
+			}
+		}
 	}
 
 #ifdef HEAP_DEBUG
