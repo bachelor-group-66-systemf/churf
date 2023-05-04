@@ -7,7 +7,7 @@ module Monomorphizer.MonomorphizerIr (
 
 import           Data.List      (intersperse)
 import           Grammar.Print
-import           LambdaLifterIr (Ident, Lit (..))
+import           LambdaLifterIr (Ident (..), Lit (..))
 
 newtype Program = Program [Def]
     deriving (Show, Ord, Eq)
