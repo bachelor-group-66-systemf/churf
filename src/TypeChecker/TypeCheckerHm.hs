@@ -2,6 +2,7 @@
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QualifiedDo #-}
+{-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 
 -- | A module for type checking and inference using algorithm W, Hindley-Milner
 module TypeChecker.TypeCheckerHm where
@@ -155,6 +156,35 @@ freeOrdered (TFun a b) = freeOrdered a ++ freeOrdered b
 freeOrdered (TData _ a) = concatMap freeOrdered a
 freeOrdered _ = mempty
 
+-- Much cleaner implementation, unfortunately one minor bug
+-- checkBind :: Bind -> Infer (T.Bind' Type)
+-- checkBind (Bind name args expr) = do
+--     fr <- fresh
+--     let lambda = makeLambda expr (reverse (coerce args))
+--     withBinding (coerce name) fr $ do
+--         (sub, (e, infSig)) <- algoW lambda
+--         env <- asks vars
+--         let genInfSig = generalize (apply sub env) infSig
+--         maybeSig <- gets (join . M.lookup (coerce name) . sigs)
+--         case maybeSig of
+--             Just typSig -> do
+--                 unless
+--                     (genInfSig <<= typSig)
+--                     ( throwError $
+--                         Error
+--                             ( Aux.do
+--                                 "Inferred type"
+--                                 quote $ printTree infSig
+--                                 "doesn't match given type"
+--                                 quote $ printTree typSig
+--                             )
+--                             False
+--                     )
+--                 return $ T.Bind (coerce name, typSig) [] (apply sub e, typSig)
+--             _ -> do
+--                 insertSig (coerce name) (Just genInfSig)
+--                 return $ T.Bind (coerce name, genInfSig) [] (apply sub e, genInfSig)
+
 checkBind :: Bind -> Infer (T.Bind' Type)
 checkBind (Bind name args e) = do
     let lambda = makeLambda e (reverse (coerce args))
@@ -162,6 +192,8 @@ checkBind (Bind name args e) = do
     s <- gets sigs
     case M.lookup (coerce name) s of
         Just (Just typSig) -> do
+            env <- asks vars
+            trace ("ENV IN CHECKBIND: " ++ show env) pure ()
             let genInfSig = generalize mempty infSig
             sub <- genInfSig `unify` typSig
             unless
