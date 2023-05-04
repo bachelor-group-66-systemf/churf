@@ -347,12 +347,8 @@ algoW = \case
     EApp e0 e1 -> do
         fr <- fresh
         (s0, (e0', t0)) <- algoW e0
-        traceShow e0 pure ()
-        trace ("S0: " ++ show s0) pure ()
         applySt s0 $ do
             (s1, (e1', t1)) <- algoW e1
-            traceShow e1 pure ()
-            trace ("S1: " ++ show s1) pure ()
             s2 <- unify (apply s1 t0) (TFun t1 fr)
             let t = apply s2 fr
             let comp = s2 `compose` s1 `compose` s0
@@ -499,6 +495,7 @@ unify t0 t1 =
             (t@(TData _ _), TVar (MkTVar b)) -> return $ M.singleton (coerce b) t
             (TVar (MkTVar a), t) -> occurs (coerce a) t
             (t, TVar (MkTVar b)) -> occurs (coerce b) t
+            -- Forall unification should change
             (TAll _ t, b) -> unify t b
             (a, TAll _ t) -> unify a t
             (TLit a, TLit b) ->
@@ -630,15 +627,19 @@ skipForalls = \case
     t -> t
 
 freshen :: Type -> Infer Type
-freshen (TAll (MkTVar (LIdent var)) t) = do
-    fr <- fresh
-    let getName (TVar (MkTVar (LIdent i))) = i
-    let sub = (M.singleton (coerce $ getName fr) fr)
-    return $ TAll (MkTVar . coerce $ getName fr) (apply sub (coerce t))
-freshen (TFun t1 t2) = TFun <$> freshen t1 <*> freshen t2
-freshen (TData name tvars) = TData name <$> mapM freshen tvars
-freshen (TVar _) = fresh
-freshen t = return t
+freshen t = do
+    let frees = S.toList (free t)
+    xs <- mapM (const fresh) frees
+    let sub = M.fromList $ zip frees xs
+    return $ apply sub t
+
+{-
+
+a = TVar $ MkTVar "a"
+single = TData "single" [a]
+arr = a `TFun` single
+
+-}
 
 -- | A class for substitutions
 class SubstType t where
