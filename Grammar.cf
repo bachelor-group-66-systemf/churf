@@ -14,7 +14,7 @@ DSig.  Def ::= Sig;
 DData. Def ::= Data; 
 
 internal Sig.   Sig ::= LIdent ":" Type;
-         SigS.   Sig ::= VarName ":" Type;
+         SigS.  Sig ::= VarName ":" Type;
 internal Bind. Bind ::= LIdent [LIdent] "=" Exp;
          BindS. Bind ::= VarName [LIdent] "=" Exp;
 
@@ -43,6 +43,18 @@ Data. Data ::= "data" Type "where" "{" [Inj] "}" ;
 Inj. Inj ::= UIdent ":" Type ;
 
 -------------------------------------------------------------------------------
+-- * PATTERN MATCHING 
+-------------------------------------------------------------------------------
+
+Branch. Branch ::= Pattern "=>" Exp ;
+
+PVar.        Pattern1 ::= LIdent;
+PLit.        Pattern1 ::= Lit;
+PCatch.      Pattern1 ::= "_";
+PEnum.       Pattern1 ::= UIdent;
+PInj.        Pattern  ::= UIdent [Pattern1];
+
+-------------------------------------------------------------------------------
 -- * Expressions
 -------------------------------------------------------------------------------
 
@@ -69,18 +81,6 @@ define infixSymbol e1 vn e3 = EApp (EApp (EVarS (VSymbol vn)) e1) e3;
 
 LInt.  Lit ::= Integer;
 LChar. Lit ::= Char;
-
--------------------------------------------------------------------------------
--- * PATTERN MATCHING 
--------------------------------------------------------------------------------
-
-Branch. Branch ::= Pattern "=>" Exp ;
-
-PVar.        Pattern1 ::= LIdent;
-PLit.        Pattern1 ::= Lit;
-PCatch.      Pattern1 ::= "_";
-PEnum.       Pattern1 ::= UIdent;
-PInj.        Pattern  ::= UIdent [Pattern1];
 
 -------------------------------------------------------------------------------
 -- * AUX
