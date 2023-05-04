@@ -1,5 +1,6 @@
 module Monomorphizer.DataTypeRemover (removeDataTypes) where
 
+import           Data.Bifunctor                (Bifunctor (bimap))
 import           LambdaLifterIr                (Ident (..))
 import qualified Monomorphizer.MonomorphizerIr as M2
 import qualified Monomorphizer.MorbIr          as M1
@@ -39,6 +40,7 @@ pExpT (exp, t) = (pExp exp, pType t)
 
 pExp :: M1.Exp -> M2.Exp
 pExp (M1.EVar ident)          = M2.EVar ident
+pExp (M1.EVarCxt ident cxt)   = M2.EVarCxt ident (map pId cxt)
 pExp (M1.ELit lit)            = M2.ELit lit
 pExp (M1.ELet bind expt)      = M2.ELet (pBind bind) (pExpT expt)
 pExp (M1.EApp e1 e2)          = M2.EApp (pExpT e1) (pExpT e2)
@@ -51,7 +53,7 @@ pBranch (M1.Branch (patt, t) expt) = M2.Branch (pPattern patt, pType t) (pExpT e
 pPattern :: M1.Pattern -> M2.Pattern
 pPattern (M1.PVar ident)       = M2.PVar ident
 pPattern (M1.PLit lit)         = M2.PLit lit
-pPattern (M1.PInj ident patts) = M2.PInj ident (map (\(p, t) -> (pPattern p, pType t)) patts)
+pPattern (M1.PInj ident patts) = M2.PInj ident (map (bimap pPattern pType) patts)
 pPattern M1.PCatch             = M2.PCatch
 pPattern (M1.PEnum ident)      = M2.PEnum ident
 

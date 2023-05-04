@@ -41,6 +41,7 @@ import           Control.Monad.State           (MonadState, StateT (runStateT),
 import qualified Data.Map                      as Map
 import           Data.Maybe                    (catMaybes)
 import qualified Data.Set                      as Set
+import           Data.Tuple.Extra              (secondM)
 import           Grammar.Print                 (printTree)
 
 {- | EnvM is the monad containing the read-only state as well as the
@@ -192,7 +193,8 @@ morphCons :: M.Type -> Ident -> EnvM ()
 morphCons expectedType ident = do
     maybeD <- getInputData ident
     case maybeD of
-        Nothing -> error $ "identifier '" ++ show ident ++ "' not found"
+        -- closures can have unbound variables
+        Nothing -> pure ()
         Just d -> do
             modify (\output -> Map.insert ident (Data expectedType d) output)
 
@@ -222,6 +224,7 @@ morphExp expectedType exp = case exp of
         return $ M.ECase (exp', t') (catMaybes bs')
     -- Ideally constructors should be EInj, though this code handles them
     -- as well.
+    -- FIXME MAKE EVAR AND EINJ SEPARATE!!!
     L.EVar ident -> do
         isLocal <- localExists ident
         if isLocal
@@ -240,6 +243,25 @@ morphExp expectedType exp = case exp of
                         return $ M.EVar newBindName
     -- Ideally constructors should be EInj, though this code handles them
     -- as well.
+
+
+    L.EVarCxt ident cxt -> do
+        isLocal <- localExists ident
+        if isLocal
+            then do
+                return $ M.EVar ident
+            else do
+                bind <- getInputBind ident
+                case bind of
+                    Nothing -> do
+                        -- This is a constructor
+                        morphCons expectedType ident
+                        return $ M.EVar ident
+                    Just bind' -> do
+                        -- New bind to process
+                        newBindName <- morphBind expectedType bind'
+                        cxt' <- mapM (secondM getMonoFromPoly) cxt
+                        return $ M.EVarCxt newBindName cxt'
 
     L.ELet (identB, tB) (expB, tExpB) (exp, tExp) -> do
         tB' <- getMonoFromPoly tB

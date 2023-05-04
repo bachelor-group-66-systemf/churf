@@ -117,7 +117,7 @@ instance Print Data where
 
 instance Print Inj where
     prt i = \case
-        Inj uident type_ -> prPrec i 0 (concatD [prt 0 uident, doc (showString ":"), prt 0 type_])
+        Inj uident type_ -> prt i (uident, type_)
 
 instance Print [Inj] where
     prt _ [] = concatD []

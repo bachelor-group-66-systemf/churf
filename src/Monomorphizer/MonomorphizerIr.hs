@@ -61,7 +61,7 @@ instance Print Bind where
     prt i (Bind sig@(name, _) parms rhs) =
         prPrec i 0 $
             concatD
-                [ prtSig sig
+                [ prt i sig
                 , prt 0 name
                 , prt 0 parms
                 , doc $ showString "="
@@ -118,7 +118,7 @@ instance Print Exp where
                     ]
 
 instance Print Branch where
-    prt i (Branch (pattern_, t) exp) = prPrec i 0 (concatD [doc (showString "("), prt 0 pattern_, doc (showString " : "), prt 0 t, doc (showString ")"), doc (showString "=>"), prt 0 exp])
+    prt i (Branch patt exp) = prPrec i 0 (concatD [prt i patt, doc (showString "=>"), prt 0 exp])
 
 instance Print [Branch] where
     prt _ []       = concatD []
@@ -136,7 +136,7 @@ instance Print Data where
 
 instance Print Inj where
     prt i = \case
-        Inj uident type_ -> prPrec i 0 (concatD [prt 0 uident, doc (showString ":"), prt 0 type_])
+        Inj uident type_ -> prt i (uident, type_)
 
 instance Print Pattern where
     prt i = \case
@@ -159,14 +159,6 @@ instance Print Type where
     prt i = \case
         TLit uident -> prPrec i 1 (concatD [prt 0 uident])
         TFun type_1 type_2 -> prPrec i 0 (concatD [prt 1 type_1, doc (showString "->"), prt 0 type_2])
-
-prtSig :: T Ident -> Doc
-prtSig (name, t) =
-    concatD
-        [ prt 0 name
-        , doc $ showString ":"
-        , prt 0 t
-        ]
 
 prtCxt :: [T Ident] -> Doc
 prtCxt cxt = concatD

@@ -1,0 +1,25 @@
+data List (a) where 
+    Nil  : List (a)
+    Cons : a -> List (a) -> List (a)
+
+map : (a -> b) -> List (a) -> List (b)
+map f xs = case xs of
+    Nil       => Nil
+    Cons x xs => Cons (f x) (map f xs)
+
+add : Int -> Int -> Int
+add x y = x + y
+
+foldr : (a -> b -> b) -> b -> List (a) -> b
+foldr f y xs = case xs of
+    Nil       => y
+    Cons x xs => f x (foldr f y xs)
+
+f : List (Int)
+f = (\x.\ys. map (\y. add y x) ys) 4 (Cons 1 (Cons 2 Nil))
+-- [5, 6]
+
+main : Int
+main = foldr add 0 f
+
+
