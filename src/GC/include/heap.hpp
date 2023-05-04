@@ -7,9 +7,9 @@
 #include "chunk.hpp"
 #include "profiler.hpp"
 
-#define HEAP_SIZE 65536
-#define FREE_THRESH (uint) 100
-#define HEAP_DEBUG
+#define HEAP_SIZE 320//65536
+#define FREE_THRESH (uint) 0
+// #define HEAP_DEBUG
 
 namespace GC
 {
@@ -23,7 +23,14 @@ namespace GC
 		MARK_SWEEP 	= 1 << 2,
 		FREE		= 1 << 3,
 		COLLECT_ALL	= 0b1111 // all flags above
-	}; 
+	};
+
+	struct AddrRange
+	{
+		const uintptr_t *start, *end;
+
+		AddrRange(uintptr_t *_start, uintptr_t *_end) : start(_start), end(_end) {}
+	};
 
 	/**
 	 * The heap class to represent the heap for the
@@ -65,6 +72,7 @@ namespace GC
 		void print_line(Chunk *chunk);
 		void print_worklist(std::vector<Chunk *> &list);
 		void mark_step(uintptr_t start, uintptr_t end, std::vector<Chunk *> &worklist);
+		void mark_range(std::vector<AddrRange *> &ranges, std::vector<Chunk *> &worklist);
 
 		// Temporary
 		Chunk *try_recycle_chunks_new(size_t size);
