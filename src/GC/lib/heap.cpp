@@ -2,6 +2,7 @@
 #include <stdexcept>
 #include <stdlib.h>
 #include <vector>
+#include <unordered_map>
 #include <chrono>
 
 #include "heap.hpp"
@@ -9,7 +10,7 @@
 #define time_now	std::chrono::high_resolution_clock::now()
 #define to_us		std::chrono::duration_cast<std::chrono::microseconds>
 
-using std::cout, std::endl, std::vector, std::hex, std::dec;
+using std::cout, std::endl, std::vector, std::hex, std::dec, std::unordered_map;
 
 namespace GC
 {
@@ -91,6 +92,12 @@ namespace GC
 			// Profiler::record(AllocStart, a_ms);
 			heap.collect();
 			// If memory is not enough after collect, crash with OOM error
+			if (heap.m_size > HEAP_SIZE)
+			{
+				throw std::runtime_error(std::string("Error: Heap out of memory"));
+			}
+			//throw std::runtime_error(std::string("Error: Heap out of memory"));
+		}
 			if (heap.m_size + size > HEAP_SIZE)
 			{
 				if (profiler_enabled)
@@ -116,6 +123,7 @@ namespace GC
 		auto new_chunk = new Chunk(size, (uintptr_t *)(heap.m_heap + heap.m_size));
 
 		heap.m_size += size;
+		heap.m_total_size += size;
 		heap.m_allocated_chunks.push_back(new_chunk);
 
 		if (profiler_enabled)
@@ -152,7 +160,8 @@ namespace GC
 			//auto chunk = Heap::get_at(heap.m_freed_chunks, i);
 			auto chunk = heap.m_freed_chunks[i];
 			auto iter = heap.m_freed_chunks.begin();
-			advance(iter, i);
+			i++;
+			//advance(iter, i);
 			if (chunk->m_size > size)
 			{
 				// Split the chunk, use one part and add the remaining part to
@@ -214,8 +223,12 @@ namespace GC
 
 		uintptr_t *stack_top = heap.m_stack_top;
 
-		auto work_list = heap.m_allocated_chunks;
-		mark(stack_bottom, stack_top, work_list);
+		//auto work_list = heap.m_allocated_chunks;
+		//mark(stack_bottom, stack_top, work_list);
+
+		// Testing mark_hash, previous woking implementation above
+		create_table();
+		mark_hash(stack_bottom, stack_top);
 
 		sweep(heap);
 
@@ -426,6 +439,7 @@ namespace GC
 				heap.m_freed_chunks.pop_back();
 				if (profiler_enabled)
 					Profiler::record(ChunkFreed, chunk);
+				heap.m_size -= chunk->m_size;
 				delete chunk;
 			}
 		}
@@ -488,6 +502,7 @@ namespace GC
 			{
 				if (profiler_enabled)
 					Profiler::record(ChunkFreed, chunk);
+				heap.m_size -= chunk->m_size;
 				delete chunk;
 			}
 			else

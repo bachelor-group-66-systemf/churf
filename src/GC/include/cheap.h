@@ -7,6 +7,7 @@
 extern "C" {
 #endif
 
+#define DEBUG
 #define WRAPPER_DEBUG
 
 #ifdef WRAPPER_DEBUG
