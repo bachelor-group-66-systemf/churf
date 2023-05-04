@@ -3,10 +3,7 @@
 
 module Desugar.Desugar (desugar) where
 
-import Data.Function (on)
-import Debug.Trace (traceShow)
 import Grammar.Abs
-import Grammar.Print
 
 {-
 
