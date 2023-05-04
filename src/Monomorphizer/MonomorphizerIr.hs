@@ -80,9 +80,8 @@ instance Print Exp where
         EVar name -> prPrec i 3 $ prt 0 name
         EVarCxt lident cxt ->
             prPrec i 3 $ concatD
-                [ doc $ showString "("
-                , prt 0 lident, doc $ showString ","
-                , prtCxt cxt, doc $ showString ")"
+                [ prtCxt cxt
+                , prt 0 lident
                 ]
         ELit lit -> prPrec i 3 $ prt 0 lit
         ELet b e ->
@@ -162,7 +161,7 @@ instance Print Type where
 
 prtCxt :: [T Ident] -> Doc
 prtCxt cxt = concatD
-    [ doc $ showString "["
-    , concatD . intersperse (doc $ showString ", ") $ map (prt 0) cxt
-    , doc $ showString "]"
+    [ doc $ showString "《"
+    , concatD . intersperse (doc $ showString ", ") $ map (\(x@(Ident s), _) -> concatD [doc $ showString (s ++ "^="), prt 0 x]) cxt
+    , doc $ showString "》"
     ]

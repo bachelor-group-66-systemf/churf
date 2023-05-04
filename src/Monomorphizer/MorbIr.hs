@@ -4,7 +4,7 @@ module Monomorphizer.MorbIr where
 
 import           Data.List      (intersperse)
 import           Grammar.Print
-import           LambdaLifterIr (Ident, Lit (..))
+import           LambdaLifterIr (Ident (..), Lit (..))
 
 newtype Program = Program [Def]
     deriving (Show, Ord, Eq)
@@ -78,9 +78,8 @@ instance Print Exp where
         EVar name -> prPrec i 3 $ prt 0 name
         EVarCxt lident cxt ->
             prPrec i 3 $ concatD
-                [ doc $ showString "("
-                , prt 0 lident, doc $ showString ","
-                , prtCxt cxt, doc $ showString ")"
+                [ prtCxt cxt
+                , prt 0 lident
                 ]
         ELit lit -> prPrec i 3 $ prt 0 lit
         ELet b e ->
@@ -159,10 +158,9 @@ instance Print Type where
         TFun type_1 type_2 -> prPrec i 0 (concatD [prt 1 type_1, doc (showString "->"), prt 0 type_2])
         TData uident types -> prPrec i 1 (concatD [prt 0 uident, doc (showString "("), prt 0 types, doc (showString ")")])
 
-
 prtCxt :: [T Ident] -> Doc
 prtCxt cxt = concatD
-    [ doc $ showString "["
-    , concatD . intersperse (doc $ showString ", ") $ map (prt 0) cxt
-    , doc $ showString "]"
+    [ doc $ showString "《"
+    , concatD . intersperse (doc $ showString ", ") $ map (\(x@(Ident s), _) -> concatD [doc $ showString (s ++ "^="), prt 0 x]) cxt
+    , doc $ showString "》"
     ]

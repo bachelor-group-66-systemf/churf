@@ -83,7 +83,7 @@ instance Print [Bind] where
 instance Print Exp where
     prt i = \case
         EVar lident -> prPrec i 3 (concatD [prt 0 lident])
-        EVarCxt lident cxt -> prPrec i 3 (concatD [doc (showString "("), prt 0 lident, doc (showString ","), prtCxt cxt, doc (showString ")")])
+        EVarCxt lident cxt -> prPrec i 3 (concatD [prtCxt cxt, prt i lident])
         EInj uident -> prPrec i 3 (concatD [prt 0 uident])
         ELit lit -> prPrec i 3 (concatD [prt 0 lit])
         EApp exp1 exp2 -> prPrec i 2 (concatD [prt 2 exp1, prt 3 exp2])
@@ -91,11 +91,12 @@ instance Print Exp where
         ELet lident exp1 exp2 -> prPrec i 0 (concatD [doc (showString "let"), prt 0 lident, doc (showString "="), prt 0 exp1 , doc (showString "in"), prt 0 exp2])
         ECase exp branchs -> prPrec i 0 (concatD [doc (showString "case"), prt 0 exp, doc (showString "of"), doc (showString "{"), prt 0 branchs, doc (showString "}")])
 
+
 prtCxt :: [T Ident] -> Doc
 prtCxt cxt = concatD
-    [ doc $ showString "["
-    , concatD . intersperse (doc $ showString ", ") $ map (prt 0) cxt
-    , doc $ showString "]"
+    [ doc $ showString "《"
+    , concatD . intersperse (doc $ showString ", ") $ map (\(x@(Ident s), _) -> concatD [doc $ showString (s ++ "^="), prt 0 x]) cxt
+    , doc $ showString "》"
     ]
 
 instance Print Branch where
