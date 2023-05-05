@@ -38,7 +38,7 @@ import Control.Monad.Reader (
     runReader,
  )
 import Control.Monad.State (
-    MonadState,
+    MonadState (get),
     StateT (runStateT),
     gets,
     modify,
@@ -48,6 +48,7 @@ import Data.Map qualified as Map
 import Data.Maybe (catMaybes)
 import Data.Set qualified as Set
 import Grammar.Print (printTree)
+import Debug.Trace (trace)
 
 {- | EnvM is the monad containing the read-only state as well as the
 output state containing monomorphized functions and to-be monomorphized
@@ -215,9 +216,9 @@ morphExp expectedType exp = case exp of
     T.ELit lit -> return $ M.ELit (convertLit lit)
     -- Constructor
     T.EInj ident -> do
-        let ident' = newName expectedType ident
-        morphCons expectedType ident ident'
-        return $ M.EVar ident'
+      let ident' = newName (getDataType expectedType) ident
+      morphCons expectedType ident ident'
+      return $ M.EVar ident'
     T.EApp (e1, _t1) (e2, t2) -> do
         t2' <- getMonoFromPoly t2
         e2' <- morphExp t2' e2
@@ -247,11 +248,7 @@ morphExp expectedType exp = case exp of
             else do
                 bind <- getInputBind ident
                 case bind of
-                    Nothing -> do
-                        -- This is a constructor
-                        let ident' = newName expectedType ident
-                        morphCons expectedType ident ident'
-                        return $ M.EVar ident'
+                    Nothing -> error $ "unbound variable: '" ++ printTree ident ++ "'"
                     Just bind' -> do
                         -- New bind to process
                         newBindName <- morphBind expectedType bind'
@@ -285,12 +282,15 @@ morphPattern p expectedType = case p of
   T.PVar ident     -> return $ Just (M.PVar (ident, expectedType), Set.singleton ident)
   T.PLit lit       -> return $ Just (M.PLit (convertLit lit, expectedType), Set.empty)
   T.PCatch         -> return $ Just (M.PCatch, Set.empty)
-  T.PEnum ident    -> do --morphCons expectedType ident
-                         return $ Just (M.PEnum ident, Set.empty)
-  T.PInj ident pts -> do --morphCons expectedType ident
-                         isMarked <- isConsMarked ident
+  T.PEnum ident    -> return $ Just (M.PEnum (newName expectedType ident), Set.empty)
+  T.PInj ident pts -> do let newIdent = newName expectedType ident
+                         outEnv <- get
+                         trace ("WOW: " ++ show (newName expectedType ident)) $ return ()
+                         trace ("WOW2: " ++ show (outEnv)) $ return ()
+                         isMarked <- isConsMarked newIdent
                          if isMarked
                             then do
+                              trace ("WOW3") $ return ()
                               ts' <- mapM (getMonoFromPoly . snd) pts
                               let pts' = zip (map fst pts) ts'
                               psSets <- mapM (uncurry morphPattern) pts'
@@ -298,7 +298,7 @@ morphPattern p expectedType = case p of
                               case maybePsSets of
                                 Nothing      -> return Nothing
                                 Just psSets' -> return $ Just 
-                                  (M.PInj ident (map fst psSets'), Set.unions $ map snd psSets')
+                                  (M.PInj newIdent (map fst psSets'), Set.unions $ map snd psSets')
                             else return Nothing
 
 -- | Creates a new identifier for a function with an assigned type.
