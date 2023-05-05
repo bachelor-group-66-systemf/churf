@@ -178,12 +178,13 @@ prelude :: String
 prelude =
     unlines
         [ "\n"
-        , -- , "customHelperFunctionCuzPoorImplementation : Bool () -> Int -> Bool ()"
-          -- , "customHelperFunctionCuzPoorImplementation x y = x"
-          "data Bool where"
+        , "data Bool where"
         , "    False : Bool"
         , "    True  : Bool"
-        , "lt : Int -> Int -> Bool"
-        , "lt x y = True"
+        , -- The function body of lt is replaced during code gen. It exists here for type checking purposes.
+          "lt : Int -> Int -> Bool"
+        , "lt x y = case x of"
+        , "    _ => True"
+        , "    _ => False"
         , "\n"
         ]
