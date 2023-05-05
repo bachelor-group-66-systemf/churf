@@ -235,16 +235,16 @@ namespace GC
 		// mark_hash(stack_bottom, stack_top);
 
 		vector<uintptr_t *> roots;
-		cout << "\nb4 find_roots\n";
+		// cout << "\nb4 find_roots\n";
 		find_roots(stack_bottom, roots);
 
-		cout << "b4 mark\n";
+		// cout << "b4 mark\n";''
 		mark(roots);
 
-		cout << "b4 sweep\n";
+		// cout << "b4 sweep\n";
 		sweep(heap);
 
-		cout << "b4 free\n";
+		// cout << "b4 free\n";
 		free(heap);
 		
 		auto c_end = time_now;
@@ -296,13 +296,13 @@ namespace GC
 		std::queue<std::pair<uintptr_t, uintptr_t>> chunk_spaces;
 		// std::set<uintptr_t> visited_addresses;
 
-		cout << "b4 find_chunks of roots\n";
+		// cout << "b4 find_chunks of roots\n";
 		while (iter != end)
 		{
 			find_chunks(*iter++, chunk_spaces);
 		}
 
-		cout << "b4 find_chunks of chunks\n";
+		// cout << "b4 find_chunks of chunks\n";
 		while (!chunk_spaces.empty())
 		{
 			auto range = chunk_spaces.front();
@@ -462,7 +462,7 @@ namespace GC
 		if (profiler_enabled)
 			Profiler::record(SweepStart);
 		auto iter = heap.m_allocated_chunks.begin();
-		std::cout << "Chunks alloced: " << heap.m_allocated_chunks.size() << std::endl;
+		// std::cout << "Chunks alloced: " << heap.m_allocated_chunks.size() << std::endl;
 		// This cannot "iter != stop", results in seg fault, since the end gets updated, I think.
 		while (iter != heap.m_allocated_chunks.end())
 		{
