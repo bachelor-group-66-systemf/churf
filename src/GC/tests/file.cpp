@@ -8,6 +8,7 @@
 void time_string(char *buffer);
 void print_log_file(const std::string TESTS_PATH);
 void readlink_test();
+void null_test();
 
 int main()
 {
@@ -17,7 +18,9 @@ int main()
     // const std::string TESTS_PATH = "/home/virre/dev/systemF/org/language/src/GC/tests/";
     // print_log_file(TESTS_PATH);
     
-    readlink_test();
+    // readlink_test();
+
+    null_test();
 
     return 0;
 }
@@ -65,4 +68,10 @@ void readlink_test()
     std::string log_path = folder + "/log_file_bla.txt";
     std::cout << "\n" << log_path << std::endl;
 
+}
+
+void null_test() {
+    int *p = nullptr;
+
+    std::cout << "P: " << nullptr << std::endl;
 }

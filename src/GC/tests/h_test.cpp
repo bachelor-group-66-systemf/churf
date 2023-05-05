@@ -11,7 +11,7 @@ struct Node {
 };
 
 Node *create_chain(int depth) {
-    cout << "entering create_chain";
+    cout << "entering create_chain" << endl;
     std::vector<Node*> nodes;
     if (depth > 0) {
         Node *last_node = static_cast<Node *>(GC::Heap::alloc(sizeof(Node)));
@@ -36,14 +36,14 @@ void create_array(size_t size) {
 }
 
 void detach_pointer(long **ptr) {
-    cout << "entering detach_pointer";
+    cout << "entering detach_pointer" << endl;
     long *dummy_ptr = nullptr;
     *ptr = dummy_ptr;
     cout << "\nexiting detach_pointer" << endl;
 }
 
 Node *test_chain(int depth, bool detach) {
-    cout << "entering test_chain";
+    cout << "entering test_chain" << endl;
     auto stack_start = reinterpret_cast<uintptr_t *>(__builtin_frame_address(0));
 
     Node *node_chain = create_chain(depth);
@@ -80,14 +80,14 @@ int main() {
     GC::Heap::init();
     GC::Heap &gc = GC::Heap::the();
     gc.set_profiler(true);
+    GC::Profiler::set_log_options(GC::FunctionCalls);
     gc.check_init();
     auto stack_start = reinterpret_cast<uintptr_t *>(__builtin_frame_address(0));
 
     Node *root1 = static_cast<Node *>(gc.alloc(sizeof(Node)));
     Node *root2 = static_cast<Node *>(gc.alloc(sizeof(Node)));
-    root1 = test_chain(58000, false);
-    root2 = test_chain(58000, false);
-
+    root1 = test_chain(100000, false);
+    //root2 = test_chain(58000, false);
 
     gc.collect(GC::COLLECT_ALL);     
     auto end = std::chrono::high_resolution_clock::now();

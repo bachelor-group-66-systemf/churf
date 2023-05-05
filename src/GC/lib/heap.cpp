@@ -1,16 +1,16 @@
-#include <algorithm>
-#include <assert.h>
-#include <cstring>
-#include <execinfo.h>
 #include <iostream>
-#include <setjmp.h>
 #include <stdexcept>
 #include <stdlib.h>
 #include <vector>
+#include <unordered_map>
+#include <chrono>
 
 #include "heap.hpp"
 
-using std::cout, std::endl, std::vector, std::hex, std::dec;
+#define time_now std::chrono::high_resolution_clock::now()
+#define to_us std::chrono::duration_cast<std::chrono::microseconds>
+
+using std::cout, std::endl, std::vector, std::hex, std::dec, std::unordered_map;
 
 namespace GC
 {
@@ -18,10 +18,10 @@ namespace GC
 	 * This implementation of the() guarantees laziness
 	 * on the instance and a correct destruction with
 	 * the destructor.
-	 * 
+	 *
 	 * @returns The singleton object.
-	*/
-	Heap& Heap::the()
+	 */
+	Heap &Heap::the()
 	{
 		static Heap instance;
 		return instance;
@@ -41,6 +41,13 @@ namespace GC
 // clang complains because arg for __b_f_a is not 0 which is "unsafe"
 #pragma clang diagnostic ignored "-Wframe-address"
 		heap.m_stack_top = static_cast<uintptr_t *>(__builtin_frame_address(1));
+		// TODO: handle this below
+		// heap.m_heap_top = heap.m_heap;
+	}
+
+	void Heap::set_profiler_log_options(RecordOption flags)
+	{
+		Profiler::set_log_options(flags);
 	}
 
 	/**
@@ -66,10 +73,11 @@ namespace GC
 	 */
 	void *Heap::alloc(size_t size)
 	{
+		auto a_start = time_now;
 		// Singleton
 		Heap &heap = Heap::the();
 		bool profiler_enabled = heap.profiler_enabled();
-		
+
 		if (profiler_enabled)
 			Profiler::record(AllocStart, size);
 
@@ -81,8 +89,20 @@ namespace GC
 
 		if (heap.m_size + size > HEAP_SIZE)
 		{
+			// auto a_ms = to_us(c_start - a_start);
+			// Profiler::record(AllocStart, a_ms);
 			heap.collect();
 			// If memory is not enough after collect, crash with OOM error
+			if (heap.m_size > HEAP_SIZE)
+			{
+				throw std::runtime_error(std::string("Error: Heap out of memory"));
+			}
+			// throw std::runtime_error(std::string("Error: Heap out of memory"));
+		}
+		if (heap.m_size + size > HEAP_SIZE)
+		{
+			if (profiler_enabled)
+				Profiler::dispose();
 			throw std::runtime_error(std::string("Error: Heap out of memory"));
 		}
 
@@ -92,6 +112,9 @@ namespace GC
 		{
 			if (profiler_enabled)
 				Profiler::record(ReusedChunk, reused_chunk);
+			auto a_end = time_now;
+			auto a_ms = to_us(a_end - a_start);
+			Profiler::record(AllocStart, a_ms);
 			return static_cast<void *>(reused_chunk->m_start);
 		}
 
@@ -100,11 +123,16 @@ namespace GC
 		auto new_chunk = new Chunk(size, (uintptr_t *)(heap.m_heap + heap.m_size));
 
 		heap.m_size += size;
+		// TODO: handle this below
+		// heap.m_total_size += size;
 		heap.m_allocated_chunks.push_back(new_chunk);
 
 		if (profiler_enabled)
 			Profiler::record(NewChunk, new_chunk);
 
+		auto a_end = time_now;
+		auto a_ms = to_us(a_end - a_start);
+		Profiler::record(AllocStart, a_ms);
 		return new_chunk->m_start;
 	}
 
@@ -130,10 +158,11 @@ namespace GC
 		// Check if there are any freed chunks large enough for current request
 		for (size_t i = 0; i < heap.m_freed_chunks.size(); i++)
 		{
-			//auto chunk = Heap::get_at(heap.m_freed_chunks, i);
+			// auto chunk = Heap::get_at(heap.m_freed_chunks, i);
 			auto chunk = heap.m_freed_chunks[i];
 			auto iter = heap.m_freed_chunks.begin();
-			advance(iter, i);
+			i++;
+			// advance(iter, i);
 			if (chunk->m_size > size)
 			{
 				// Split the chunk, use one part and add the remaining part to
@@ -160,32 +189,14 @@ namespace GC
 	}
 
 	/**
-	 * Advances an iterator and returns an element
-	 * at position `n`.
-	 * 
-	 * @param list	The list to retrieve an element from.
-	 * 
-	 * @param n		The position to retrieve an element at.
-	 * 
-	 * @returns 	The pointer to the chunk at position n in list.
-	*/
-	// Chunk *Heap::get_at(std::vector<Chunk *> &list, size_t n)
-	// {
-	// 	auto iter = list.begin();
-	// 	if (!n)
-	// 		return *iter;
-	// 	std::advance(iter, n);
-	// 	return *iter;
-	// }
-
-	/**
 	 * Returns a bool whether the profiler is enabled
 	 * or not.
-	 * 
+	 *
 	 * @returns True or false if the profiler is enabled
 	 * 			or disabled respectively.
-	*/
-	bool Heap::profiler_enabled() {
+	 */
+	bool Heap::profiler_enabled()
+	{
 		Heap &heap = Heap::the();
 		return heap.m_profiler_enable;
 	}
@@ -199,6 +210,8 @@ namespace GC
 	 */
 	void Heap::collect()
 	{
+		auto c_start = time_now;
+
 		Heap &heap = Heap::the();
 
 		if (heap.profiler_enabled())
@@ -212,12 +225,20 @@ namespace GC
 
 		uintptr_t *stack_top = heap.m_stack_top;
 
-		auto work_list = heap.m_allocated_chunks;
-		mark(stack_bottom, stack_top, work_list);
+		// auto work_list = heap.m_allocated_chunks;
+		// mark(stack_bottom, stack_top, work_list);
+
+		// Testing mark_hash, previous woking implementation above
+		create_table();
+		mark_hash(stack_bottom, stack_top);
 
 		sweep(heap);
 
 		free(heap);
+
+		auto c_end = time_now;
+
+		Profiler::record(CollectStart, to_us(c_end - c_start));
 	}
 
 	/**
@@ -227,8 +248,8 @@ namespace GC
 	 * the root chunk and mark those chunks.
 	 * If a chunk is marked it is removed from the worklist, since it's no longer of
 	 * concern for this method.
-	 * 
-	 * Time complexity: 0(N^2 * log(N)) as upper bound. 
+	 *
+	 * Time complexity: 0(N^2 * log(N)) as upper bound.
 	 * 					Where N is either the size of the worklist or the size of
 	 * 					the stack frame, depending on which is the largest.
 	 *
@@ -236,12 +257,15 @@ namespace GC
 	 * @param end      Pointer to the end of the stack frame.
 	 * @param worklist The currently allocated chunks, which haven't been marked.
 	 */
-	void Heap::mark(uintptr_t *start, const uintptr_t* const end, vector<Chunk *> &worklist)
+	void Heap::mark(uintptr_t *start, const uintptr_t *const end, vector<Chunk *> &worklist)
 	{
+		// cout << "\nWorklist size: " << worklist.size() << "\n";
 		Heap &heap = Heap::the();
 		bool profiler_enabled = heap.m_profiler_enable;
 		if (profiler_enabled)
 			Profiler::record(MarkStart);
+
+		vector<AddrRange *> rangeWL;
 
 		// To find adresses thats in the worklist
 		for (; start <= end; start++)
@@ -265,8 +289,22 @@ namespace GC
 						chunk->m_marked = true;
 						it = worklist.erase(it);
 
+						/* 						Chunk *next = find_pointer((uintptr_t *) c_start, (uintptr_t *) c_end, worklist);
+												while (next != NULL) {
+													if (!next->m_marked)
+													{
+														next->m_marked = true;
+														auto c_start = reinterpret_cast<uintptr_t>(next->m_start);
+														auto c_size  = reinterpret_cast<uintptr_t>(next->m_size);
+														auto c_end   = reinterpret_cast<uintptr_t>(c_start + c_size);
+														next = find_pointer((uintptr_t *) c_start, (uintptr_t *) c_end, worklist);
+													}
+												} */
+
 						// Recursively call mark, to see if the reachable chunk further points to another chunk
-						mark((uintptr_t *)c_start, (uintptr_t *)c_end, worklist);
+						// mark((uintptr_t *)c_start, (uintptr_t *)c_end, worklist);
+						// AddrRange *range = new AddrRange((uintptr_t *)c_start, (uintptr_t *)c_end);
+						rangeWL.push_back(new AddrRange((uintptr_t *)c_start, (uintptr_t *)c_end));
 					}
 					else
 					{
@@ -279,24 +317,136 @@ namespace GC
 				}
 			}
 		}
+		mark_range(rangeWL, worklist);
+		rangeWL.clear();
 	}
 
+	void Heap::mark_range(vector<AddrRange *> &ranges, vector<Chunk *> &worklist)
+	{
+		Heap &heap = Heap::the();
+		bool profiler_enabled = heap.m_profiler_enable;
+		if (profiler_enabled)
+			Profiler::record(MarkStart);
+
+		auto iter = ranges.begin();
+		auto stop = ranges.end();
+
+		while (iter != stop)
+		{
+			auto range = *iter++;
+			uintptr_t *start = (uintptr_t *)range->start;
+			const uintptr_t *end = range->end;
+			if (start == nullptr)
+				cout << "\nstart is null\n";
+			for (; start <= end; start++)
+			{
+				auto wliter = worklist.begin();
+				auto wlstop = worklist.end();
+				while (wliter != wlstop)
+				{
+					Chunk *chunk = *wliter;
+					auto c_start = reinterpret_cast<uintptr_t>(chunk->m_start);
+					auto c_size = reinterpret_cast<uintptr_t>(chunk->m_size);
+					auto c_end = reinterpret_cast<uintptr_t>(c_start + c_size);
+
+					if (c_start <= *start && *start < c_end)
+					{
+						if (!chunk->m_marked)
+						{
+							chunk->m_marked = true;
+							wliter = worklist.erase(wliter);
+							ranges.push_back(new AddrRange((uintptr_t *)c_start, (uintptr_t *)c_end));
+							stop = ranges.end();
+						}
+						else
+						{
+							wliter++;
+						}
+					}
+					else
+					{
+						wliter++;
+					}
+				}
+			}
+		}
+	}
+
+	void Heap::create_table()
+	{
+		Heap &heap = Heap::the();
+		unordered_map<uintptr_t, Chunk *> chunk_table;
+		for (auto chunk : heap.m_allocated_chunks)
+		{
+			auto pair = std::make_pair(reinterpret_cast<uintptr_t>(chunk->m_start), chunk);
+			heap.m_chunk_table.insert(pair);
+		}
+	}
+
+	void Heap::mark_hash(uintptr_t *start, const uintptr_t *const end)
+	{
+		Heap &heap = Heap::the();
+
+		bool profiler_enabled = heap.m_profiler_enable;
+		if (profiler_enabled)
+			Profiler::record(MarkStart);
+
+		for (; start <= end; start++)
+		{
+			auto search = heap.m_chunk_table.find(*start);
+			if (search != heap.m_chunk_table.end())
+			{
+				Chunk *chunk = search->second;
+				auto c_start = reinterpret_cast<uintptr_t>(chunk->m_start);
+				auto c_size = reinterpret_cast<uintptr_t>(chunk->m_size);
+				auto c_end = reinterpret_cast<uintptr_t *>(c_start + c_size);
+				if (!chunk->m_marked)
+				{
+					chunk->m_marked = true;
+
+					if (profiler_enabled)
+						Profiler::record(ChunkMarked, chunk);
+
+					// mark_hash(chunk->m_start, c_end);
+					Chunk *next = find_pointer_hash((uintptr_t *)c_start, (uintptr_t *)c_end);
+					while (next != NULL)
+					{
+						if (!next->m_marked)
+						{
+							next->m_marked = true;
+
+							if (profiler_enabled)
+								Profiler::record(ChunkMarked, chunk);
+
+							auto c_start = reinterpret_cast<uintptr_t>(next->m_start);
+							auto c_size = reinterpret_cast<uintptr_t>(next->m_size);
+							auto c_end = reinterpret_cast<uintptr_t>(c_start + c_size);
+							next = find_pointer_hash((uintptr_t *)c_start, (uintptr_t *)c_end);
+						}
+					}
+				}
+			}
+		}
+	}
 
 	/**
 	 * Sweeps the heap, unmarks the marked chunks for the next cycle,
 	 * adds the unmarked nodes to the list of freed chunks; to be freed.
 	 *
-	 * Time complexity: O(N^2), where N is the number of allocated chunks. 
-	 * 					It is quadratic, in the worst case, 
-	 * 					since each call to erase() is linear.  
+	 * Time complexity: O(N^2), where N is the number of allocated chunks.
+	 * 					It is quadratic, in the worst case,
+	 * 					since each call to erase() is linear.
 	 *
 	 * @param heap Pointer to the heap singleton instance.
 	 */
 	void Heap::sweep(Heap &heap)
 	{
-		auto iter = heap.m_allocated_chunks.begin();
 		bool profiler_enabled = heap.m_profiler_enable;
-		// This cannot "iter != stop", results in seg fault, since the end gets updated, I think.
+		if (profiler_enabled)
+			Profiler::record(SweepStart);
+		auto iter = heap.m_allocated_chunks.begin();
+		// std::cout << "Chunks alloced: " << heap.m_allocated_chunks.size() << std::endl;
+		//  This cannot "iter != stop", results in seg fault, since the end gets updated, I think.
 		while (iter != heap.m_allocated_chunks.end())
 		{
 			Chunk *chunk = *iter;
@@ -315,8 +465,12 @@ namespace GC
 					Profiler::record(ChunkSwept, chunk);
 				heap.m_freed_chunks.push_back(chunk);
 				iter = heap.m_allocated_chunks.erase(iter);
+				// heap.m_size -= chunk->m_size;
+				// cout << "Decremented total heap size with: " << chunk->m_size << endl;
+				// cout << "Total size is: " << heap.m_size << endl;
 			}
 		}
+		// std::cout << "Chunks left: " << heap.m_allocated_chunks.size() << std::endl;
 	}
 
 	/**
@@ -324,7 +478,7 @@ namespace GC
 	 * by the sweep phase. If there are more than a certain
 	 * amount of free chunks, delete the free chunks to
 	 * avoid cluttering.
-	 * 
+	 *
 	 * Time complexity: O(N^2), where N is the freed chunks.
 	 * 					If free_overlap() is called, it runs in O(N^2),
 	 * 					otherwise O(N).
@@ -334,6 +488,9 @@ namespace GC
 	 */
 	void Heap::free(Heap &heap)
 	{
+		bool profiler_enabled = heap.m_profiler_enable;
+		if (profiler_enabled)
+			Profiler::record(FreeStart);
 		if (heap.m_freed_chunks.size() > FREE_THRESH)
 		{
 			bool profiler_enabled = heap.profiler_enabled();
@@ -343,6 +500,9 @@ namespace GC
 				heap.m_freed_chunks.pop_back();
 				if (profiler_enabled)
 					Profiler::record(ChunkFreed, chunk);
+				heap.m_size -= chunk->m_size;
+				// cout << "Decremented total heap size with: " << chunk->m_size << endl;
+				// cout << "Total size is: " << heap.m_size << endl;
 				delete chunk;
 			}
 		}
@@ -359,7 +519,7 @@ namespace GC
 	 * Checks for overlaps between freed chunks of memory
 	 * and removes overlapping chunks while prioritizing
 	 * the chunks at lower addresses.
-	 * 
+	 *
 	 * Time complexity: O(N^2), where N is the number of freed chunks.
 	 * 					At each iteration get_at() is called, which is linear.
 	 *
@@ -374,15 +534,15 @@ namespace GC
 	{
 		std::vector<Chunk *> filtered;
 		size_t i = 0;
-		//auto prev = Heap::get_at(heap.m_freed_chunks, i++);
+		// auto prev = Heap::get_at(heap.m_freed_chunks, i++);
 		auto prev = heap.m_freed_chunks[i++];
 		prev->m_marked = true;
 		filtered.push_back(prev);
-		cout << filtered.back()->m_start << endl;
+		// cout << filtered.back()->m_start << endl;
 		for (; i < heap.m_freed_chunks.size(); i++)
 		{
 			prev = filtered.back();
-			//auto next = Heap::get_at(heap.m_freed_chunks, i);
+			// auto next = Heap::get_at(heap.m_freed_chunks, i);
 			auto next = heap.m_freed_chunks[i];
 			auto p_start = (uintptr_t)(prev->m_start);
 			auto p_size = (uintptr_t)(prev->m_size);
@@ -394,7 +554,7 @@ namespace GC
 			}
 		}
 		heap.m_freed_chunks.swap(filtered);
-		
+
 		bool profiler_enabled = heap.m_profiler_enable;
 		// After swap m_freed_chunks contains still available chunks
 		// and filtered contains all the chunks, so delete unused chunks
@@ -405,6 +565,9 @@ namespace GC
 			{
 				if (profiler_enabled)
 					Profiler::record(ChunkFreed, chunk);
+				heap.m_size -= chunk->m_size;
+				// cout << "Decremented total heap size with: " << chunk->m_size << endl;
+				// cout << "Total size is: " << heap.m_size << endl;
 				delete chunk;
 			}
 			else
@@ -414,7 +577,51 @@ namespace GC
 		}
 	}
 
-#ifdef DEBUG
+	void Heap::set_profiler(bool mode)
+	{
+		Heap &heap = Heap::the();
+		heap.m_profiler_enable = mode;
+	}
+
+	Chunk *find_pointer(uintptr_t *start, const uintptr_t *const end, vector<Chunk *> &worklist)
+	{
+		for (; start <= end; start++)
+		{
+			auto it = worklist.begin();
+			auto stop = worklist.end();
+			while (it != stop)
+			{
+				Chunk *chunk = *it;
+				auto c_start = reinterpret_cast<uintptr_t>(chunk->m_start);
+				auto c_size = reinterpret_cast<uintptr_t>(chunk->m_size);
+				auto c_end = reinterpret_cast<uintptr_t>(c_start + c_size);
+
+				// Check if the stack pointer points to something within the chunk
+				if (c_start <= *start && *start < c_end)
+				{
+					return chunk;
+				}
+				return NULL;
+			}
+		}
+	}
+
+	// Checks if a given chunk points to another chunk and returns it
+	Chunk *Heap::find_pointer_hash(uintptr_t *start, const uintptr_t *const end)
+	{
+		Heap &heap = Heap::the();
+		for (; start <= end; start++)
+		{
+			auto search = heap.m_chunk_table.find(*start);
+			if (search != heap.m_chunk_table.end())
+			{
+				return search->second;
+			}
+			return NULL;
+		}
+	}
+
+#ifdef HEAP_DEBUG
 	/**
 	 * Prints the result of Heap::init() and a dummy value
 	 * for the current stack frame for reference.
@@ -530,7 +737,8 @@ namespace GC
 		}
 		else
 		{
-			cout << "NO ALLOCATIONS\n" << endl;
+			cout << "NO ALLOCATIONS\n"
+				 << endl;
 		}
 		if (heap.m_freed_chunks.size())
 		{
@@ -553,7 +761,8 @@ namespace GC
 		}
 		else
 		{
-			cout << "NO ALLOCATIONS\n" << endl;
+			cout << "NO ALLOCATIONS\n"
+				 << endl;
 		}
 		if (heap.m_freed_chunks.size())
 		{
@@ -565,15 +774,12 @@ namespace GC
 		}
 	}
 
-	void Heap::set_profiler(bool mode)
+	void Heap::print_allocated_chunks(Heap *heap)
 	{
-		Heap &heap = Heap::the();
-		heap.m_profiler_enable = mode;
-	}
-
-	void Heap::print_allocated_chunks(Heap *heap) {
-		cout << "--- Allocated Chunks ---\n" << endl;
-		for (auto chunk : heap->m_allocated_chunks) {
+		cout << "--- Allocated Chunks ---\n"
+			 << endl;
+		for (auto chunk : heap->m_allocated_chunks)
+		{
 			print_line(chunk);
 		}
 	}
@@ -584,9 +790,9 @@ namespace GC
 		// Check if there are any freed chunks large enough for current request
 		for (size_t i = 0; i < heap.m_freed_chunks.size(); i++)
 		{
-			auto chunk = heap.m_freed_chunks[i]; //Heap::get_at(heap.m_freed_chunks, i);
+			auto chunk = heap.m_freed_chunks[i]; // Heap::get_at(heap.m_freed_chunks, i);
 			auto iter = heap.m_freed_chunks.begin();
-			//advance(iter, i);
+			// advance(iter, i);
 			i++;
 			if (chunk->m_size > size)
 			{
@@ -617,14 +823,14 @@ namespace GC
 	{
 		std::vector<Chunk *> filtered;
 		size_t i = 0;
-		auto prev = heap.m_freed_chunks[i++]; //Heap::get_at(heap.m_freed_chunks, i++);
+		auto prev = heap.m_freed_chunks[i++]; // Heap::get_at(heap.m_freed_chunks, i++);
 		prev->m_marked = true;
 		filtered.push_back(prev);
 		cout << filtered.back()->m_start << endl;
 		for (; i < heap.m_freed_chunks.size(); i++)
 		{
 			prev = filtered.back();
-			auto next = heap.m_freed_chunks[i]; //Heap::get_at(heap.m_freed_chunks, i);
+			auto next = heap.m_freed_chunks[i]; // Heap::get_at(heap.m_freed_chunks, i);
 			auto p_start = (uintptr_t)(prev->m_start);
 			auto p_size = (uintptr_t)(prev->m_size);
 			auto n_start = (uintptr_t)(next->m_start);
@@ -635,7 +841,7 @@ namespace GC
 			}
 		}
 		heap.m_freed_chunks.swap(filtered);
-		
+
 		bool profiler_enabled = heap.m_profiler_enable;
 		// After swap m_freed_chunks contains still available chunks
 		// and filtered contains all the chunks, so delete unused chunks

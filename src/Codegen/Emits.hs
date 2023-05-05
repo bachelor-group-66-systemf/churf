@@ -129,10 +129,10 @@ compileScs (MIR.DData (MIR.Data typ ts) : xs) = do
 
 firstMainContent :: Bool -> [LLVMIr]
 firstMainContent True =
-    [ UnsafeRaw "%prof = call ptr @cheap_the()\n"
-    , UnsafeRaw "call void @cheap_set_profiler(ptr %prof, i1 true)\n"
-    , UnsafeRaw "call void @cheap_profiler_log_options(ptr %prof, i64 30)\n"
-    , UnsafeRaw "call void @cheap_init()\n"
+    [ -- UnsafeRaw "%prof = call ptr @cheap_the()\n"
+      --     , UnsafeRaw "call void @cheap_set_profiler(ptr %prof, i1 true)\n"
+      -- , UnsafeRaw "call void @cheap_profiler_log_options(ptr %prof, i64 30)\n"
+      UnsafeRaw "call void @cheap_init()\n"
     ]
 firstMainContent False = []
 

@@ -11,10 +11,42 @@
 #include "event.hpp"
 #include "profiler.hpp"
 
-// #define MAC_OS
+#define MAC_OS
 
 namespace GC
 {
+    Profiler& Profiler::the()
+    {
+        static Profiler instance;
+        return instance;
+    }
+
+    RecordOption Profiler::log_options()
+    {
+        Profiler &prof = Profiler::the();
+        return prof.flags;        
+    }
+
+    void Profiler::set_log_options(RecordOption flags)
+    {
+        Profiler &prof = Profiler::the();
+        prof.flags = flags;
+    }
+
+    void Profiler::record_data(GCEvent *event)
+    {
+        Profiler &prof = Profiler::the();
+        prof.m_events.push_back(event);
+
+        if (prof.m_last_prof_event->m_type == event->get_type())
+            prof.m_last_prof_event->m_n++;
+        else
+        {
+            prof.m_prof_events.push_back(prof.m_last_prof_event);
+            prof.m_last_prof_event = new ProfilerEvent(event->get_type());
+        }
+    }
+
     /**
      * Records an event independent of a chunk.
      * 
@@ -22,9 +54,12 @@ namespace GC
     */
     void Profiler::record(GCEventType type)
     {
-        auto event = new GCEvent(type);
-        auto profiler = Profiler::the();
-        profiler->m_events.push_back(event);
+        Profiler &prof = Profiler::the();
+        if (prof.flags & type)
+            Profiler::record_data(new GCEvent(type));
+        // auto event = new GCEvent(type);
+        // auto profiler = Profiler::the();
+        // profiler.m_events.push_back(event);
     }
 
     /**
@@ -37,9 +72,21 @@ namespace GC
     */
     void Profiler::record(GCEventType type, size_t size)
     {
-        auto event = new GCEvent(type, size);
-        auto profiler = Profiler::the();
-        profiler->m_events.push_back(event);
+        Profiler &prof = Profiler::the();
+        if (prof.flags & type)
+            Profiler::record_data(new GCEvent(type, size));
+        // auto event = new GCEvent(type, size);
+        // auto profiler = Profiler::the();
+        // profiler.m_events.push_back(event);
+    }
+
+    void Profiler::dump_trace()
+    {
+        Profiler &prof = Profiler::the();
+        if (prof.flags & FunctionCalls)
+            dump_prof_trace();
+        else
+            dump_chunk_trace();
     }
 
     /**
@@ -56,60 +103,114 @@ namespace GC
         // because in free() chunks are deleted and cannot
         // be referenced by the profiler. These copied
         // chunks are deleted by the profiler on dispose().
-        auto chunk_copy = new Chunk(chunk);
-        auto event = new GCEvent(type, chunk_copy);
-        auto profiler = Profiler::the();
-        profiler->m_events.push_back(event);
+        Profiler &prof = Profiler::the();
+        if (prof.flags & type)
+        {
+            auto chunk_copy = new Chunk(chunk);
+            auto event = new GCEvent(type, chunk_copy);
+            Profiler::record_data(event);
+        }
+        // auto profiler = Profiler::the();
+        // profiler.m_events.push_back(event);
+    }
+
+    void Profiler::record(GCEventType type, std::chrono::microseconds time)
+    {
+        Profiler &prof = Profiler::the();
+        if (type == AllocStart)
+        {
+            prof.alloc_time += time;
+        }
+        else if (type == CollectStart)
+        {
+            prof.collect_time += time;
+        }
+    }
+
+    void Profiler::dump_prof_trace()
+    {
+        Profiler &prof = Profiler::the();
+        prof.m_prof_events.push_back(prof.m_last_prof_event);
+        auto start = prof.m_prof_events.begin();
+        auto end = prof.m_prof_events.end();
+        int allocs = 0, collects = 0;
+
+        char buffer[22];
+        std::ofstream fstr = prof.create_file_stream();
+
+        while (start != end)
+        {
+            auto event = *start++;
+
+            if (event->m_type == AllocStart)
+                allocs += event->m_n;
+            else if (event->m_type == CollectStart)
+                collects += event->m_n;
+
+            fstr << "\n--------------------------------\n"
+                << Profiler::type_to_string(event->m_type) << " "
+                << event->m_n << " times:"; 
+        }
+        fstr << "\n--------------------------------";
+
+        fstr << "\n\nTime spent on allocations:\t" << prof.alloc_time.count() << " microseconds"
+            << "\nAllocation cycles:\t" << allocs
+            << "\nTime spent on collections:\t" << prof.collect_time.count() << " microseconds"
+            << "\nCollection cycles:\t" << collects
+            << "\n--------------------------------";
     }
 
     /**
      * Prints the history of the recorded events
      * to a log file in the /tests/logs folder.
     */
-    void Profiler::dump_trace()
+    void Profiler::dump_chunk_trace()
     {
-        auto profiler = Profiler::the();
-        auto start = profiler->m_events.begin();
-        auto end = profiler->m_events.end();
+        Profiler &prof = Profiler::the();
+        auto start = prof.m_events.begin();
+        auto end = prof.m_events.end();
 
-        // File output stream
-        std::ofstream fstr = profiler->create_file_stream(); 
         // Buffer for timestamp
         char buffer[22];
-        // Time variables
-        std::tm *btm;
-        std::time_t tt;
-        const Chunk *chunk;
 
         while (start != end)
         {
             auto event = *start++;
+            auto e_type = event->get_type();
 
-            tt = event->get_time_stamp(); 
-            btm = std::localtime(&tt);
-            std::strftime(buffer, 22, "%a %T", btm);
-
-            fstr << "--------------------------------\n"
-                 << buffer
-                 << "\nEvent:\t" << event->type_to_string(); 
-            
-
-
-            chunk = event->get_chunk(); 
-
-            if (event->get_type() == AllocStart)
-            {
-                fstr << "\nSize: " << event->get_size();
-            }
-            else if (chunk)
-            {
-                fstr << "\nChunk:  " << chunk->m_start
-                     << "\n  Size: " << chunk->m_size
-                     << "\n  Mark: " << chunk->m_marked;
-            }
-            fstr << "\n";
+            prof.print_chunk_event(event, buffer);
         }
-        fstr << "--------------------------------" << std::endl;
+    }
+
+    void Profiler::print_chunk_event(GCEvent *event, char buffer[22])
+    {
+        Profiler &prof = Profiler::the();
+        // File output stream
+        std::ofstream fstr = prof.create_file_stream(); 
+        std::time_t tt = event->get_time_stamp(); 
+        std::tm *btm = std::localtime(&tt);
+        std::strftime(buffer, 22, "%a %T", btm);
+
+        fstr << "--------------------------------\n"
+             << buffer
+             << "\nEvent:\t" << Profiler::type_to_string(event->get_type());
+             // event->type_to_string(); 
+        
+
+
+        const Chunk *chunk = event->get_chunk(); 
+
+        if (event->get_type() == AllocStart)
+        {
+            fstr << "\nSize: " << event->get_size();
+        }
+        else if (chunk)
+        {
+            fstr << "\nChunk:  " << chunk->m_start
+                 << "\n  Size: " << chunk->m_size
+                 << "\n  Mark: " << chunk->m_marked;
+        }
+        fstr << "\n";
     }
 
     /**
@@ -122,8 +223,6 @@ namespace GC
     {
         Profiler::record(ProfilerDispose);
         Profiler::dump_trace();
-        auto profiler = Profiler::the();
-        delete profiler;
     }
 
     /**
@@ -188,5 +287,25 @@ namespace GC
         auto folder = std::string("/Users/valtermiari/Desktop/DV/Bachelors/code/language/src/GC/tests");
 #endif
         return folder + "/logs";
+    }
+
+    const char *Profiler::type_to_string(GCEventType type)
+    {
+        switch (type)
+        {
+            case HeapInit:          return "HeapInit";
+            case AllocStart:        return "AllocStart";
+            case CollectStart:      return "CollectStart";
+            case MarkStart:         return "MarkStart";
+            case ChunkMarked:       return "ChunkMarked";
+            case ChunkSwept:        return "ChunkSwept";
+            case ChunkFreed:        return "ChunkFreed";
+            case NewChunk:          return "NewChunk";
+            case ReusedChunk:       return "ReusedChunk";
+            case ProfilerDispose:   return "ProfilerDispose";
+            case SweepStart:        return "SweepStart";
+            case FreeStart:         return "FreeStart";
+            default:                return "[Unknown]";
+        }
     }
 }
