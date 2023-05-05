@@ -65,7 +65,8 @@ internal EVar.  Exp4 ::= LIdent;
          EApp.  Exp3 ::= Exp3 Exp4;
          EAdd.  Exp2 ::= Exp2 "+" Exp3;
          ELet.  Exp1  ::= "let" Bind "in" Exp1; 
-         EAbs.  Exp1  ::= "\\" LIdent "." Exp1;
+         EAbsS. Exp1  ::= "\\" Pattern "." Exp1;
+internal EAbs.  Exp1  ::= "\\" LIdent "." Exp1;
          ECase. Exp1  ::= "case" Exp "of" "{" [Branch] "}";
          EAnn.  Exp  ::= Exp1 ":" Type;
 

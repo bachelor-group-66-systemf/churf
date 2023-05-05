@@ -65,6 +65,7 @@ desugarExp = \case
     EApp e1 e2 -> EApp (desugarExp e1) (desugarExp e2)
     EAdd e1 e2 -> EAdd (desugarExp e1) (desugarExp e2)
     EAbs i e -> EAbs i (desugarExp e)
+    EAbsS pat e -> EAbs (LIdent "$zz$") (ECase (EVar "$zz$") [Branch (desugarPattern pat) (desugarExp e)])
     ELet b e -> ELet (desugarBind b) (desugarExp e)
     ECase e br -> ECase (desugarExp e) (map desugarBranch br)
     EAnn e t -> EAnn (desugarExp e) t
