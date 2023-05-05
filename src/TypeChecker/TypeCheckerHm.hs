@@ -217,12 +217,14 @@ checkBind (Bind name args e) = do
 
 checkData :: (MonadState Env m, Monad m, MonadError Error m) => Data -> m ()
 checkData err@(Data typ injs) = do
-    (name, tvars) <- go (skipForalls typ)
+    (name, tvars) <- go [] typ
     dataErr (mapM_ (\i -> checkInj i name tvars) injs) err
   where
-    go = \case
+    go tvars = \case
+        TAll tvar t -> go (tvar : tvars) t
         TData name typs
-            | Right tvars' <- mapM toTVar typs ->
+            | Right tvars' <- mapM toTVar typs
+            , all (`elem` tvars) tvars' ->
                 pure (name, tvars')
         _ ->
             uncatchableErr $
@@ -619,6 +621,15 @@ inst = \case
     TFun t1 t2 -> TFun <$> inst t1 <*> inst t2
     rest -> return rest
 
+-- Only one of 'freshen' and 'inst' should be needed but something doesn't work
+-- when I remove either.
+freshen :: Type -> Infer Type
+freshen t = do
+    let frees = S.toList (free t)
+    xs <- mapM (const fresh) frees
+    let sub = M.fromList $ zip frees xs
+    return $ apply sub t
+
 -- | Generate a new fresh variable
 fresh :: Infer Type
 fresh = do
@@ -631,6 +642,7 @@ fresh = do
 (<<=) a b = case (a, b) of
     (TVar _, _) -> True
     (TFun a b, TFun c d) -> a <<= c && b <<= d
+    -- TAll still scuffed implementation here
     (TAll tvar1 t1, TAll tvar2 t2) -> ungo [tvar1, tvar2] t1 t2
     (TAll tvar t1, t2) -> ungo [tvar] t1 t2
     (t1, TAll tvar t2) -> ungo [tvar] t1 t2
@@ -651,27 +663,10 @@ fresh = do
     go tvars t1 t2 = do
         fr <- fresh
         let sub = M.fromList [(coerce x, fr) | (MkTVar x) <- tvars]
-        return (apply sub t1 <<= apply sub t2)
-
-skipForalls :: Type -> Type
-skipForalls = \case
-    TAll _ t -> skipForalls t
-    t -> t
-
-freshen :: Type -> Infer Type
-freshen t = do
-    let frees = S.toList (free t)
-    xs <- mapM (const fresh) frees
-    let sub = M.fromList $ zip frees xs
-    return $ apply sub t
-
-{-
-
-a = TVar $ MkTVar "a"
-single = TData "single" [a]
-arr = a `TFun` single
-
--}
+        let t1' = apply sub t1
+        let t2' = apply sub t2
+        traceShow t1' (traceShow t2' pure ())
+        return (t1' <<= t2')
 
 -- | A class for substitutions
 class SubstType t where
@@ -711,7 +706,9 @@ instance SubstType Type where
                 Just _ -> apply sub t
             TFun a b -> TFun (apply sub a) (apply sub b)
             TData name a -> TData name (apply sub a)
-            TEVar (MkTEVar _) -> t
+            TEVar (MkTEVar a) -> case M.lookup (coerce a) sub of
+                Nothing -> TEVar (MkTEVar $ coerce a)
+                Just t -> t
 
 instance FreeVars (Map T.Ident Type) where
     free :: Map T.Ident Type -> Set T.Ident
