@@ -53,7 +53,7 @@ void clear_list(Node *head)
     }
 }
 
-#define LIST_SIZE   10
+#define LIST_SIZE   1000
 
 void list_test1()
 {
@@ -61,6 +61,7 @@ void list_test1()
     // print_list(list_1);
 }
 
+/*
 void list_test2()
 {
     Node *list_2 = create_list(LIST_SIZE);
@@ -99,6 +100,7 @@ void make_test() {
     list_test5();
     list_test6();
 }
+*/
 
 int main()
 {
@@ -108,7 +110,9 @@ int main()
     GC::Profiler::set_log_options(GC::FunctionCalls);
     //GC::Profiler::set_log_options(GC::AllOps);
 
-    make_test();
+    // make_test();
+    for (int i = 0; i < 1000; i++)
+        list_test1();
 
     GC::Heap::dispose();
 
