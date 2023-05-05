@@ -482,35 +482,37 @@ subtype (TEVar alpha) a | notElem alpha $ frees a = instantiateL alpha a
 --  Γ[ά] ⊢ A <: ά ⊣ Δ
 subtype a  (TEVar alpha) | notElem alpha $ frees a = instantiateR a alpha
 
-subtype t1 t2 = case (t1, t2) of
-    (TData name1 typs1, TData name2 typs2)
 
-      --  D₁ = D₂
-      --  ----------------
-      --  Γ ⊢ D₁ () <: D₂ ()
-      | name1 == name2
-      , [] <- typs1
-      , [] <- typs2
-      -> pure ()
+subtype (TData name1 typs1) (TData name2 typs2)
 
-      --                    Γ ⊢ ά₁ <: έ₁ ⊣ Θ₁
-      --                           ...
-      -- D₁ = D₂   Θₙ₋₁ ⊢ [Θₙ₋₁]άₙ <: [Θₙ₋₁]έₙ ⊣ Δ
-      -- -------------------------------------------
-      -- Γ ⊢ D (ά₁ ‥ άₙ) <: D (έ₁ ‥ έₙ) ⊣ Δ
-      | name1 == name2
-      , t1:t1s <- typs1
-      , t2:t2s <- typs2
-      -> do
-          subtype t1 t2
-          zipWithM_ go t1s t2s
-     where
-       go t1' t2' = do
-           t1'' <- apply t1'
-           t2'' <- apply t2'
-           subtype t1'' t2''
+    --  D₁ = D₂
+    --  ----------------
+    --  Γ ⊢ D₁ () <: D₂ ()
+    | name1 == name2
+    , [] <- typs1
+    , [] <- typs2
+    = pure ()
 
-    _ -> throwError $ unwords ["Types", ppT t1, "and", ppT t2, "doesn't match!"]
+    --                    Γ ⊢ ά₁ <: έ₁ ⊣ Θ₁
+    --                           ...
+    -- D₁ = D₂   Θₙ₋₁ ⊢ [Θₙ₋₁]άₙ <: [Θₙ₋₁]έₙ ⊣ Δ
+    -- -------------------------------------------
+    -- Γ ⊢ D (ά₁ ‥ άₙ) <: D (έ₁ ‥ έₙ) ⊣ Δ
+    | name1 == name2
+    , t1:t1s <- typs1
+    , t2:t2s <- typs2
+    = do
+    subtype t1 t2
+    zipWithM_ go t1s t2s
+  where
+    go t1' t2' = do
+        t1'' <- apply t1'
+        t2'' <- apply t2'
+        subtype t1'' t2''
+
+subtype (TIdent t1) (TIdent t2) | t1 == t2 = pure ()
+
+subtype t1 t2 = throwError $ unwords ["Types", show t1, "and", show t2, "doesn't match!"]
 
 ---------------------------------------------------------------------------
 -- * Instantiation rules
@@ -788,6 +790,7 @@ applyType' cxt typ | typ == typ' = typ'
         TFun t1 t2      -> on TFun (applyType' cxt) t1 t2
         -- [Γ](∀α. A) = (∀α. [Γ]A)
         TAll tvar t     -> TAll tvar $ applyType' cxt t
+        TIdent t        -> typ
 
 applyExp :: T.Exp' Type -> Tc (T.Exp' Type)
 applyExp exp = case exp of
@@ -841,6 +844,8 @@ ppT = \case
     TEVar (MkTEVar (LIdent s)) -> "tevar_" ++ s
     TData (UIdent name) typs   -> name ++ " (" ++ unwords (map ppT typs)
                                        ++ " )"
+    TIdent (UIdent name)       -> name
+
 ppEnvElem = \case
    EnvVar         (LIdent s) t           -> s ++ ":" ++ ppT t
    EnvTVar        (MkTVar  (LIdent s))   -> "tvar_" ++ s
