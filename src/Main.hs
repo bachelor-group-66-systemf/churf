@@ -187,4 +187,8 @@ prelude =
         , "    _ => True"
         , "    _ => False"
         , "\n"
+        , -- The function body of - is replaced during code gen. It exists here for type checking purposes.
+          ".- : Int -> Int -> Int"
+        , ".- x y = 0"
+        , "\n"
         ]

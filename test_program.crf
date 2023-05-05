@@ -1,15 +1,30 @@
-data List a where
-    Cons : a -> List a -> List a
-    Nil : List a
+-- Peano naturals
+data Nat where
+  Zero : Nat
+  Succ : Nat -> Nat
 
-.++ xs ys = case xs of
-    Nil => ys
-    Cons z zs => Cons z (zs ++ ys)
+toInt : Nat -> Int
+toInt a = case a of
+    Succ n => 1 + toInt n
+    Zero => 0
 
-length xs = case xs of
-    Cons x xs => 1 + length xs
+fromInt a = case a of
+    0 => Zero
+    n => Succ (fromInt (a - 1))
 
-main = length (list1 ++ list2)
+-- Peano arithmetic --
 
-list1 = Cons 0 (Cons 1 (Cons 2 (Cons 3 Nil)))
-list2 = Cons 4 (Cons 5 (Cons 6 (Cons 7 Nil)))
+-- Peano addition
+add : Nat -> Nat -> Nat
+add left right = case left of
+    Zero => right
+    Succ n => Succ (add n right)
+
+-- Peano multiplication
+mul : Nat -> Nat -> Nat
+mul left right = case right of
+    Zero => Zero
+    Succ n => add left (mul left n)
+
+-- Returns 10_000
+main = toInt (mul (fromInt 100) (fromInt 100))

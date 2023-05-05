@@ -325,6 +325,7 @@ emitApp rt e1 e2 = appEmitter e1 e2 []
                 let call =
                         case name of
                             TIR.Ident ('l' : 't' : '$' : _) -> Icmp LLSlt I64 (snd (head args')) (snd (args' !! 1))
+                            TIR.Ident ('$' : 'm' : 'i' : 'n' : 'u' : 's' : '$' : '$' : _) -> Sub I64 (snd (head args')) (snd (args' !! 1))
                             _ -> Call FastCC (type2LlvmType rt) visibility name args'
                 emit $ Comment $ show rt
                 emit $ SetVariable vs call
@@ -359,8 +360,8 @@ exprToValue = \case
     (MIR.ELit i, _t) -> pure $ case i of
         (MIR.LInt i) -> VInteger i
         (MIR.LChar i) -> VChar $ ord i
-    (MIR.EVar (TIR.Ident "True"), _t) -> pure $ VInteger 1
-    (MIR.EVar (TIR.Ident "False"), _t) -> pure $ VInteger 0
+    (MIR.EVar (TIR.Ident "True$Bool"), _t) -> pure $ VInteger 1
+    (MIR.EVar (TIR.Ident "False$Bool"), _t) -> pure $ VInteger 0
     (MIR.EVar name, t) -> do
         funcs <- gets functions
         cons <- gets constructors
