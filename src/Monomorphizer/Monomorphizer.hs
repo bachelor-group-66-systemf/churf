@@ -196,11 +196,13 @@ appear as expressions in the tree, or as patterns in case-expressions.
 -}
 morphCons :: M.Type -> Ident -> EnvM ()
 morphCons expectedType ident = do
+    --trace ("Tjofras:" ++ show (newName expectedType ident)) $ return ()
+    let ident' = newName expectedType ident
     maybeD <- getInputData ident
     case maybeD of
         Nothing -> error $ "identifier '" ++ show ident ++ "' not found"
         Just d -> do
-            modify (\output -> Map.insert ident (Data expectedType d) output)
+            modify (\output -> Map.insert ident' (Data expectedType d) output)
 
 -- | Converts literals from input to output tree.
 convertLit :: T.Lit -> M.Lit
