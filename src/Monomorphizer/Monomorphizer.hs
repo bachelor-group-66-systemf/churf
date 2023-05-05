@@ -193,16 +193,16 @@ getInputData ident = do
 
 {- | Monomorphize a constructor using it's global name. Constructors may
 appear as expressions in the tree, or as patterns in case-expressions.
+'newIdent' has a unique name while 'ident' has a general name.
 -}
-morphCons :: M.Type -> Ident -> EnvM ()
-morphCons expectedType ident = do
+morphCons :: M.Type -> Ident -> Ident -> EnvM ()
+morphCons expectedType ident newIdent = do
     --trace ("Tjofras:" ++ show (newName expectedType ident)) $ return ()
-    let ident' = newName expectedType ident
     maybeD <- getInputData ident
     case maybeD of
         Nothing -> error $ "identifier '" ++ show ident ++ "' not found"
         Just d -> do
-            modify (\output -> Map.insert ident' (Data expectedType d) output)
+            modify (\output -> Map.insert newIdent (Data expectedType d) output)
 
 -- | Converts literals from input to output tree.
 convertLit :: T.Lit -> M.Lit
@@ -215,8 +215,9 @@ morphExp expectedType exp = case exp of
     T.ELit lit -> return $ M.ELit (convertLit lit)
     -- Constructor
     T.EInj ident -> do
-        morphCons expectedType ident
-        return $ M.EVar ident
+        let ident' = newName expectedType ident
+        morphCons expectedType ident ident'
+        return $ M.EVar ident'
     T.EApp (e1, _t1) (e2, t2) -> do
         t2' <- getMonoFromPoly t2
         e2' <- morphExp t2' e2
@@ -248,8 +249,9 @@ morphExp expectedType exp = case exp of
                 case bind of
                     Nothing -> do
                         -- This is a constructor
-                        morphCons expectedType ident
-                        return $ M.EVar ident
+                        let ident' = newName expectedType ident
+                        morphCons expectedType ident ident'
+                        return $ M.EVar ident'
                     Just bind' -> do
                         -- New bind to process
                         newBindName <- morphBind expectedType bind'
