@@ -2,6 +2,7 @@ dist-newstyle
 *.y
 *.x
 *.bak
+Grammar.tex
 src/Grammar
 
 language
@@ -14,3 +15,9 @@ src/GC/lib/*.so
 src/GC/lib/*.a
 src/GC/tests/*.out
 src/GC/tests/logs
+test_program_result
+output/
+*.o
+*.out
+*.aux
+*.log

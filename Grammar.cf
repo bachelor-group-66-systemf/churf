@@ -1,25 +1,103 @@
-Program. Program ::= [Bind];
+-------------------------------------------------------------------------------
+-- * TOP-LEVEL
+-------------------------------------------------------------------------------
 
-EId.  Exp3 ::= Ident;
-EInt. Exp3 ::= Integer;
-EAnn. Exp3  ::= "(" Exp ":" Type ")";
-ELet. Exp3 ::= "let" Bind "in" Exp; 
-EApp. Exp2 ::= Exp2 Exp3;
-EAdd. Exp1 ::= Exp1 "+" Exp2;
-EAbs. Exp  ::= "\\" Ident ":" Type "." Exp;
+DBind. Def ::= Bind;
+DSig.  Def ::= Sig;
+DData. Def ::= Data; 
 
-Bind. Bind ::= Ident ":" Type ";"
-               Ident [Ident] "=" Exp;
+internal Sig.   Sig ::= LIdent ":" Type;
+         SigS.  Sig ::= VarName ":" Type;
+internal Bind. Bind ::= LIdent [LIdent] "=" Exp;
+         BindS. Bind ::= VarName [LIdent] "=" Exp;
 
-separator Bind ";";
-separator Ident "";
+-------------------------------------------------------------------------------
+-- * Types
+-------------------------------------------------------------------------------
 
-coercions Exp 3;
+internal TLit.     Type3 ::= UIdent;                 -- τ
+         TIdent.   Type3 ::= UIdent;
+         TVar.     Type3 ::= TVar;                   -- α
+         TApp.     Type2 ::= Type2 Type3 ;
+         TFun.     Type1 ::= Type1 "->" Type;        -- A → A
+         TAll.     Type  ::= "forall" TVar "." Type; -- ∀α. A 
+internal TEVar.    Type1 ::= TEVar;                  -- ά
+internal TData.    Type1 ::= UIdent "(" [Type] ")";  -- D ()
 
-TInt. Type1 ::= "Int" ;
-TPol. Type1 ::= Ident ;
-TFun. Type  ::= Type1 "->" Type ;
-coercions Type 1 ;
+         MkTVar.  TVar  ::= LIdent;
+internal MkTEVar. TEVar ::= LIdent;
+
+-------------------------------------------------------------------------------
+-- * DATA TYPES
+-------------------------------------------------------------------------------
+
+Data. Data ::= "data" Type "where" "{" [Inj] "}" ;
+
+Inj. Inj ::= UIdent ":" Type ;
+
+-------------------------------------------------------------------------------
+-- * PATTERN MATCHING 
+-------------------------------------------------------------------------------
+
+Branch. Branch ::= Pattern "=>" Exp ;
+
+PVar.        Pattern1 ::= LIdent;
+PLit.        Pattern1 ::= Lit;
+PCatch.      Pattern1 ::= "_";
+PEnum.       Pattern1 ::= UIdent;
+PInj.        Pattern  ::= UIdent [Pattern1];
+
+-------------------------------------------------------------------------------
+-- * Expressions
+-------------------------------------------------------------------------------
+
+internal EVar.  Exp4 ::= LIdent;
+         EVarS. Exp4 ::= VarName ;
+         EInj.  Exp4 ::= UIdent;
+         ELit.  Exp4 ::= Lit;
+         EApp.  Exp3 ::= Exp3 Exp4;
+         EAdd.  Exp2 ::= Exp2 "+" Exp3;
+         ELet.  Exp1  ::= "let" Bind "in" Exp1; 
+         EAbs.  Exp1  ::= "\\" LIdent "." Exp1;
+         ECase. Exp1  ::= "case" Exp "of" "{" [Branch] "}";
+         EAnn.  Exp  ::= Exp1 ":" Type;
+
+VSymbol. VarName ::= "." Symbol;
+VIdent. VarName ::= LIdent;
+
+infixSymbol. Exp2 ::= Exp2 Symbol Exp3 ;
+define infixSymbol e1 vn e3 = EApp (EApp (EVarS (VSymbol vn)) e1) e3;
+
+-------------------------------------------------------------------------------
+-- * LITERALS
+-------------------------------------------------------------------------------
+
+LInt.  Lit ::= Integer;
+LChar. Lit ::= Char;
+
+-------------------------------------------------------------------------------
+-- * AUX
+-------------------------------------------------------------------------------
+
+layout "of", "where";
+layout toplevel;
+
+separator Def ";";
+separator Branch ";" ;
+separator Inj ";";
+
+separator LIdent "";
+separator Type " ";
+separator TVar " ";
+separator nonempty Pattern1 " ";
+
+coercions Pattern 1;
+coercions Exp 4;
+coercions Type 3 ;
+
+token UIdent (upper (letter | digit | '_')*) ;
+token LIdent (lower (letter | digit | '_')*) ;
+token Symbol (["@#%^&*_-+=|?/<>,•:[]"]+) ;
 
 comment "--";
 comment "{-" "-}";

@@ -1,0 +1,8 @@
+const2 : a -> b -> a
+const2 x y = x
+
+f : a -> a
+f x = (const2 x 'c')
+
+main = f 5
+

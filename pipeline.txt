@@ -1,0 +1,27 @@
+
+                      Parser       
+                        | 
+                      ReportForall                           Report unnecessary foralls. Hm: report rank>2 foralls
+                        |
+                      AnnotateForall                         Annotate all unbound type variables with foralls
+                        | 
+                      Renamer                                Rename type variables and term variables
+                        |
+                       / \
+                      /   \ 
+             TypeCheckHm  TypeCheckBi  
+                      \   / 
+                       \ / 
+                        |
+                      ReportTEVar                            Report type existential variables and change type AST
+                        |
+                      RemoveForall                           RemoveForall and change type AST
+                        | 
+                      Monomorpher                            
+                        | 
+                      Desugar
+                        |
+                      CodeGen
+                        
+                        
+                  

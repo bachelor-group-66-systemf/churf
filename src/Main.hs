@@ -1,97 +1,196 @@
-{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedRecordDot #-}
 
 module Main where
 
+import AnnForall (annotateForall)
+import Codegen.Codegen (generateCode)
 import Compiler (compile)
+import Control.Monad (when, (<=<))
+import Data.List.Extra (isSuffixOf)
+import Data.Maybe (fromJust, isNothing)
+import Desugar.Desugar (desugar)
 import GHC.IO.Handle.Text (hPutStrLn)
 import Grammar.ErrM (Err)
+import Grammar.Layout (resolveLayout)
 import Grammar.Par (myLexer, pProgram)
-import Grammar.Print (printTree)
-
--- import           Interpreter        (interpret)
+import Grammar.Print (Print, printTree)
 import LambdaLifter (lambdaLift)
-import Renamer (rename)
+import Monomorphizer.Monomorphizer (monomorphize)
+import OrderDefs (orderDefs)
+import Renamer.Renamer (rename)
+import ReportForall (reportForall)
+import System.Console.GetOpt (
+    ArgDescr (NoArg, ReqArg),
+    ArgOrder (RequireOrder),
+    OptDescr (Option),
+    getOpt,
+    usageInfo,
+ )
+import System.Directory (
+    createDirectory,
+    doesPathExist,
+    getDirectoryContents,
+    removeDirectoryRecursive,
+    setCurrentDirectory,
+ )
 import System.Environment (getArgs)
-import System.Exit (exitFailure, exitSuccess)
+import System.Exit (
+    ExitCode (ExitFailure),
+    exitFailure,
+    exitSuccess,
+    exitWith,
+ )
 import System.IO (stderr)
-import TypeChecker (typecheck)
+import System.Process (spawnCommand, waitForProcess)
+import TypeChecker.TypeChecker (TypeChecker (Bi, Hm), typecheck)
 
 main :: IO ()
-main =
-    getArgs >>= \case
-        [] -> print "Required file path missing"
-        (s : _) -> main' s
+main = getArgs >>= parseArgs >>= uncurry main'
 
-main' :: String -> IO ()
-main' s = do
-    file <- readFile s
+parseArgs :: [String] -> IO (Options, String)
+parseArgs argv = case getOpt RequireOrder flags argv of
+    (os, f : _, [])
+        | opts.help || isNothing opts.typechecker -> do
+            hPutStrLn stderr (usageInfo header flags)
+            exitSuccess
+        | otherwise -> pure (opts, f)
+      where
+        opts = foldr ($) initOpts os
+    (_, _, errs) -> do
+        hPutStrLn stderr (concat errs ++ usageInfo header flags)
+        exitWith (ExitFailure 1)
+  where
+    header = "Usage: language [--help] [-d|--debug] [-t|type-checker bi/hm] FILE \n"
 
-    printToErr "-- Parse Tree -- "
-    parsed <- fromSyntaxErr . pProgram $ myLexer file
-    printToErr $ printTree parsed
+flags :: [OptDescr (Options -> Options)]
+flags =
+    [ Option ['d'] ["debug"] (NoArg enableDebug) "Print debug messages."
+    , Option ['t'] ["type-checker"] (ReqArg chooseTypechecker "bi/hm") "Choose type checker. Possible options are bi and hm"
+    , Option ['m'] ["disable-gc"] (NoArg disableGC) "Disables the garbage collector and uses malloc instead."
+    , Option [] ["help"] (NoArg enableHelp) "Print this help message"
+    ]
 
-    printToErr "\n-- Renamer --"
-    let renamed = rename parsed
-    printToErr $ printTree renamed
+initOpts :: Options
+initOpts =
+    Options
+        { help = False
+        , debug = False
+        , gc = True
+        , typechecker = Nothing
+        }
 
-    printToErr "\n-- TypeChecker --"
-    typechecked <- fromTypeCheckerErr $ typecheck renamed
-    printToErr $ printTree typechecked
+enableHelp :: Options -> Options
+enableHelp opts = opts{help = True}
 
-    printToErr "\n-- Lambda Lifter --"
-    let lifted = lambdaLift typechecked
-    printToErr $ printTree lifted
+enableDebug :: Options -> Options
+enableDebug opts = opts{debug = True}
 
-    printToErr "\n -- Printing compiler output to stdout --"
-    compiled <- fromCompilerErr $ compile lifted
-    putStrLn compiled
-    writeFile "llvm.ll" compiled
+disableGC :: Options -> Options
+disableGC opts = opts{gc = False}
 
-    -- interpred <- fromInterpreterErr $ interpret lifted
-    -- putStrLn "\n-- interpret"
-    -- print interpred
+chooseTypechecker :: String -> Options -> Options
+chooseTypechecker s options = options{typechecker = tc}
+  where
+    tc = case s of
+        "hm" -> pure Hm
+        "bi" -> pure Bi
+        _ -> Nothing
 
-    exitSuccess
+data Options = Options
+    { help :: Bool
+    , debug :: Bool
+    , gc :: Bool
+    , typechecker :: Maybe TypeChecker
+    }
+
+main' :: Options -> String -> IO ()
+main' opts s =
+    let
+        log :: (Print a, Show a) => a -> IO ()
+        log = printToErr . if opts.debug then show else printTree
+     in
+        do
+            file <- readFile s
+
+            printToErr "-- Parse Tree -- "
+            parsed <- fromErr . pProgram . resolveLayout True $ myLexer (file ++ prelude)
+            log parsed
+
+            printToErr "-- Desugar --"
+            let desugared = desugar parsed
+            log desugared
+
+            printToErr "\n-- Renamer --"
+            _ <- fromErr $ reportForall (fromJust opts.typechecker) desugared
+            renamed <- fromErr $ (rename <=< annotateForall) desugared
+            log renamed
+
+            printToErr "\n-- TypeChecker --"
+            typechecked <- fromErr $ typecheck (fromJust opts.typechecker) (orderDefs renamed)
+            log typechecked
+
+            printToErr "\n-- Lambda Lifter --"
+            let lifted = lambdaLift typechecked
+            log lifted
+
+            printToErr "\n -- Monomorphizer --"
+            let monomorphized = monomorphize lifted
+            log monomorphized
+
+            printToErr "\n -- Compiler --"
+            -- generatedCode <- fromErr $ generateCode monomorphized (gc opts)
+            generatedCode <- fromErr $ generateCode monomorphized False
+
+            check <- doesPathExist "output"
+            when check (removeDirectoryRecursive "output")
+            createDirectory "output"
+            createDirectory "output/logs"
+            when opts.debug $ do
+                writeFile "output/llvm.ll" generatedCode
+                debugDotViz
+
+            -- compile generatedCode (gc opts)
+            compile generatedCode False
+            printToErr "Compilation done!"
+            printToErr "\n-- Program output --"
+            print =<< spawnWait "./output/hello_world"
+
+            exitSuccess
+
+debugDotViz :: IO ()
+debugDotViz = do
+    setCurrentDirectory "output"
+    spawnWait "opt -dot-cfg llvm.ll -disable-output"
+    content <- filter (isSuffixOf ".dot") <$> getDirectoryContents "."
+    let commands = (\p -> "dot " <> p <> " -Tpng -o" <> p <> ".png") <$> content
+    mapM_ spawnWait commands
+    setCurrentDirectory ".."
+    return ()
+
+spawnWait :: String -> IO ExitCode
+spawnWait s = spawnCommand s >>= waitForProcess
 
 printToErr :: String -> IO ()
 printToErr = hPutStrLn stderr
 
-fromCompilerErr :: Err a -> IO a
-fromCompilerErr =
-    either
-        ( \err -> do
-            putStrLn "\nCOMPILER ERROR"
-            putStrLn err
-            exitFailure
-        )
-        pure
+fromErr :: Err a -> IO a
+fromErr = either (\s -> printToErr s >> exitFailure) pure
 
-fromSyntaxErr :: Err a -> IO a
-fromSyntaxErr =
-    either
-        ( \err -> do
-            putStrLn "\nSYNTAX ERROR"
-            putStrLn err
-            exitFailure
-        )
-        pure
-
-fromTypeCheckerErr :: Err a -> IO a
-fromTypeCheckerErr =
-    either
-        ( \err -> do
-            putStrLn "\nTYPECHECKER ERROR"
-            putStrLn err
-            exitFailure
-        )
-        pure
-
-fromInterpreterErr :: Err a -> IO a
-fromInterpreterErr =
-    either
-        ( \err -> do
-            putStrLn "\nINTERPRETER ERROR"
-            putStrLn err
-            exitFailure
-        )
-        pure
+prelude :: String
+prelude =
+    unlines
+        [ "\n"
+        , "data Bool where"
+        , "    False : Bool"
+        , "    True  : Bool"
+        , -- The function body of lt is replaced during code gen. It exists here for type checking purposes.
+          "lt : Int -> Int -> Bool"
+        , "lt x y = case x of"
+        , "    _ => True"
+        , "    _ => False"
+        , "\n"
+        , -- The function body of - is replaced during code gen. It exists here for type checking purposes.
+          ".- : Int -> Int -> Int"
+        , ".- x y = 0"
+        , "\n"
+        ]

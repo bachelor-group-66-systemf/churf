@@ -1,0 +1,11 @@
+data Number() where
+    One: Number ()
+    Two: Number ()
+
+numberToInt : Number () -> Int
+numberToInt n = case n of
+                  One => 1
+                  Two => 2
+
+main = numberToInt One
+

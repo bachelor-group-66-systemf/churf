@@ -12,10 +12,8 @@ build-type:         Simple
 
 extra-doc-files:    CHANGELOG.md
 
-
 extra-source-files:
   Grammar.cf
-
 
 common warnings
     ghc-options: -W
@@ -32,14 +30,33 @@ executable language
       Grammar.Print
       Grammar.Skel
       Grammar.ErrM
-      LambdaLifter
+      Grammar.ErrM
+      Grammar.Layout
       Auxiliary
-      Renamer
-      TypeChecker
-      TypeCheckerIr
---      Interpreter
+      Renamer.Renamer
+      TypeChecker.TypeChecker
+      AnnForall
+      OrderDefs
+      TypeChecker.TypeCheckerHm
+      TypeChecker.TypeCheckerBidir
+      TypeChecker.TypeCheckerIr
+      TypeChecker.ReportTEVar
+      TypeChecker.RemoveForall
+      LambdaLifter
+      Monomorphizer.Monomorphizer
+      Monomorphizer.MonomorphizerIr
+      Monomorphizer.MorbIr
+      Monomorphizer.DataTypeRemover
+      Codegen.Codegen
+      Codegen.LlvmIr
+      Codegen.Auxillary
+      Codegen.CompilerState
+      Codegen.Emits
       Compiler
-      LlvmIr
+      Renamer.Renamer
+      TreeConverter
+      Desugar.Desugar
+
     hs-source-dirs:   src
 
     build-depends:    
@@ -47,6 +64,65 @@ executable language
       , mtl
       , containers
       , either
-      , array
       , extra
+      , array
+      , hspec
+      , QuickCheck
+      , directory
+      , process
+
     default-language: GHC2021
+
+Test-suite language-testsuite
+    type: exitcode-stdio-1.0
+    main-is: Main.hs
+
+    other-modules:
+      TestTypeCheckerBidir
+      TestTypeCheckerHm
+      TestAnnForall
+      TestReportForall
+      TestRenamer
+      TestLambdaLifter
+      DoStrings
+
+      Grammar.Abs
+      Grammar.Lex
+      Grammar.Par
+      Grammar.Print
+      Grammar.Skel
+      Grammar.ErrM
+      Grammar.Layout
+      OrderDefs
+      Auxiliary
+      Monomorphizer.Monomorphizer
+      Monomorphizer.MonomorphizerIr
+      Renamer.Renamer
+      TypeChecker.TypeChecker
+      AnnForall
+      ReportForall
+      TypeChecker.TypeCheckerHm
+      TypeChecker.TypeCheckerBidir
+      TypeChecker.ReportTEVar
+      TypeChecker.RemoveForall
+      TypeChecker.TypeCheckerIr
+      Compiler
+
+    hs-source-dirs: src, tests
+
+    build-depends: 
+        base >=4.16
+      , mtl
+      , containers
+      , either
+      , extra
+      , array
+      , hspec
+      , QuickCheck
+      , process
+      , bytestring
+      , hspec
+      , directory
+
+    default-language: GHC2021
+

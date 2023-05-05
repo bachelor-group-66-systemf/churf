@@ -3,7 +3,7 @@
 language : src/Grammar/Test
 	cabal install --installdir=. --overwrite-policy=always
 
-src/Grammar/Test.hs src/Grammar/Lex.x src/Grammar/Par.y : Grammar.cf
+src/Grammar/Test.hs src/Grammar/Lex.x src/Grammar/Par.y src/Grammar/Layout : Grammar.cf
 	bnfc -o src -d $<
 
 src/Grammar/Par.hs : src/Grammar/Par.y
@@ -15,23 +15,25 @@ src/Grammar/Lex.hs : src/Grammar/Lex.x
 src/Grammar/%.y : Grammar.cf
 	bnfc -o src -d $<
 
-src/Grammar/Test : src/Grammar/Test.hs src/Grammar/Par.hs src/Grammar/Lex.hs
-	ghc src/Grammar/Test.hs src/Grammar/Par.hs src/Grammar/Lex.hs src/Grammar/Abs.hs src/Grammar/Skel.hs src/Grammar/Print.hs -o src/Grammar/test
+src/Grammar/Test : src/Grammar/Test.hs src/Grammar/Par.hs src/Grammar/Lex.hs src/Grammar/Layout
+	ghc src/Grammar/Test.hs src/Grammar/Par.hs src/Grammar/Lex.hs src/Grammar/Abs.hs src/Grammar/Skel.hs src/Grammar/Print.hs src/Grammar/Layout -o src/Grammar/test
+
+Grammar.tex : 
+	bnfc --latex Grammar.cf
+
+Grammar.pdf : Grammar.tex
+	pdflatex Grammar.tex
+	rm Grammar.aux Grammar.log
+
+pdf : Grammar.pdf
 
 clean :
 	rm -r src/Grammar
 	rm language
+	rm -rf dist-newstyles
+	rm Grammar.aux Grammar.fdb_latexmk Grammar.fls Grammar.log Grammar.synctex.gz Grammar.tex
 
 test :
-	./language ./sample-programs/basic-1
-	./language ./sample-programs/basic-2
-	./language ./sample-programs/basic-3
-	./language ./sample-programs/basic-4
-	./language ./sample-programs/basic-5
-	./language ./sample-programs/basic-5
-	./language ./sample-programs/basic-6
-	./language ./sample-programs/basic-7
-	./language ./sample-programs/basic-8
-	./language ./sample-programs/basic-9
+	cabal v2-test
 
 # EOF
