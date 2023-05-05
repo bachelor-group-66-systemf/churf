@@ -4,13 +4,19 @@
 #include <stdlib.h>
 #include <vector>
 #include <unordered_map>
+#include <queue>
 
 #include "chunk.hpp"
 #include "profiler.hpp"
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 #define HEAP_SIZE 320//65536
 #define FREE_THRESH (uint) 0
+=======
+#define HEAP_SIZE 16000//65536
+#define FREE_THRESH (uint) 100
+>>>>>>> c09da8a (now it works ok???)
 // #define HEAP_DEBUG
 =======
 #define HEAP_SIZE 2097152 //256 //65536 //2097152
@@ -78,12 +84,11 @@ namespace GC
 
 		static bool profiler_enabled();
 		// static Chunk *get_at(std::vector<Chunk *> &list, size_t n);
-		void collect();
+		void collect(uintptr_t *stack_bottom);
 		void sweep(Heap &heap);
 		Chunk *try_recycle_chunks(size_t size);
 		void free(Heap &heap);
 		void free_overlap(Heap &heap);
-		void mark(uintptr_t *start, const uintptr_t *end, std::vector<Chunk *> &worklist);
 		void mark_hash(uintptr_t *start, const uintptr_t *end);
 		Chunk* find_pointer_hash(uintptr_t *start, const uintptr_t *end);
 		void create_table();
@@ -91,6 +96,10 @@ namespace GC
 		void print_worklist(std::vector<Chunk *> &list);
 		void mark_step(uintptr_t start, uintptr_t end, std::vector<Chunk *> &worklist);
 		void mark_range(std::vector<AddrRange *> &ranges, std::vector<Chunk *> &worklist);
+
+		void find_roots(uintptr_t *stack_bottom, std::vector<uintptr_t *> &roots);
+		void mark(std::vector<uintptr_t *> &roots);
+		void find_chunks(uintptr_t *stack_addr, std::queue<std::pair<uintptr_t, uintptr_t>> &chunk_spaces);
 
 		// Temporary
 		Chunk *try_recycle_chunks_new(size_t size);

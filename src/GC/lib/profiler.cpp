@@ -11,7 +11,7 @@
 #include "event.hpp"
 #include "profiler.hpp"
 
-#define MAC_OS
+// #define MAC_OS
 
 namespace GC
 {
