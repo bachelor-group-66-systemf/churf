@@ -48,7 +48,8 @@ namespace GC
 // clang complains because arg for __b_f_a is not 0 which is "unsafe"
 #pragma clang diagnostic ignored "-Wframe-address"
 		heap.m_stack_top = static_cast<uintptr_t *>(__builtin_frame_address(1));
-		heap.m_heap_top = heap.m_heap;
+		// TODO: handle this below
+		//heap.m_heap_top = heap.m_heap;
 	}
 
 	void Heap::set_profiler_log_options(RecordOption flags)
@@ -100,6 +101,7 @@ namespace GC
 			heap.collect();
 			// If memory is not enough after collect, crash with OOM error
 <<<<<<< HEAD
+<<<<<<< HEAD
 			if (heap.m_size + size > HEAP_SIZE)
 			{
 				if (profiler_enabled)
@@ -107,12 +109,23 @@ namespace GC
 				throw std::runtime_error(std::string("Error: Heap out of memory"));
 			}
 =======
+=======
+>>>>>>> 208ff86 (Fixed bug in size handling and mark hash)
 			if (heap.m_size > HEAP_SIZE)
 			{
 				throw std::runtime_error(std::string("Error: Heap out of memory"));
 			}
 			//throw std::runtime_error(std::string("Error: Heap out of memory"));
+<<<<<<< HEAD
 >>>>>>> 74e0282 (Added Hash map marking)
+=======
+		}
+		if (heap.m_size + size > HEAP_SIZE)
+		{
+			if (profiler_enabled)
+				Profiler::dispose();
+			throw std::runtime_error(std::string("Error: Heap out of memory"));
+>>>>>>> 208ff86 (Fixed bug in size handling and mark hash)
 		}
 
 		// If a chunk was recycled, return the old chunk address
@@ -132,7 +145,8 @@ namespace GC
 		auto new_chunk = new Chunk(size, (uintptr_t *)(heap.m_heap + heap.m_size));
 
 		heap.m_size += size;
-		heap.m_total_size += size;
+		// TODO: handle this below
+		//heap.m_total_size += size;
 		heap.m_allocated_chunks.push_back(new_chunk);
 
 		if (profiler_enabled)
@@ -296,7 +310,7 @@ namespace GC
 						chunk->m_marked = true;
 						it = worklist.erase(it);
 
-						Chunk *next = find_pointer((uintptr_t *) c_start, (uintptr_t *) c_end, worklist);
+/* 						Chunk *next = find_pointer((uintptr_t *) c_start, (uintptr_t *) c_end, worklist);
 						while (next != NULL) {
 							if (!next->m_marked) 
 							{
@@ -306,7 +320,7 @@ namespace GC
 								auto c_end   = reinterpret_cast<uintptr_t>(c_start + c_size);
 								next = find_pointer((uintptr_t *) c_start, (uintptr_t *) c_end, worklist);
 							}
-						}
+						} */
 
 						// Recursively call mark, to see if the reachable chunk further points to another chunk
 						// mark((uintptr_t *)c_start, (uintptr_t *)c_end, worklist);
@@ -412,6 +426,62 @@ namespace GC
 
 >>>>>>> 74e0282 (Added Hash map marking)
 
+		void Heap::create_table() 
+	{
+		Heap &heap = Heap::the();
+		unordered_map<uintptr_t, Chunk*> chunk_table;
+		for (auto chunk : heap.m_allocated_chunks) {
+			auto pair = std::make_pair(reinterpret_cast<uintptr_t>(chunk->m_start), chunk);
+			heap.m_chunk_table.insert(pair);		
+		}
+	}
+
+	void Heap::mark_hash(uintptr_t *start, const uintptr_t* const end) 
+	{
+		Heap &heap = Heap::the();
+
+		bool profiler_enabled = heap.m_profiler_enable;
+		if (profiler_enabled)
+			Profiler::record(MarkStart);
+
+		for (; start <= end; start++) 
+		{
+			auto search = heap.m_chunk_table.find(*start);
+			if (search != heap.m_chunk_table.end())
+			{
+				Chunk *chunk = search->second;
+				auto c_start = reinterpret_cast<uintptr_t>(chunk->m_start);
+				auto c_size = reinterpret_cast<uintptr_t>(chunk->m_size);
+				auto c_end = reinterpret_cast<uintptr_t*>(c_start + c_size);
+				if (!chunk->m_marked) 
+				{
+					chunk->m_marked = true;
+
+					if (profiler_enabled)
+							Profiler::record(ChunkMarked, chunk);
+
+					//mark_hash(chunk->m_start, c_end);
+					Chunk *next = find_pointer_hash((uintptr_t *) c_start, (uintptr_t *) c_end);
+					while (next != NULL) 
+					{
+						if (!next->m_marked) 
+						{
+							next->m_marked = true;
+
+							if (profiler_enabled)
+								Profiler::record(ChunkMarked, chunk);
+
+							auto c_start = reinterpret_cast<uintptr_t>(next->m_start);
+							auto c_size  = reinterpret_cast<uintptr_t>(next->m_size);
+							auto c_end   = reinterpret_cast<uintptr_t>(c_start + c_size);
+							next = find_pointer_hash((uintptr_t *) c_start, (uintptr_t *) c_end);
+						}
+					}
+				}
+			}
+		}
+	}
+
 	/**
 	 * Sweeps the heap, unmarks the marked chunks for the next cycle,
 	 * adds the unmarked nodes to the list of freed chunks; to be freed.
@@ -448,7 +518,9 @@ namespace GC
 					Profiler::record(ChunkSwept, chunk);
 				heap.m_freed_chunks.push_back(chunk);
 				iter = heap.m_allocated_chunks.erase(iter);
-				heap.m_size -= chunk->m_size;
+				//heap.m_size -= chunk->m_size;
+				cout << "Decremented total heap size with: " << chunk->m_size << endl;
+				cout << "Total size is: " << heap.m_size << endl;
 			}
 		}
 		std::cout << "Chunks left: " << heap.m_allocated_chunks.size() << std::endl;
@@ -482,6 +554,8 @@ namespace GC
 				if (profiler_enabled)
 					Profiler::record(ChunkFreed, chunk);
 				heap.m_size -= chunk->m_size;
+				cout << "Decremented total heap size with: " << chunk->m_size << endl;
+				cout << "Total size is: " << heap.m_size << endl;
 				delete chunk;
 			}
 		}
@@ -545,6 +619,8 @@ namespace GC
 				if (profiler_enabled)
 					Profiler::record(ChunkFreed, chunk);
 				heap.m_size -= chunk->m_size;
+				cout << "Decremented total heap size with: " << chunk->m_size << endl;
+				cout << "Total size is: " << heap.m_size << endl;
 				delete chunk;
 			}
 			else
@@ -578,6 +654,18 @@ namespace GC
 				}
 				return NULL;
 			}
+		}
+	}
+
+	// Checks if a given chunk points to another chunk and returns it
+	Chunk* Heap::find_pointer_hash(uintptr_t *start, const uintptr_t* const end) {
+		Heap &heap = Heap::the();
+		for (; start <= end; start++) {
+			auto search = heap.m_chunk_table.find(*start);
+			if (search != heap.m_chunk_table.end()) {
+				return search->second;
+			}
+			return NULL;
 		}
 	}
 
