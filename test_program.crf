@@ -3,14 +3,8 @@ data Nat where
   Zero : Nat
   Succ : Nat -> Nat
 
-toInt : Nat -> Int
-toInt a = case a of
-    Succ n => 1 + toInt n
-    Zero => 0
-
-fromInt a = case a of
-    0 => Zero
-    n => Succ (fromInt (a - 1))
+-- Returns 10_000
+main = toInt (fromInt 10000)
 
 -- Peano arithmetic --
 
@@ -26,5 +20,40 @@ mul left right = case right of
     Zero => Zero
     Succ n => add left (mul left n)
 
--- Returns 10_000
-main = toInt (mul (fromInt 100) (fromInt 100))
+eq : Nat -> Nat -> Nat
+eq a b = case a of
+    Zero => case b of 
+        Zero => Succ Zero
+        _    => Zero
+    Succ n => case b of
+        Zero => Zero
+        Succ m => eq n m
+
+less : Nat -> Nat -> Nat
+less a b = case a of
+    Zero => case b of
+        Zero => Zero
+        Succ n => Succ Zero
+    Succ n => case b of
+        Zero => Zero
+        Succ m => less n m
+
+greater : Nat -> Nat -> Nat
+greater a b = case b of
+    Zero => case a of
+        Zero => Zero
+        Succ n => Succ Zero
+    Succ n => case a of
+        Zero => Zero
+        Succ m => less n m
+
+-- Aux
+
+toInt : Nat -> Int
+toInt a = case a of
+    Succ n => 1 + toInt n
+    Zero => 0
+
+fromInt a = case a of
+    0 => Zero
+    n => Succ (fromInt (a - 1))
