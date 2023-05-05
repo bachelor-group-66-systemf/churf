@@ -13,9 +13,10 @@ import Data.Bifunctor qualified as BI
 import Data.Char (ord)
 import Data.Coerce (coerce)
 import Data.Map qualified as Map
-import Data.Maybe (fromJust, fromMaybe)
+import Data.Maybe (fromJust, fromMaybe, isNothing)
 import Data.Tuple.Extra (dupe, first, second)
-import Debug.Trace (traceShow)
+import Debug.Trace (trace, traceShow)
+import Grammar.Print
 import Monomorphizer.MonomorphizerIr as MIR
 import TypeChecker.TypeCheckerIr qualified as TIR
 
@@ -264,14 +265,15 @@ emitECased t e cases = do
         emit $ Br label
         lbl_failPos <- (\x -> TIR.Ident $ "failed_" <> show x) <$> getNewLabel
         emit $ Label lbl_failPos
-    emitCases rt ty label stackPtr vs (Branch (MIR.PEnum (TIR.Ident "True"), t) exp) = do
+    emitCases rt ty label stackPtr vs (Branch (MIR.PEnum (TIR.Ident "True$Bool"), t) exp) = do
         emitCases rt ty label stackPtr vs (Branch (MIR.PLit (MIR.LInt 1, TLit "Bool"), t) exp)
-    emitCases rt ty label stackPtr vs (Branch (MIR.PEnum (TIR.Ident "False"), _) exp) = do
+    emitCases rt ty label stackPtr vs (Branch (MIR.PEnum (TIR.Ident "False$Bool"), _) exp) = do
         emitCases rt ty label stackPtr vs (Branch (MIR.PLit (MIR.LInt 0, TLit "Bool"), t) exp)
-    emitCases rt ty label stackPtr vs (Branch (MIR.PEnum consId, _) exp) = do
+    emitCases rt ty label stackPtr vs br@(Branch (MIR.PEnum consId, _) exp) = do
         emit $ Comment "Penum"
         cons <- gets constructors
-        let r = fromJust $ Map.lookup consId cons
+        let r = Map.lookup consId cons
+        when (isNothing r) (error $ "Constructor: '" ++ printTree consId ++ "' does not exist in cons state:\n" ++ show cons ++ "\nin pattern\n'" ++ printTree br ++ "'\n")
 
         lbl_failPos <- (\x -> TIR.Ident $ "failed_" <> show x) <$> getNewLabel
         lbl_succPos <- (\x -> TIR.Ident $ "success_" <> show x) <$> getNewLabel
@@ -280,7 +282,7 @@ emitECased t e cases = do
         emit $ SetVariable consVal (ExtractValue rt vs 0)
 
         consCheck <- getNewVar
-        emit $ SetVariable consCheck (Icmp LLEq I8 (VIdent consVal I8) (VInteger $ numCI r))
+        emit $ SetVariable consCheck (Icmp LLEq I8 (VIdent consVal I8) (VInteger $ numCI (fromJust r)))
         emit $ BrCond (VIdent consCheck ty) lbl_succPos lbl_failPos
         emit $ Label lbl_succPos
 
