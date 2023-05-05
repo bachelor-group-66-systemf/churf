@@ -335,7 +335,7 @@ algoW = \case
         case M.lookup (coerce i) constr of
             Just t -> do
                 t <- freshen t
-                return (nullSubst, (T.EVar $ coerce i, t))
+                return (nullSubst, (T.EInj $ coerce i, t))
             Nothing ->
                 uncatchableErr $ Aux.do
                     "Constructor:"
