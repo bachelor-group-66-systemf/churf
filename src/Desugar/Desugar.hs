@@ -16,7 +16,7 @@ desugar :: Program -> Program
 desugar (Program defs) = Program (map desugarDef defs)
 
 desugarVarName :: VarName -> LIdent
-desugarVarName (VSymbol (Symbol i)) = LIdent i
+desugarVarName (VSymbol (Symbol i)) = LIdent $ fixName i
 desugarVarName (VIdent i) = i
 
 desugarDef :: Def -> Def
@@ -68,8 +68,8 @@ desugarExp = \case
     ELet b e -> ELet (desugarBind b) (desugarExp e)
     ECase e br -> ECase (desugarExp e) (map desugarBranch br)
     EAnn e t -> EAnn (desugarExp e) t
-    EVarS (VSymbol (Symbol symb)) -> EVar (LIdent symb)
-    EVarS (VIdent ident) -> EVar ident
+    EVarS (VSymbol (Symbol symb)) -> EVar (LIdent $ fixName symb)
+    EVarS (VIdent (LIdent ident)) -> EVar $ LIdent $ fixName ident
     EVar i -> EVar i
     ELit l -> ELit l
     EInj i -> EInj i
@@ -88,3 +88,30 @@ desugarPattern = \case
 desugarLit :: Lit -> Lit
 desugarLit (LInt i) = LInt i
 desugarLit (LChar c) = LChar c
+
+fixName :: String -> String
+fixName = concatMap mapSymbols
+  where
+    mapSymbols :: Char -> String
+    mapSymbols c = case c of
+        '@' -> "$at$"
+        '#' -> "$octothorpe$"
+        '%' -> "$percent$"
+        '^' -> "$hat$"
+        '&' -> "$and$"
+        '*' -> "$star$"
+        '_' -> "$underscore$"
+        '-' -> "$minus$"
+        '+' -> "$plus$"
+        '=' -> "$equals$"
+        '|' -> "$pipe$"
+        '?' -> "$questionmark$"
+        '/' -> "$fslash$"
+        '<' -> "$langle$"
+        '>' -> "$rangle$"
+        ',' -> "$comma$"
+        '•' -> "$bullet$"
+        ':' -> "$semicolon$"
+        '[' -> "$lbracket$"
+        ']' -> "$rbracket$"
+        c -> c : ""

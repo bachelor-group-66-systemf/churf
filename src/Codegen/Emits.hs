@@ -15,6 +15,7 @@ import Data.Coerce (coerce)
 import Data.Map qualified as Map
 import Data.Maybe (fromJust, fromMaybe)
 import Data.Tuple.Extra (dupe, first, second)
+import Debug.Trace (traceShow)
 import Monomorphizer.MonomorphizerIr as MIR
 import TypeChecker.TypeCheckerIr qualified as TIR
 
@@ -268,7 +269,6 @@ emitECased t e cases = do
     emitCases rt ty label stackPtr vs (Branch (MIR.PEnum (TIR.Ident "False"), _) exp) = do
         emitCases rt ty label stackPtr vs (Branch (MIR.PLit (MIR.LInt 0, TLit "Bool"), t) exp)
     emitCases rt ty label stackPtr vs (Branch (MIR.PEnum consId, _) exp) = do
-        -- //TODO Penum wrong, acts as a catch all
         emit $ Comment "Penum"
         cons <- gets constructors
         let r = fromJust $ Map.lookup consId cons
