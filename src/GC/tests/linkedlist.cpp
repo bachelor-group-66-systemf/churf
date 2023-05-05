@@ -106,7 +106,7 @@ int main()
     GC::Heap &heap = GC::Heap::the();
     heap.set_profiler(true);
     GC::Profiler::set_log_options(GC::FunctionCalls);
-    // GC::Profiler::set_log_options(GC::AllOps);
+    //GC::Profiler::set_log_options(GC::AllOps);
 
     make_test();
 

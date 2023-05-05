@@ -71,6 +71,7 @@ namespace GC
 		void free_overlap(Heap &heap);
 		void mark(uintptr_t *start, const uintptr_t *end, std::vector<Chunk *> &worklist);
 		void mark_hash(uintptr_t *start, const uintptr_t *end);
+		Chunk* find_pointer_hash(uintptr_t *start, const uintptr_t *end);
 		void create_table();
 		void print_line(Chunk *chunk);
 		void print_worklist(std::vector<Chunk *> &list);
