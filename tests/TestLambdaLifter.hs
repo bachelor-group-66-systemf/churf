@@ -1,30 +1,30 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE PatternSynonyms #-}
-{-# LANGUAGE QualifiedDo #-}
+{-# LANGUAGE PatternSynonyms   #-}
+{-# LANGUAGE QualifiedDo       #-}
 {-# HLINT ignore "Use camelCase" #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
 module TestLambdaLifter where
 
-import Test.Hspec
+import           Test.Hspec
 
-import AnnForall (annotateForall)
-import Control.Monad ((<=<))
-import Control.Monad.Error.Class (liftEither)
-import Control.Monad.Extra (eitherM)
-import Desugar.Desugar (desugar)
-import Grammar.ErrM (Err, pattern Bad, pattern Ok)
-import Grammar.Layout (resolveLayout)
-import Grammar.Par (myLexer, pProgram)
-import Grammar.Print (printTree)
-import LambdaLifter
-import Renamer.Renamer (rename)
-import ReportForall (reportForall)
-import TypeChecker.RemoveForall (removeForall)
-import TypeChecker.ReportTEVar (reportTEVar)
-import TypeChecker.TypeChecker (TypeChecker (Bi))
-import TypeChecker.TypeCheckerBidir (typecheck)
-import TypeChecker.TypeCheckerIr
+import           AnnForall                    (annotateForall)
+import           Control.Monad                ((<=<))
+import           Control.Monad.Error.Class    (liftEither)
+import           Control.Monad.Extra          (eitherM)
+import           Desugar.Desugar              (desugar)
+import           Grammar.ErrM                 (Err, pattern Bad, pattern Ok)
+import           Grammar.Layout               (resolveLayout)
+import           Grammar.Par                  (myLexer, pProgram)
+import           Grammar.Print                (printTree)
+import           LambdaLifter
+import           Renamer.Renamer              (rename)
+import           ReportForall                 (reportForall)
+import           TypeChecker.RemoveForall     (removeForall)
+import           TypeChecker.ReportTEVar      (reportTEVar)
+import           TypeChecker.TypeChecker      (TypeChecker (Bi))
+import           TypeChecker.TypeCheckerBidir (typecheck)
+import           TypeChecker.TypeCheckerIr
 
 test = hspec testLambdaLifter
 
@@ -58,7 +58,7 @@ abs_1 = undefined
             ]
 
 runFreeVars = either putStrLn print (runFree s2)
-runAbstract = either putStrLn (putStrLn . printTree) (runAbs s2)
+-- runAbstract = either putStrLn (putStrLn . printTree) (runAbs s2)
 runCollect = either putStrLn (putStrLn . printTree) (run s2)
 
 s1 =
