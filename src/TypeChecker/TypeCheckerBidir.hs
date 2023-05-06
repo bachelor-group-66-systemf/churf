@@ -31,6 +31,7 @@ import           Grammar.ErrM
 import           Grammar.Print             (printTree)
 import           Prelude                   hiding (exp)
 import qualified TypeChecker.TypeCheckerIr as T
+import           TypeChecker.TypeCheckerIr (T, T')
 
 -- Implementation is derived from the paper (Dunfield and Krishnaswami 2013)
 -- https://doi.org/10.1145/2500365.2500582
@@ -172,7 +173,7 @@ typecheckInj (Inj inj_name inj_typ) name tvars
 
 -- | Γ ⊢ e ↑ A ⊣ Δ
 -- Under input context Γ, e checks against input type A, with output context ∆
-check :: Exp -> Type -> Tc (T.ExpT' Type)
+check :: Exp -> Type -> Tc (T' T.Exp' Type)
 
 --  Γ,α ⊢ e ↑ A ⊣ Δ,α,Θ
 --  ------------------- ∀I
@@ -212,12 +213,6 @@ check (ECase scrut pi) c = do
              e' <- check e c
              pure (T.Branch p' e')
          apply (T.ECase (scrut', a) pi', c)
-       where
-         go (pi, b) (Branch p e) = do
-             p' <- checkPattern p =<< apply a
-             e'@(_, b') <- infer e
-             subtype b' b
-             apply (T.Branch p' e' : pi, b')
 
 
 --  Γ,α ⊢ e ↓ A ⊣ Θ   Θ ⊢ [Θ]A <: [Θ]B ⊣ Δ
@@ -228,9 +223,6 @@ check e b = do
     b' <- apply b
     subtype a b'
     apply (e', b)
-
-
-
 
 checkPattern :: Pattern -> Type -> Tc (T.Pattern' Type, Type)
 checkPattern patt t_patt = case patt of
@@ -297,7 +289,7 @@ checkPattern patt t_patt = case patt of
 
 -- | Γ ⊢ e ↓ A ⊣ Δ
 -- Under input context Γ, e infers output type A, with output context ∆
-infer :: Exp -> Tc (T.ExpT' Type)
+infer :: Exp -> Tc (T' T.Exp' Type)
 infer (ELit lit) = apply (T.ELit lit, litType lit)
 
 --  Γ ∋ (x : A)         Γ ⊢ rec(x)
@@ -391,7 +383,7 @@ infer (ECase scrut pi) = do
 -- | Γ ⊢ A • e ⇓ C ⊣ Δ
 -- Under input context Γ , applying a function of type A to e infers type C, with output context ∆
 -- Instantiate existential type variables until there is an arrow type.
-applyInfer :: Type -> Exp -> Tc (T.ExpT' Type, Type)
+applyInfer :: Type -> Exp -> Tc (T' T.Exp' Type, Type)
 
 --  Γ,ά ⊢ [ά/α]A • e ⇓ C ⊣ Δ
 --  ------------------------ ∀App

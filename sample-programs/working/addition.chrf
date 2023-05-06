@@ -1,0 +1,6 @@
+
+
+add : Int -> Int -> Int -> Int
+add x y z = x + y + z
+
+main = add 8 6 2 
