@@ -242,7 +242,7 @@ namespace GC
 			Profiler::record(CollectStart);
 
 		// get current stack frame
-		// auto stack_bottom = reinterpret_cast<uintptr_t *>(__builtin_frame_address(2));
+		stack_bottom = reinterpret_cast<uintptr_t *>(__builtin_frame_address(0));
 
 		if (heap.m_stack_top == nullptr)
 			throw std::runtime_error(std::string("Error: Heap is not initialized, read the docs!"));
@@ -276,12 +276,10 @@ namespace GC
 
 	void Heap::find_roots(uintptr_t *stack_bottom, vector<uintptr_t *> &roots)
 	{
-		Heap &heap = Heap::the();
-		auto stack_top = heap.m_stack_top;
-		auto heap_bottom = reinterpret_cast<const uintptr_t>(heap.m_heap);
-		auto heap_top = reinterpret_cast<const uintptr_t>(heap.m_heap + HEAP_SIZE);
+		auto heap_bottom = reinterpret_cast<const uintptr_t>(m_heap);
+		auto heap_top = reinterpret_cast<const uintptr_t>(m_heap + HEAP_SIZE);
 
-		while (stack_bottom < stack_top)
+		while (stack_bottom < m_stack_top)
 		{
 			if (heap_bottom < *stack_bottom && *stack_bottom < heap_top)
 			{
@@ -314,25 +312,26 @@ namespace GC
 			Profiler::record(MarkStart);
 
 		auto iter = roots.begin(), end = roots.end();
-		// vector<std::pair<uintptr_t, uintptr_t>> chunk_spaces;
 		std::queue<std::pair<uintptr_t, uintptr_t>> chunk_spaces;
-		// std::set<uintptr_t> visited_addresses;
 
-		// cout << "b4 find_chunks of roots\n";
 		while (iter != end)
 		{
 			find_chunks(*iter++, chunk_spaces);
 		}
 
-		// cout << "b4 find_chunks of chunks\n";
 		while (!chunk_spaces.empty())
 		{
 			auto range = chunk_spaces.front();
 			chunk_spaces.pop();
 
-			auto stack_addr = reinterpret_cast<uintptr_t *>(range.first);
+			auto addr_bottom = reinterpret_cast<uintptr_t *>(range.first);
+			auto addr_top = reinterpret_cast<uintptr_t *>(range.second);
 
-			find_chunks(stack_addr, chunk_spaces);
+			while (addr_bottom < addr_top)
+			{
+				find_chunks(addr_bottom, chunk_spaces);
+				addr_bottom++;
+			}
 		}
 	}
 
@@ -355,12 +354,12 @@ namespace GC
 			if (c_start < *stack_addr && *stack_addr < c_end)
 			{
 				chunk->m_marked = true;
-				// chunk_spaces.push_back(std::make_pair(c_start, c_end));
 				chunk_spaces.push(std::make_pair(c_start, c_end));
 			}
 		}
 	}
 
+<<<<<<< HEAD
 <<<<<<< HEAD
 	void Heap::mark_range(vector<AddrRange *> &ranges, vector<Chunk *> &worklist)
 	{
@@ -445,6 +444,8 @@ namespace GC
 
 >>>>>>> 74e0282 (Added Hash map marking)
 
+=======
+>>>>>>> 830d863 (bugfix)
 	void Heap::create_table() 
 	{
 		Heap &heap = Heap::the();
