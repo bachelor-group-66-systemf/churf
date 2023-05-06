@@ -213,12 +213,6 @@ check (ECase scrut pi) c = do
              e' <- check e c
              pure (T.Branch p' e')
          apply (T.ECase (scrut', a) pi', c)
-       where
-         go (pi, b) (Branch p e) = do
-             p' <- checkPattern p =<< apply a
-             e'@(_, b') <- infer e
-             subtype b' b
-             apply (T.Branch p' e' : pi, b')
 
 
 --  Γ,α ⊢ e ↓ A ⊣ Θ   Θ ⊢ [Θ]A <: [Θ]B ⊣ Δ
@@ -229,9 +223,6 @@ check e b = do
     b' <- apply b
     subtype a b'
     apply (e', b)
-
-
-
 
 checkPattern :: Pattern -> Type -> Tc (T.Pattern' Type, Type)
 checkPattern patt t_patt = case patt of

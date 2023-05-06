@@ -1,10 +1,14 @@
 {-# LANGUAGE LambdaCase #-}
 
-module Monomorphizer.MorbIr where
+module Monomorphizer.MorbIr (
+    module Monomorphizer.MorbIr,
+    module LambdaLifterIr
+) where
 
-import           Data.List      (intersperse)
+import           Data.List      (intercalate)
 import           Grammar.Print
 import           LambdaLifterIr (Ident (..), Lit (..))
+import           Prelude        hiding (exp)
 
 newtype Program = Program [Def]
     deriving (Show, Ord, Eq)
@@ -16,6 +20,7 @@ data Data = Data Type [Inj]
     deriving (Show, Ord, Eq)
 
 data Bind = Bind (T Ident) [T Ident] (T Exp)
+          | BindC [T Ident] (T Ident) [T Ident] (T Exp)
     deriving (Show, Ord, Eq)
 
 
@@ -23,7 +28,7 @@ type T a = (a, Type)
 
 data Exp
     = EVar Ident
-    | EVarCxt Ident [T Ident]
+    | EVarC [T Ident] Ident
     | ELit Lit
     | ELet Bind (T Exp)
     | EApp (T Exp) (T Exp)
@@ -61,11 +66,20 @@ instance Print Bind where
     prt i (Bind sig@(name, _) parms rhs) =
         prPrec i 0 $
             concatD
-                [ prt i sig
+                [ prt 0 sig
                 , prt 0 name
                 , prt 0 parms
                 , doc $ showString "="
                 , prt 0 rhs
+                ]
+
+    prt i (BindC cxt sig parms rhs) =
+        prPrec i 0 $
+            concatD
+                [ doc . showString $ "{" ++ intercalate ", " (map (\(x, _) -> printTree x ++ "^") cxt) ++ "}" ++ printTree sig
+                , prt i parms
+                , doc $ showString "="
+                , prt i rhs
                 ]
 
 instance Print [Bind] where
@@ -76,11 +90,10 @@ instance Print [Bind] where
 instance Print Exp where
     prt i = \case
         EVar name -> prPrec i 3 $ prt 0 name
-        EVarCxt lident cxt ->
-            prPrec i 3 $ concatD
-                [ prtCxt cxt
-                , prt 0 lident
-                ]
+        EVarC as lident -> doc . showString
+                               $ "{" ++ intercalate ", " (map go as) ++ "}" ++ printTree lident
+                where
+              go (x, _) = printTree x ++ "^=" ++ printTree (EVar x)
         ELit lit -> prPrec i 3 $ prt 0 lit
         ELet b e ->
             prPrec i 3 $
@@ -158,9 +171,4 @@ instance Print Type where
         TFun type_1 type_2 -> prPrec i 0 (concatD [prt 1 type_1, doc (showString "->"), prt 0 type_2])
         TData uident types -> prPrec i 1 (concatD [prt 0 uident, doc (showString "("), prt 0 types, doc (showString ")")])
 
-prtCxt :: [T Ident] -> Doc
-prtCxt cxt = concatD
-    [ doc $ showString "《"
-    , concatD . intersperse (doc $ showString ", ") $ map (\(x@(Ident s), _) -> concatD [doc $ showString (s ++ "^="), prt 0 x]) cxt
-    , doc $ showString "》"
-    ]
+

@@ -1,9 +1,11 @@
+
 module Monomorphizer.DataTypeRemover (removeDataTypes) where
 
 import           Data.Bifunctor                (Bifunctor (bimap))
-import           LambdaLifterIr                (Ident (..))
+import           Monomorphizer.MonomorphizerIr (Ident (..))
 import qualified Monomorphizer.MonomorphizerIr as M2
 import qualified Monomorphizer.MorbIr          as M1
+import           Prelude                       hiding (exp)
 
 removeDataTypes :: M1.Program -> M2.Program
 removeDataTypes (M1.Program defs) = M2.Program (map pDef defs)
@@ -31,6 +33,8 @@ newName (M1.TData (Ident str) args) = str ++ concatMap newName args
 
 pBind :: M1.Bind -> M2.Bind
 pBind (M1.Bind id argIds expt) = M2.Bind (pId id) (map pId argIds) (pExpT expt)
+pBind (M1.BindC cxt id argIds expt) =
+    M2.BindC (map pId cxt) (pId id) (map pId argIds) (pExpT expt)
 
 pId :: (Ident, M1.Type) -> (Ident, M2.Type)
 pId (ident, t) = (ident, pType t)
@@ -40,7 +44,7 @@ pExpT (exp, t) = (pExp exp, pType t)
 
 pExp :: M1.Exp -> M2.Exp
 pExp (M1.EVar ident)          = M2.EVar ident
-pExp (M1.EVarCxt ident cxt)   = M2.EVarCxt ident (map pId cxt)
+pExp (M1.EVarC as ident)      = M2.EVarC (map pId as) ident
 pExp (M1.ELit lit)            = M2.ELit lit
 pExp (M1.ELet bind expt)      = M2.ELet (pBind bind) (pExpT expt)
 pExp (M1.EApp e1 e2)          = M2.EApp (pExpT e1) (pExpT e2)

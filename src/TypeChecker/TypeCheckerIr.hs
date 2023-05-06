@@ -11,31 +11,30 @@ import           Data.String   (IsString)
 import           Grammar.Abs   (Lit (..))
 import           Grammar.Print
 import           Prelude
-import qualified Prelude       as C (Eq, Ord, Read, Show)
 
 newtype Program' t = Program [Def' t]
-    deriving (C.Eq, C.Ord, C.Show, C.Read, Functor)
+    deriving (Eq, Ord, Show, Functor)
 
 data Def' t
     = DBind (Bind' t)
     | DData (Data' t)
-    deriving (C.Eq, C.Ord, C.Show, C.Read, Functor)
+    deriving (Eq, Ord, Show, Functor)
 
 data Type
     = TLit Ident
     | TVar TVar
     | TData Ident [Type]
     | TFun Type Type
-    deriving (Eq, Ord, Show, Read)
+    deriving (Eq, Ord, Show)
 
 data Data' t = Data t [Inj' t]
-    deriving (C.Eq, C.Ord, C.Show, C.Read, Functor)
+    deriving (Eq, Ord, Show, Functor)
 
 data Inj' t = Inj Ident t
-    deriving (C.Eq, C.Ord, C.Show, C.Read, Functor)
+    deriving (Eq, Ord, Show, Functor)
 
 newtype Ident = Ident String
-    deriving (C.Eq, C.Ord, C.Show, C.Read, IsString)
+    deriving (Eq, Ord, Show, IsString)
 
 data Pattern' t
     = PVar Ident
@@ -43,7 +42,7 @@ data Pattern' t
     | PCatch
     | PEnum Ident
     | PInj Ident [(Pattern' t, t)]
-    deriving (C.Eq, C.Ord, C.Show, C.Read, Functor)
+    deriving (Eq, Ord, Show, Functor)
 
 data Exp' t
     = EVar Ident
@@ -54,20 +53,20 @@ data Exp' t
     | EAdd (T' Exp' t) (T' Exp' t)
     | EAbs Ident (T' Exp' t)
     | ECase (T' Exp' t) [Branch' t]
-    deriving (C.Eq, C.Ord, C.Show, C.Read, Functor)
+    deriving (Eq, Ord, Show, Functor)
 
 newtype TVar = MkTVar Ident
-    deriving (C.Eq, C.Ord, C.Show, C.Read)
+    deriving (Eq, Ord, Show)
 
 type T' a t = (a t, t)
 type T  a t = (a, t)
 
 
 data Bind' t = Bind (T Ident t) [T Ident t] (T' Exp' t)
-    deriving (C.Eq, C.Ord, C.Show, C.Read, Functor)
+    deriving (Eq, Ord, Show, Functor)
 
 data Branch' t = Branch (T' Pattern' t) (T' Exp' t)
-    deriving (C.Eq, C.Ord, C.Show, C.Read, Functor)
+    deriving (Eq, Ord, Show, Functor)
 
 instance Print Ident where
     prt _ (Ident s) = doc $ showString s
@@ -84,9 +83,9 @@ instance Print t => Print (Bind' t) where
                 ]
 
 prtSig :: Print t => T Ident t -> Doc
-prtSig (name, t) =
+prtSig (x, t) =
     concatD
-        [ prt 0 name
+        [ prt 0 x
         , doc $ showString ":"
         , prt 0 t
         ]
@@ -94,9 +93,11 @@ prtSig (name, t) =
 instance (Print a, Print t) => Print (T a t) where
     prt i (x, t) =
         concatD
-            [ prt i x
+            [ -- doc $ showString "("
+            {- , -} prt i x
 --            , doc $ showString ":"
 --            , prt 0 t
+--            , doc $ showString ")"
             ]
 
 instance Print t => Print [Bind' t] where

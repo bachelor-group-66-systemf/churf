@@ -84,6 +84,7 @@ getInputBind ident = asks (Map.lookup ident . input)
 -- | Add monomorphic function derived from a polymorphic one, to env.
 addOutputBind :: M.Bind -> EnvM ()
 addOutputBind b@(M.Bind (ident, _) _ _) = modify (Map.insert ident (Complete b))
+addOutputBind b@(M.BindC _ (ident, _) _ _) = modify (Map.insert ident (Complete b))
 
 {- | Marks a global bind as being processed, meaning that when encountered again,
 it should not be recursively processed.
@@ -174,6 +175,38 @@ morphBind expectedType b@(L.Bind (ident, btype) args (exp, expt)) = do
                             (exp', expt')
                     return name'
 
+morphBind expectedType b@(L.BindC cxt (ident, btype) args (exp, expt)) = do
+    -- The "new name" is used to find out if it is already marked or not.
+    let name' = newFuncName expectedType b
+    bindMarked <- isBindMarked name'
+    local
+        ( \env ->
+            env
+                { locals = Set.fromList (map fst args)
+                , polys = Map.fromList (mapTypes ident btype expectedType)
+                }
+        )
+        $ do
+            -- Return with right name if already marked
+            if bindMarked
+                then return name'
+                else do
+                    -- Mark so that this bind will not be processed in recursive or cyclic
+                    -- function calls
+                    markBind name'
+                    expt' <- getMonoFromPoly expt
+                    exp' <- morphExp expt' exp
+                    -- Get monomorphic type sof args
+                    args' <- mapM morphArg args
+                    cxt' <- mapM (secondM getMonoFromPoly) cxt
+                    addOutputBind $
+                        M.BindC cxt'
+                            (name', expectedType)
+                            args'
+                            (exp', expt')
+                    return name'
+
+
 -- | Monomorphizes arguments of a bind.
 morphArg :: (Ident, L.Type) -> EnvM (Ident, M.Type)
 morphArg (ident, t) = do
@@ -241,11 +274,7 @@ morphExp expectedType exp = case exp of
                         -- New bind to process
                         newBindName <- morphBind expectedType bind'
                         return $ M.EVar newBindName
-    -- Ideally constructors should be EInj, though this code handles them
-    -- as well.
-
-
-    L.EVarCxt ident cxt -> do
+    L.EVarC as ident -> do
         isLocal <- localExists ident
         if isLocal
             then do
@@ -253,15 +282,15 @@ morphExp expectedType exp = case exp of
             else do
                 bind <- getInputBind ident
                 case bind of
-                    Nothing -> do
-                        -- This is a constructor
-                        morphCons expectedType ident
-                        return $ M.EVar ident
+                    Nothing -> undefined
                     Just bind' -> do
+                        as' <- mapM (secondM getMonoFromPoly) as
                         -- New bind to process
                         newBindName <- morphBind expectedType bind'
-                        cxt' <- mapM (secondM getMonoFromPoly) cxt
-                        return $ M.EVarCxt newBindName cxt'
+                        return $ M.EVarC as' newBindName
+    -- Ideally constructors should be EInj, though this code handles them
+    -- as well.
+
 
     L.ELet (identB, tB) (expB, tExpB) (exp, tExp) -> do
         tB' <- getMonoFromPoly tB
@@ -313,6 +342,11 @@ newFuncName t (L.Bind (ident@(Ident bindName), _) _ _) =
         then Ident bindName
         else newName t ident
 
+newFuncName t (L.BindC _ (ident@(Ident bindName), _) _ _) =
+    if bindName == "main"
+        then Ident bindName
+        else newName t ident
+
 newName :: M.Type -> Ident -> Ident
 newName t (Ident str) = Ident $ str ++ "$" ++ newName' t
   where
@@ -356,7 +390,8 @@ createEnv defs =
 
 -- | Gets a top-lefel function name.
 getBindName :: L.Bind -> Ident
-getBindName (L.Bind (ident, _) _ _) = ident
+getBindName (L.Bind (ident, _) _ _)    = ident
+getBindName (L.BindC _ (ident, _) _ _) = ident
 
 -- Helper functions
 -- Gets custom data declarations form defs.

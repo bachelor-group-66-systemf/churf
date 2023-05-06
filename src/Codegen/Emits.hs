@@ -1,25 +1,31 @@
-{-# LANGUAGE LambdaCase          #-}
-{-# LANGUAGE OverloadedRecordDot #-}
-{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE LambdaCase            #-}
+{-# LANGUAGE NamedFieldPuns        #-}
+{-# LANGUAGE OverloadedRecordDot   #-}
+{-# LANGUAGE OverloadedStrings     #-}
 
 module Codegen.Emits where
 
+import           Auxiliary                     (snoc)
 import           Codegen.Auxillary
 import           Codegen.CompilerState
 import           Codegen.LlvmIr                as LIR
-import           Control.Applicative           ((<|>))
-import           Control.Monad                 (forM_, when)
+import           Control.Applicative           (Applicative (liftA2), (<|>))
+import           Control.Monad                 (forM_, when, zipWithM_)
+import           Control.Monad.Extra           (whenJust)
 import           Control.Monad.State           (gets, modify)
 import qualified Data.Bifunctor                as BI
 import           Data.Char                     (ord)
 import           Data.Coerce                   (coerce)
+import           Data.Foldable.Extra           (notNull)
 import qualified Data.Map                      as Map
 import           Data.Maybe                    (fromJust, fromMaybe)
-import           Data.Tuple.Extra              (dupe, first, second)
-import           Monomorphizer.MonomorphizerIr (Ident (..))
-import           Monomorphizer.MonomorphizerIr as MIR
+import           Data.Tuple.Extra              (second)
+import           Debug.Trace                   (trace)
+import           Monomorphizer.MonomorphizerIr
 
-compileScs :: [MIR.Def] -> CompilerState ()
+
+compileScs :: [Def] -> CompilerState ()
 compileScs [] = do
     emit $ UnsafeRaw "\n"
     -- as a last step create all the constructors
@@ -29,27 +35,8 @@ compileScs [] = do
         ( \(id, ci) -> do
             let t = returnTypeCI ci
             let t' = type2LlvmType t
-
-
-            -- Higher order functions uses ptr
-            let f t = case t of
-                          TFun _ _ -> Ptr
-                          _        -> type2LlvmType t
-
-            let x = BI.second f <$> argumentsCI ci
-
+            let x = BI.second type2LlvmType <$> argumentsCI ci
             emit $ Define FastCC t' id x
-
-            -- Dereference: ptr → i64(i64)*
-            forM_ x $ \(x@(Ident s), t) -> case t of
-                                   Ptr -> do
-                                       let t_f =  fromMaybe (error "Something wrong!")
-                                                  $ lookup x ci.argumentsCI
-                                       emit $ SetVariable (Ident $ s ++ "_deref")
-                                            $ Load (type2LlvmType t_f) Ptr x
-                                       undefined
-                                   _   -> pure ()
-
             top <- getNewVar
             ptr <- getNewVar
             -- allocated the primary type
@@ -115,32 +102,83 @@ compileScs [] = do
             modify $ \s -> s{variableCount = 0}
         )
         c
-compileScs (MIR.DBind (MIR.Bind (name, t) args exp) : xs) = do
-    let t_return = type2LlvmType . last . flattenType $ t
+
+compileScs (DBind bind : xs) = do
     emit $ UnsafeRaw "\n"
-    emit . Comment $ show name <> ": " <> show exp
-    let args' = map (second type2LlvmType) args
+    emit . Comment $ show name <> ": " <> show (fst exp)
+
+    Function t_return t_args <- gets $ fst
+                                     . fromJust
+                                     . Map.lookup name
+                                     . globals
+
+    let args' = zip (mkCxtName : map fst args) t_args
+
     emit $ Define FastCC t_return name args'
-    useGc <- gets gcEnabled
-    when (name == "main") (mapM_ emit (firstMainContent useGc))
-    functionBody <- exprToValue exp
-    if name == "main"
-        then mapM_ emit $ lastMainContent useGc functionBody
-        else emit $ Ret t_return functionBody
+    modify $ \s -> s  { locals = foldr insertArg s.locals args' }
+
+    -- Dereference ptr arguments
+    when (notNull args') $
+        forM_ (tail args') $ \(x, t) -> when (t == Ptr) $ do
+            let t_deref =
+                  let
+                    Function t ts = type2LlvmType . fromJust $ lookup x args
+                  in
+                    Function t (Ptr : ts)
+
+            emit . SetVariable (mkDerefName x)
+                 $ Load t_deref Ptr x
+
+    whenJust mcxt loadFreeVars
+
+    gcEnabled <- gets gcEnabled
+    when isMain $ mapM_ emit (firstMainContent gcEnabled)
+
+    result <- exprToValue exp
+
+    if isMain
+        then mapM_ emit $ lastMainContent gcEnabled result
+        else emit $ Ret t_return result
+
     emit DefineEnd
-    modify $ \s -> s{variableCount = 0}
+    -- Reset variable count and empty locals
+    modify $ \s -> s { variableCount = 0, locals = mempty }
     compileScs xs
-compileScs (MIR.DData (MIR.Data typ ts) : xs) = do
+  where
+    loadFreeVars cxt = do
+        emit $ Comment "Load free variables"
+        zipWithM_ go cxt' [1 ..]
+      where
+        go (x, t) i = do
+            vc <- getNewVar
+            emit . SetVariable vc
+                 $ GetElementPtrInbounds (CustomType $ mkClosureName name) Ptr (VIdent mkCxtName Ptr)
+                   I32 (VInteger 0) I32 (VInteger i) -- TODO fix indices
+            emit . SetVariable x $ Load t Ptr vc
+        cxt' = map (second type2LlvmType) cxt
+
+    isMain = name == "main"
+
+    (name, args, exp, mcxt) = case bind of
+        Bind (name, _) args exp      -> (name, args, exp, Nothing)
+        BindC cxt (name, _) args exp -> (name, args, exp, Just cxt)
+
+
+    insertArg (x, t) = snoc (x, LocalElem { val = VIdent x t, typ = t })
+
+compileScs (DData (Data typ ts) : xs) = do
     let (Ident outer_id) = extractTypeName typ
     -- //TODO this could be extracted from the customTypes map
     let variantTypes fi = init $ map type2LlvmType (flattenType fi)
     let biggestVariant = 7 + maximum (sum . (\(Inj _ fi) -> typeByteSize <$> variantTypes fi) <$> ts)
-    emit $ LIR.Type (Ident outer_id) [I8, Array biggestVariant I8]
+    -- Add data type (e.g. %List) to top of the file
+    addStructType_ (Ident outer_id) [I8, Array biggestVariant I8]
     typeSets <- gets customTypes
     mapM_
         ( \(Inj inner_id fi) -> do
             let types = (\s -> if Map.member s typeSets then Ref s else s) <$> variantTypes fi
-            emit $ LIR.Type inner_id (I8 : types)
+            -- Add constructor type (e.g. %Cons) to top of the file
+            addStructType_ inner_id (I8 : types)
         )
         ts
     compileScs xs
@@ -168,16 +206,15 @@ lastMainContent False var =
     ]
 
 compileExp :: T Exp -> CompilerState ()
-compileExp (MIR.ELit lit, _t)   = emitLit lit
-compileExp (MIR.EAdd e1 e2, t)  = emitAdd t e1 e2
-compileExp (MIR.EVar name, _t)  = emitIdent name
-compileExp (MIR.EApp e1 e2, t)  = emitApp t e1 e2
-compileExp (MIR.ELet bind e, _) = emitLet bind e
-compileExp (MIR.ECase e cs, t)  = emitECased t e (map (t,) cs)
--- compileExp (MIR.EVarCxt name cxt) = emitEVarCxt name cxt
+compileExp (ELit lit, _t)   = emitLit lit
+compileExp (EAdd e1 e2, t)  = emitAdd t e1 e2
+compileExp (EVar name, _t)  = emitIdent name
+compileExp (EApp e1 e2, t)  = emitApp t e1 e2
+compileExp (ELet bind e, _) = emitLet bind e
+compileExp (ECase e cs, t)  = emitECased t e (map (t,) cs)
 
-emitLet :: MIR.Bind -> T Exp -> CompilerState ()
-emitLet (MIR.Bind id [] innerExp) e = do
+emitLet :: Bind -> T Exp -> CompilerState ()
+emitLet (Bind id [] innerExp) e = do
     evaled <- exprToValue innerExp
     tempVar <- getNewVar
     let t = type2LlvmType . snd $ innerExp
@@ -187,7 +224,7 @@ emitLet (MIR.Bind id [] innerExp) e = do
     compileExp e
 emitLet b _ = error $ "Non empty argument list in let-bind " <> show b
 
-emitECased :: MIR.Type -> T Exp -> [(MIR.Type, Branch)] -> CompilerState ()
+emitECased :: Type -> T Exp -> [(Type, Branch)] -> CompilerState ()
 emitECased t e cases = do
     let cs = snd <$> cases
     let ty = type2LlvmType t
@@ -212,7 +249,7 @@ emitECased t e cases = do
     emit $ SetVariable res (Load ty Ptr stackPtr)
   where
     emitCases :: LLVMType -> LLVMType -> Ident -> Ident -> LLVMValue -> Branch -> CompilerState ()
-    emitCases rt ty label stackPtr vs (Branch (MIR.PInj consId cs, _t) exp) = do
+    emitCases rt ty label stackPtr vs (Branch (PInj consId cs, _t) exp) = do
         emit $ Comment "Inj"
         cons <- gets constructors
         let r = fromJust $ Map.lookup consId cons
@@ -257,11 +294,11 @@ emitECased t e cases = do
         emit $ Store ty val Ptr stackPtr
         emit $ Br label
         emit $ Label lbl_failPos
-    emitCases _rt ty label stackPtr vs (Branch (MIR.PLit i, t) exp) = do
+    emitCases _rt ty label stackPtr vs (Branch (PLit i, t) exp) = do
         emit $ Comment "Plit"
         let i' = case i of
-                MIR.LInt i  -> VInteger i
-                MIR.LChar i -> VChar (ord i)
+                LInt i  -> VInteger i
+                LChar i -> VChar (ord i)
         ns <- getNewVar
         lbl_failPos <- (\x -> Ident $ "failed_" <> show x) <$> getNewLabel
         lbl_succPos <- (\x -> Ident $ "success_" <> show x) <$> getNewLabel
@@ -272,7 +309,7 @@ emitECased t e cases = do
         emit $ Store ty val Ptr stackPtr
         emit $ Br label
         emit $ Label lbl_failPos
-    emitCases rt ty label stackPtr vs (Branch (MIR.PVar id, _) exp) = do
+    emitCases rt ty label stackPtr vs (Branch (PVar id, _) exp) = do
         emit $ Comment "Pvar"
         -- //TODO this is pretty disgusting and would heavily benefit from a rewrite
         valPtr <- getNewVar
@@ -284,11 +321,11 @@ emitECased t e cases = do
         emit $ Br label
         lbl_failPos <- (\x -> Ident $ "failed_" <> show x) <$> getNewLabel
         emit $ Label lbl_failPos
-    emitCases rt ty label stackPtr vs (Branch (MIR.PEnum (Ident "True"), t) exp) = do
-        emitCases rt ty label stackPtr vs (Branch (MIR.PLit (MIR.LInt 1), TLit "Bool") exp)
-    emitCases rt ty label stackPtr vs (Branch (MIR.PEnum (Ident "False"), _) exp) = do
-        emitCases rt ty label stackPtr vs (Branch (MIR.PLit (MIR.LInt 0), TLit "Bool") exp)
-    emitCases rt ty label stackPtr vs (Branch (MIR.PEnum consId, _) exp) = do
+    emitCases rt ty label stackPtr vs (Branch (PEnum (Ident "True"), t) exp) = do
+        emitCases rt ty label stackPtr vs (Branch (PLit (LInt 1), TLit "Bool") exp)
+    emitCases rt ty label stackPtr vs (Branch (PEnum (Ident "False"), _) exp) = do
+        emitCases rt ty label stackPtr vs (Branch (PLit (LInt 0), TLit "Bool") exp)
+    emitCases rt ty label stackPtr vs (Branch (PEnum consId, _) exp) = do
         -- //TODO Penum wrong, acts as a catch all
         emit $ Comment "Penum"
         cons <- gets constructors
@@ -314,7 +351,7 @@ emitECased t e cases = do
         emit $ Store ty val Ptr stackPtr
         emit $ Br label
         emit $ Label lbl_failPos
-    emitCases _ ty label stackPtr _ (Branch (MIR.PCatch, _) exp) = do
+    emitCases _ ty label stackPtr _ (Branch (PCatch, _) exp) = do
         emit $ Comment "Pcatch"
         val <- exprToValue exp
         emit $ Store ty val Ptr stackPtr
@@ -322,50 +359,49 @@ emitECased t e cases = do
         lbl_failPos <- (\x -> Ident $ "failed_" <> show x) <$> getNewLabel
         emit $ Label lbl_failPos
 
-emitApp :: MIR.Type -> T Exp -> T Exp -> CompilerState ()
-emitApp rt e1 e2 = appEmitter e1 e2 []
-  where
-    appEmitter :: T Exp -> T Exp -> [T Exp] -> CompilerState ()
-    appEmitter e1 e2 stack = do
-        let newStack = e2 : stack
-        case e1 of
-            (MIR.EApp e1' e2', _) -> appEmitter e1' e2' newStack
-            (MIR.EVarCxt name cxt, t) -> do
-                args <- traverse exprToValue newStack
-                vs <- getNewVar
-                funcs <- gets functions
-                consts <- gets constructors
-                let visibility =
-                        fromMaybe Local $
-                            Global <$ Map.lookup name consts
-                                <|> Global <$ Map.lookup (name, t) funcs
-                    -- this piece of code could probably be improved, i.e remove the double `const Global`
-                    args' = map (first valueGetType . dupe) args
-                let call =
-                        case name of
-                            Ident ('l' : 't' : '$' : _) -> Icmp LLSlt I64 (snd (head args')) (snd (args' !! 1))
-                            Ident s -> Call FastCC (type2LlvmType rt) visibility (Ident $ s ++ "_deref") (args') -- TODO need local vars!
-                emit $ Comment $ show rt
-                emit $ SetVariable vs call
+emitApp :: Type -> T Exp -> T Exp -> CompilerState ()
+emitApp rt e1 e2 = do
+    ((EVar name, t), args) <- go (EApp e1 e2, rt)
+    vs <- getNewVar
+    funcs <- gets functions
+    consts <- gets constructors
+    let visibility =
+            fromMaybe Local $
+                Global <$ Map.lookup name consts
+                    <|> Global <$ Map.lookup (name, t) funcs
+        -- this piece of code could probably be improved, i.e remove the double `const Global`
 
-            (MIR.EVar name, t) -> do
-                args <- traverse exprToValue newStack
-                vs <- getNewVar
-                funcs <- gets functions
-                consts <- gets constructors
-                let visibility =
-                        fromMaybe Local $
-                            Global <$ Map.lookup name consts
-                                <|> Global <$ Map.lookup (name, t) funcs
-                    -- this piece of code could probably be improved, i.e remove the double `const Global`
-                    args' = map (first valueGetType . dupe) args
-                let call =
-                        case name of
-                            Ident ('l' : 't' : '$' : _) -> Icmp LLSlt I64 (snd (head args')) (snd (args' !! 1))
-                            _ -> Call FastCC (type2LlvmType rt) visibility name args'
-                emit $ Comment $ show rt
-                emit $ SetVariable vs call
-            x -> error $ "The unspeakable happened: " <> show x
+    call <- case name of
+        Ident ('l' : 't' : '$' : _) ->
+            pure $ Icmp LLSlt I64 (snd (head args)) (snd (args !! 1))
+
+        -- FIXME
+        _ -> do
+            let closure_call LocalElem { typ = Ptr, val } = (mkDerefName name, (Ptr, val) : args)
+
+            (name, args) <- gets $ maybe (name, (Ptr, VNull) : args) closure_call
+                                 . lookup name
+                                 . locals
+
+            pure $ Call FastCC (type2LlvmType rt) visibility name args
+
+    emit $ Comment $ show (type2LlvmType rt)
+    emit $ SetVariable vs call
+
+  where
+
+    go :: T Exp -> CompilerState (T Exp, [(LLVMType, LLVMValue)])
+    go et@(e, _) = case e of
+      EApp e1 e2@(_, t) -> do
+          (x, as) <- go e1
+          a <- exprToValue e2
+          let t' = type2LlvmType' t
+          pure (x, snoc (t', a) as)
+      _ -> pure (et, [])
+
+    type2LlvmType' = \case
+      TFun _ _ -> Ptr
+      t        -> type2LlvmType t
 
 emitIdent :: Ident -> CompilerState ()
 emitIdent id = do
@@ -374,17 +410,17 @@ emitIdent id = do
     emit $ Variable id
     emit $ UnsafeRaw "\n"
 
-emitLit :: MIR.Lit -> CompilerState ()
+emitLit :: Lit -> CompilerState ()
 emitLit i = do
     -- !!this should never happen!!
     let (i', t) = case i of
-            (MIR.LInt i'')  -> (VInteger i'', I64)
-            (MIR.LChar i'') -> (VChar $ ord i'', I8)
+            (LInt i'')  -> (VInteger i'', I64)
+            (LChar i'') -> (VChar $ ord i'', I8)
     varCount <- getNewVar
     emit $ Comment "This should not have happened!"
     emit $ SetVariable varCount (Add t i' (VInteger 0))
 
-emitAdd :: MIR.Type -> T Exp -> T Exp -> CompilerState ()
+emitAdd :: Type -> T Exp -> T Exp -> CompilerState ()
 emitAdd t e1 e2 = do
     v1 <- exprToValue e1
     v2 <- exprToValue e2
@@ -392,37 +428,112 @@ emitAdd t e1 e2 = do
     emit $ SetVariable v (Add (type2LlvmType t) v1 v2)
 
 exprToValue :: T Exp -> CompilerState LLVMValue
-exprToValue = \case
-    (MIR.ELit i, _t) -> pure $ case i of
-        (MIR.LInt i)  -> VInteger i
-        (MIR.LChar i) -> VChar $ ord i
-    (MIR.EVar (Ident "True"), _t) -> pure $ VInteger 1
-    (MIR.EVar (Ident "False"), _t) -> pure $ VInteger 0
-    (MIR.EVar name, t) -> do
-        funcs <- gets functions
-        cons <- gets constructors
-        let res =
-                Map.lookup (name, t) funcs
-                    <|> ( \c ->
-                            FunctionInfo
-                                { numArgs = numArgsCI c
-                                , arguments = argumentsCI c
-                                }
-                        )
-                        <$> Map.lookup name cons
-        case res of
-            Just fi -> do
-                if numArgs fi == 0
-                    then do
-                        vc <- getNewVar
-                        emit $
-                            SetVariable
-                                vc
-                                (Call FastCC (type2LlvmType t) Global name [])
-                        pure $ VIdent vc (type2LlvmType t)
-                    else pure $ VFunction name Global (type2LlvmType t)
-            Nothing -> pure $ VIdent name (type2LlvmType t)
-    e -> do
-        compileExp e
+exprToValue et@(e, t) = case e of
+    ELit (LInt i) -> pure $ VInteger i
+    ELit (LChar c) -> pure . VChar $ ord c
+
+    EVar "True" -> pure $ VInteger 1
+    EVar "False" -> pure $ VInteger 0
+
+
+    EVar name -> gets (Map.lookup name . globals) >>= \case
+        Just (typ@(Function _ ts), val) | length ts > 1 -> do
+            trace ("TYPE: " ++ show name ++ "      " ++ show typ) pure ()
+            type_struct <- addStructType (mkClosureName name) [typ]
+            emit $ Comment "Allocating structure"
+            emit . SetVariable name $ Alloca type_struct
+            emit $ Store typ val Ptr name
+            pure $ VIdent name Ptr
+
+        Just (typ, _) -> do
+            vc <- getNewVar
+            emit $ Comment (show $ type2LlvmType t)
+            emit $ SetVariable vc (Call FastCC typ Global name [(Ptr, VNull)])
+            pure $ VIdent vc typ
+
+        Nothing -> gets (Map.lookup name . constructors) >>= \case
+
+            Just ConstructorInfo {numArgsCI}
+                | numArgsCI == 0 -> do
+                    vc <- getNewVar
+                    emit $ SetVariable vc call
+                    pure $ VIdent vc (type2LlvmType t)
+                | otherwise -> pure $ VFunction name Global (type2LlvmType t)
+                  where
+                    call = Call FastCC (type2LlvmType t) Global name []
+
+            Nothing -> gets $ val
+                            . fromJust
+                            . lookup name
+                            . locals
+
+    -- EVar name -> do
+    --     funcs <- gets functions
+    --     cons <- gets constructors
+    --     let res =
+    --             Map.lookup (name, t) funcs
+    --                 <|> ( \c ->
+    --                         FunctionInfo
+    --                             { numArgs = numArgsCI c
+    --                             , arguments = argumentsCI c
+    --                             }
+    --                     )
+    --                     <$> Map.lookup name cons
+    --     case res of
+    --         Just fi -> do
+    --             if numArgs fi == 0
+    --                 then do
+    --                     vc <- getNewVar
+    --                     emit $
+    --                         SetVariable
+    --                             vc
+    --                             (Call FastCC (type2LlvmType t) Global name [])
+    --                     pure $ VIdent vc (type2LlvmType t)
+    --                 else pure $ VFunction name Global (type2LlvmType t)
+    --
+    --         Nothing -> gets $ val
+    --                         . fromJust
+    --                         . lookup name
+    --                         . locals
+
+    EVarC cxt name -> do
+        emit $ Comment "EVARC"
+        let cxt' = flip map cxt $ \(x, t) -> let t' = type2LlvmType t
+                                             in (t', VIdent x t')
+        cxt'' <- gets $ (:cxt')
+                      . fromJust
+                      . Map.lookup name
+                      . globals
+
+        -- Create a new type for function pointer and arguments
+        type_struct <- addStructType (mkClosureName name) $ map fst cxt''
+        emit $ Comment "Allocating structure"
+        emit . SetVariable name $ Alloca type_struct
+
+        let ptr_struct = VIdent name Ptr
+            storeArg (t, v) i = do
+                vc <- getNewVar
+                emit . SetVariable vc
+                     $ GetElementPtrInbounds type_struct Ptr ptr_struct
+                       I32 (VInteger 0) I32 (VInteger i) -- TODO fix indices
+                emit $ Store t v Ptr vc
+
+        -- Store arguments in structure
+        zipWithM_ storeArg cxt'' [0 ..]
+        pure ptr_struct
+
+    _ -> do
+        compileExp et
         v <- getVarCount
-        pure $ VIdent (Ident $ show v) (getType e)
+        pure $ VIdent (Ident $ show v) (getType et)
+
+
+mkClosureName :: Ident -> Ident
+mkClosureName (Ident s) = Ident $ "Closure_" ++ s
+
+mkDerefName :: Ident -> Ident
+mkDerefName (Ident s) = Ident $ s ++ "_deref"
+
+mkCxtName :: Ident
+mkCxtName = Ident "cxt"
+

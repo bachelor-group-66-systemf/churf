@@ -139,23 +139,24 @@ data AExp = AVar Ident
 
 
 
-
 data BBind = BBind (T Ident) [T Ident] (T BExp)
-    deriving (Eq, Ord, Show, Read)
+           | BBindCxt [T Ident] (T Ident) [T Ident] (T BExp)
+    deriving (Eq, Ord, Show)
+
+
+data BBranch = BBranch (T Pattern) (T BExp)
+    deriving (Eq, Ord, Show)
 
 data BExp
     = BVar Ident
-    | BVarCxt Ident [T Ident]
+    | BVarC [T Ident] Ident
     | BInj Ident
     | BLit Lit
     | BLet BBind (T BExp)
     | BApp (T BExp)(T BExp)
     | BAdd (T BExp)(T BExp)
     | BCase (T BExp) [BBranch]
-    deriving (Eq, Ord, Show, Read)
-
-data BBranch = BBranch (T Pattern) (T BExp)
-    deriving (Eq, Ord, Show, Read)
+    deriving (Eq, Ord, Show)
 
 
 abstract :: [ABind] -> [BBind]
@@ -183,10 +184,12 @@ abstractAnnExp Ann {frees, term = (annae, typ) } = case annae of
         i <- nextNumber
         rhs <- abstractAnnExp annae''
         let sc_name  = Ident ("sc_" ++ show i)
-            bind = BBind (sc_name, typ) vars rhs
-            e@(_, t) | null frees = (BVar sc_name, typ)
-                     | otherwise  = (BVarCxt sc_name frees, typ)
-        pure (BLet bind e ,t)
+            sc   | null frees = (BVar sc_name, typ)
+                 | otherwise  = (BVarC frees sc_name, typ)
+            bind | null frees = BBind (sc_name, typ) vars rhs
+                 | otherwise  = BBindCxt frees (sc_name, typ) vars rhs
+
+        pure (BLet bind sc ,typ)
 
       where
         vars = [(x, t_x)] <|| ys
@@ -217,12 +220,15 @@ collectScs = concatMap collectFromRhs
     collectFromRhs (BBind name parms rhs) =
         let (rhs_scs, rhs') = collectScsExp rhs
         in  L.Bind name parms rhs' : rhs_scs
+    collectFromRhs (BBindCxt cxt name parms rhs) =
+        let (rhs_scs, rhs') = collectScsExp rhs
+        in  L.BindC cxt name parms rhs' : rhs_scs
 
 
 collectScsExp :: T BExp -> ([L.Bind], T L.Exp)
 collectScsExp (exp, typ) = case exp of
-    BVar  x    -> ([], (L.EVar x, typ))
-    BVarCxt x cxt -> ([], (L.EVarCxt x cxt, typ))
+    BVar  x -> ([], (L.EVar x, typ))
+    BVarC as x -> ([], (L.EVarC as x, typ))
     BInj k -> ([], (L.EInj k, typ))
     BLit lit -> ([], (L.ELit lit, typ))
 
@@ -253,6 +259,15 @@ collectScsExp (exp, typ) = case exp of
         | otherwise  -> (bind : rhs_scs ++ et_scs, et')
       where
         bind            = L.Bind name parms rhs'
+        (rhs_scs, rhs') = collectScsExp rhs
+        (et_scs, et')   = collectScsExp e
+
+
+    BLet (BBindCxt cxt name parms rhs) e
+        | null parms -> (rhs_scs ++ et_scs, (L.ELet name rhs' et', snd et'))
+        | otherwise  -> (bind : rhs_scs ++ et_scs, et')
+      where
+        bind            = L.BindC cxt name parms rhs'
         (rhs_scs, rhs') = collectScsExp rhs
         (et_scs, et')   = collectScsExp e
 

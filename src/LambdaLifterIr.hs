@@ -7,26 +7,26 @@ module LambdaLifterIr (
     module TypeChecker.TypeCheckerIr
 ) where
 
-import           Data.List                 (intersperse)
+import           Data.List                 (intercalate)
 import           Grammar.Abs               (Lit (..))
 import           Grammar.Print
-import           Prelude
-import qualified Prelude                   as C (Eq, Ord, Read, Show)
+import           Prelude                   hiding (exp)
+import qualified Prelude                   as C (Eq, Ord, Show)
 import           TypeChecker.TypeCheckerIr (Ident (..), TVar (..), Type (..))
 
 newtype Program = Program [Def]
-    deriving (C.Eq, C.Ord, C.Show, C.Read)
+    deriving (C.Eq, C.Ord, C.Show)
 
 data Def
     = DBind Bind
     | DData Data
-    deriving (C.Eq, C.Ord, C.Show, C.Read)
+    deriving (C.Eq, C.Ord, C.Show)
 
 data Data = Data Type [Inj]
-    deriving (C.Eq, C.Ord, C.Show, C.Read)
+    deriving (C.Eq, C.Ord, C.Show)
 
 data Inj = Inj Ident Type
-    deriving (C.Eq, C.Ord, C.Show, C.Read)
+    deriving (C.Eq, C.Ord, C.Show)
 
 data Pattern
     = PVar Ident
@@ -34,46 +34,47 @@ data Pattern
     | PCatch
     | PEnum Ident
     | PInj Ident [(Pattern, Type)]
-    deriving (C.Eq, C.Ord, C.Show, C.Read)
+    deriving (C.Eq, C.Ord, C.Show)
 
 data Exp
     = EVar Ident
-    | EVarCxt Ident [T Ident]
+    | EVarC [T Ident] Ident
     | EInj Ident
     | ELit Lit
     | ELet (T Ident) (T Exp) (T Exp)
     | EApp (T Exp)(T Exp)
     | EAdd (T Exp)(T Exp)
     | ECase (T Exp) [Branch]
-    deriving (C.Eq, C.Ord, C.Show, C.Read)
+    deriving (C.Eq, C.Ord, C.Show)
 
 
 type T a = (a, Type)
 
 data Bind = Bind (T Ident) [T Ident] (T Exp)
-    deriving (C.Eq, C.Ord, C.Show, C.Read)
+          | BindC [T Ident] (T Ident) [T Ident] (T Exp)
+    deriving (C.Eq, C.Ord, C.Show)
 
 data Branch = Branch (T Pattern) (T Exp)
-    deriving (C.Eq, C.Ord, C.Show, C.Read)
+    deriving (C.Eq, C.Ord, C.Show)
 
 instance Print Program where
     prt i (Program sc) = prt i sc
 
 instance Print Bind where
     prt i (Bind sig parms rhs) = concatD
-                [ prtSig sig
+                [ prt i sig
                 , prt i parms
                 , doc $ showString "="
                 , prt i rhs
                 ]
-
-prtSig :: T Ident -> Doc
-prtSig (name, t) =
-    concatD
-        [ prt 0 name
---        , doc $ showString ":"
---        , prt 0 t
-        ]
+    prt i (BindC cxt sig parms rhs) =
+        prPrec i 0 $
+            concatD
+                [ doc . showString $ "{" ++ intercalate ", " (map (\(x, _) -> printTree x ++ "^") cxt) ++ "}" ++ printTree sig
+                , prt i parms
+                , doc $ showString "="
+                , prt i rhs
+                ]
 
 instance Print [Bind] where
     prt _ []       = concatD []
@@ -83,7 +84,10 @@ instance Print [Bind] where
 instance Print Exp where
     prt i = \case
         EVar lident -> prPrec i 3 (concatD [prt 0 lident])
-        EVarCxt lident cxt -> prPrec i 3 (concatD [prtCxt cxt, prt i lident])
+        EVarC as lident -> doc . showString
+                               $ "{" ++ intercalate ", " (map go as) ++ "}" ++ printTree lident
+                where
+              go (x, _) = printTree x ++ "^=" ++ printTree (EVar x)
         EInj uident -> prPrec i 3 (concatD [prt 0 uident])
         ELit lit -> prPrec i 3 (concatD [prt 0 lit])
         EApp exp1 exp2 -> prPrec i 2 (concatD [prt 2 exp1, prt 3 exp2])
@@ -91,13 +95,6 @@ instance Print Exp where
         ELet lident exp1 exp2 -> prPrec i 0 (concatD [doc (showString "let"), prt 0 lident, doc (showString "="), prt 0 exp1 , doc (showString "in"), prt 0 exp2])
         ECase exp branchs -> prPrec i 0 (concatD [doc (showString "case"), prt 0 exp, doc (showString "of"), doc (showString "{"), prt 0 branchs, doc (showString "}")])
 
-
-prtCxt :: [T Ident] -> Doc
-prtCxt cxt = concatD
-    [ doc $ showString "《"
-    , concatD . intersperse (doc $ showString ", ") $ map (\(x@(Ident s), _) -> concatD [doc $ showString (s ++ "^="), prt 0 x]) cxt
-    , doc $ showString "》"
-    ]
 
 instance Print Branch where
     prt i (Branch (pattern_, t) exp) = prPrec i 0 (concatD [doc (showString "("), prt 0 pattern_, doc (showString " : "), prt 0 t, doc (showString ")"), doc (showString "=>"), prt 0 exp])
@@ -140,3 +137,4 @@ instance Print [Def] where
 
 pattern DBind' id vars expt = DBind (Bind id vars expt)
 pattern DData' typ injs = DData (Data typ injs)
+

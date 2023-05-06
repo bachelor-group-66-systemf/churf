@@ -1,15 +1,24 @@
+{-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE LambdaCase            #-}
+{-# LANGUAGE OverloadedRecordDot   #-}
+{-# LANGUAGE OverloadedStrings     #-}
+
 module Codegen.CompilerState where
 
 import           Auxiliary                     (snoc)
 import           Codegen.Auxillary             (type2LlvmType, typeByteSize)
-import           Codegen.LlvmIr                as LIR (LLVMIr (UnsafeRaw),
-                                                       LLVMType)
-import           Control.Monad.State           (StateT, gets, modify)
+import           Codegen.LlvmIr                as LIR (LLVMIr (SetVariable, Type),
+                                                       LLVMType (CustomType, Function, I64, Ptr),
+                                                       LLVMValue (VFunction, VIdent),
+                                                       Visibility (Global),
+                                                       typeOf)
+import           Control.Monad.State           (StateT, gets, modify, void)
 import           Data.Map                      (Map)
 import qualified Data.Map                      as Map
 import           Grammar.ErrM                  (Err)
-import           Monomorphizer.MonomorphizerIr (Ident (..), T)
-import           Monomorphizer.MonomorphizerIr as MIR
+import           Monomorphizer.MonomorphizerIr (Ident (..), Inj (..), T,
+                                                flattenType)
+import qualified Monomorphizer.MonomorphizerIr as MIR
 import qualified TypeChecker.TypeCheckerIr     as TIR
 
 -- | The record used as the code generator state
@@ -17,11 +26,28 @@ data CodeGenerator = CodeGenerator
     { instructions  :: [LLVMIr]
     , functions     :: Map (T Ident) FunctionInfo
     , customTypes   :: Map LLVMType Integer
-    , constructors  :: Map TIR.Ident ConstructorInfo
+    , constructors  :: Map Ident ConstructorInfo
     , variableCount :: Integer
     , labelCount    :: Integer
     , gcEnabled     :: Bool
+    , structTypes   :: Map Ident StructType
+    -- ^ Custom stucture types
+    , locals        :: [(Ident, LocalElem)]
+    -- ^ Arguments and variables in local environment
+    , globals       :: Map Ident (LLVMType, LLVMValue)
     }
+
+data StructType = StructType
+    { ptr  :: LLVMType
+    , typs :: [LLVMType]
+    , inst :: LLVMIr
+    }
+
+data LocalElem = LocalElem
+    { typ :: LLVMType
+    , val :: LLVMValue
+    }
+
 
 -- | A state type synonym
 type CompilerState a = StateT CodeGenerator Err a
@@ -39,9 +65,37 @@ data ConstructorInfo = ConstructorInfo
     }
     deriving (Show)
 
+
+addStructType_ :: Ident -> [LLVMType] -> CompilerState ()
+addStructType_ = fmap void . addStructType
+
+addStructType :: Ident -> [LLVMType] -> CompilerState LLVMType
+addStructType x ts = do
+    modify $ \s -> s { structTypes = Map.insert x struct s.structTypes }
+    pure t
+  where
+    struct = StructType
+        { ptr  = t
+        , typs = ts
+        , inst = Type x ts
+        }
+    t = CustomType x
+
 -- | Adds a instruction to the CodeGenerator state
 emit :: LLVMIr -> CompilerState ()
-emit l = modify $ \t -> t{instructions = Auxiliary.snoc l $ instructions t}
+
+-- Add variable to environment
+emit l@(SetVariable x _) = modify $ \t ->
+    t { instructions = Auxiliary.snoc l t.instructions
+      , locals       = snoc (x, local)
+                       t.locals
+      }
+  where
+    local = LocalElem { typ = typeOf l
+                      , val = VIdent x (typeOf l)
+                      }
+
+emit l = modify $ \t -> t { instructions = Auxiliary.snoc l t.instructions }
 
 -- | Increases the variable counter in the CodeGenerator state
 increaseVarCount :: CompilerState ()
@@ -69,8 +123,11 @@ getFunctions bs = Map.fromList $ go bs
   where
     go [] = []
     go (MIR.DBind (MIR.Bind id args _) : xs) =
-        (id, FunctionInfo{numArgs = length args, arguments = args})
-            : go xs
+        (id, FunctionInfo { numArgs = length args
+                          , arguments = args
+                          }
+        )
+        : go xs
     go (_ : xs) = go xs
 
 createArgs :: [MIR.Type] -> [T Ident]
@@ -114,35 +171,43 @@ getTypes bs = Map.fromList $ go bs
     variantTypes fi = init $ map type2LlvmType (flattenType fi)
     biggestVariant ts = 8 + maximum (sum . (\(Inj _ fi) -> typeByteSize <$> variantTypes fi) <$> ts)
 
+getGlobals :: [MIR.Def] -> Map Ident (LLVMType, LLVMValue)
+getGlobals scs = Map.fromList [ go b | MIR.DBind b <- scs ]
+  where
+    go bind | x == "main" = let typ = Function I64 []
+                            in (x, (typ, VFunction x Global typ))
+            | otherwise = (x, (typ, VFunction x Global typ))
+      where
+        typ = Function tr $ Ptr : ts
+        Function tr ts = type2LlvmType' t
+
+        (x, t) = case bind of
+            MIR.Bind xt _ _    -> xt
+            MIR.BindC _ xt _ _ -> xt
+
+    -- Higher order function arguments are replaced with ptr
+    type2LlvmType' = go []
+      where
+        go acc = \case
+            MIR.TFun (MIR.TFun _ _) t2 -> go (snoc Ptr acc) t2
+            MIR.TFun t1             t2 -> go (snoc (type2LlvmType t1) acc) t2
+            t                          -> Function (type2LlvmType t) acc
+
+
+
+
 initCodeGenerator :: Bool -> [MIR.Def] -> CodeGenerator
 initCodeGenerator addGc scs =
     CodeGenerator
-        { instructions = defaultStart <> if addGc then gcStart else []
+        { instructions = []
         , functions = getFunctions scs
         , constructors = getConstructors scs
         , customTypes = getTypes scs
+        , structTypes = mempty
         , variableCount = 0
         , labelCount = 0
         , gcEnabled = addGc
+        , locals = mempty
+        , globals = getGlobals scs
         }
 
-defaultStart :: [LLVMIr]
-defaultStart =
-    [ UnsafeRaw "target triple = \"x86_64-pc-linux-gnu\"\n"
-    , UnsafeRaw "target datalayout = \"e-m:o-i64:64-f80:128-n8:16:32:64-S128\"\n"
-    , UnsafeRaw "@.str = private unnamed_addr constant [3 x i8] c\"%i\n\", align 1\n"
-    , UnsafeRaw "@.non_exhaustive_patterns = private unnamed_addr constant [41 x i8] c\"Non-exhaustive patterns in case at %i:%i\n\"\n"
-    , UnsafeRaw "declare i32 @printf(ptr noalias nocapture, ...)\n"
-    , UnsafeRaw "declare i32 @exit(i32 noundef)\n"
-    , UnsafeRaw "declare ptr @malloc(i32 noundef)\n"
-    ]
-
-gcStart :: [LLVMIr]
-gcStart =
-    [ UnsafeRaw "declare external void @cheap_init()\n"
-    , UnsafeRaw "declare external ptr @cheap_alloc(i64)\n"
-    , UnsafeRaw "declare external void @cheap_dispose()\n"
-    , UnsafeRaw "declare external ptr @cheap_the()\n"
-    , UnsafeRaw "declare external void @cheap_set_profiler(ptr, i1)\n"
-    , UnsafeRaw "declare external void @cheap_profiler_log_options(ptr, i64)\n"
-    ]

@@ -18,7 +18,7 @@ data Type
     | TData Ident [Type]
     | TFun Type Type
     | TAll TVar Type
-    deriving (Eq, Ord, Show, Read)
+    deriving (Eq, Ord, Show)
 
 class ReportTEVar a b where
     reportTEVar :: a -> Err b
