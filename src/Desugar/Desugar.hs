@@ -62,18 +62,18 @@ desugarInj (Inj ident typ) = Inj ident (desugarType typ)
 
 desugarExp :: Exp -> Exp
 desugarExp = \case
-    EApp e1 e2 -> EApp (desugarExp e1) (desugarExp e2)
-    EAdd e1 e2 -> EAdd (desugarExp e1) (desugarExp e2)
-    EAbs i e -> EAbs i (desugarExp e)
-    EAbsS pat e -> EAbs (LIdent "$zz$") (ECase (EVar "$zz$") [Branch (desugarPattern pat) (desugarExp e)])
-    ELet b e -> ELet (desugarBind b) (desugarExp e)
-    ECase e br -> ECase (desugarExp e) (map desugarBranch br)
-    EAnn e t -> EAnn (desugarExp e) t
+    EApp e1 e2                    -> EApp (desugarExp e1) (desugarExp e2)
+    EAdd e1 e2                    -> EAdd (desugarExp e1) (desugarExp e2)
+    EAbs i e                      -> EAbs i (desugarExp e)
+    -- EAbsS pat e -> EAbs (LIdent "$zz$") (ECase (EVar "$zz$") [Branch (desugarPattern pat) (desugarExp e)])
+    ELet b e                      -> ELet (desugarBind b) (desugarExp e)
+    ECase e br                    -> ECase (desugarExp e) (map desugarBranch br)
+    EAnn e t                      -> EAnn (desugarExp e) t
     EVarS (VSymbol (Symbol symb)) -> EVar (LIdent $ fixName symb)
     EVarS (VIdent (LIdent ident)) -> EVar $ LIdent $ fixName ident
-    EVar i -> EVar i
-    ELit l -> ELit l
-    EInj i -> EInj i
+    EVar i                        -> EVar i
+    ELit l                        -> ELit l
+    EInj i                        -> EInj i
 
 desugarBranch :: Branch -> Branch
 desugarBranch (Branch p e) = Branch (desugarPattern p) (desugarExp e)
