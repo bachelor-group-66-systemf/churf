@@ -1,8 +1,8 @@
-main = for 0 1000
+main = for 0 10000
 
 for x n = case n of 
     0 => 0
-    n => for (revRange 1000) (n - 1)
+    n => for ((revRange 10000)) (n - 1)
 
 data List (a) where
     Nil : List (a)
@@ -12,3 +12,7 @@ data List (a) where
 revRange x = case x of 
     0 => Cons x Nil
     x => Cons x (revRange (x - 1))
+
+sum xs = case xs of 
+    Cons x ys => x + sum ys
+    Nil => 0
