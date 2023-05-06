@@ -1,0 +1,7 @@
+
+
+
+apply : (Int -> Int) -> Int -> Int
+apply f y = f y
+
+main = apply (\y. y + y) 5

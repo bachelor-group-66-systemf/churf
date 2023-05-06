@@ -1,0 +1,10 @@
+
+
+
+
+apply : (Int -> Int) -> Int -> Int
+apply f z = f z
+
+main = 
+    let x = 10 in
+    apply (\y. y + x) 6

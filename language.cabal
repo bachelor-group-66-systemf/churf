@@ -43,6 +43,7 @@ executable language
       TypeChecker.ReportTEVar
       TypeChecker.RemoveForall
       LambdaLifter
+      LambdaLifterIr
       Monomorphizer.Monomorphizer
       Monomorphizer.MonomorphizerIr
       Monomorphizer.MorbIr
@@ -101,6 +102,8 @@ Test-suite language-testsuite
       TypeChecker.TypeChecker
       AnnForall
       ReportForall
+      LambdaLifterIr
+      LambdaLifter
       TypeChecker.TypeCheckerHm
       TypeChecker.TypeCheckerBidir
       TypeChecker.ReportTEVar
