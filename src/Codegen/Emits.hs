@@ -14,28 +14,26 @@ import           Control.Applicative           (Applicative (liftA2), (<|>))
 import           Control.Monad                 (forM_, when, zipWithM_)
 import           Control.Monad.Extra           (whenJust)
 import           Control.Monad.State           (gets, modify)
-import qualified Data.Bifunctor                as BI
 import           Data.Char                     (ord)
 import           Data.Coerce                   (coerce)
 import           Data.Foldable.Extra           (notNull)
 import qualified Data.Map                      as Map
 import           Data.Maybe                    (fromJust, fromMaybe)
 import           Data.Tuple.Extra              (second)
-import           Debug.Trace                   (trace)
 import           Monomorphizer.MonomorphizerIr
 
 
 compileScs :: [Def] -> CompilerState ()
 compileScs [] = do
     emit $ UnsafeRaw "\n"
+    mapM_ createConstructor =<< gets (Map.toList . constructors)
     -- as a last step create all the constructors
     -- //TODO maybe merge this with the data type match?
-    c <- gets (Map.toList . constructors)
-    mapM_
-        ( \(id, ci) -> do
-            let t = returnTypeCI ci
-            let t' = type2LlvmType t
-            let x = BI.second type2LlvmType <$> argumentsCI ci
+  where
+    createConstructor (id, ci) = do
+            let t  = returnTypeCI ci
+                t' = type2LlvmType t
+                x  = (mkCxtName, Ptr) :  map (second type2LlvmType) ci.argumentsCI
             emit $ Define FastCC t' id x
             top <- getNewVar
             ptr <- getNewVar
@@ -100,8 +98,6 @@ compileScs [] = do
             emit $ UnsafeRaw "\n"
 
             modify $ \s -> s{variableCount = 0}
-        )
-        c
 
 compileScs (DBind bind : xs) = do
     emit $ UnsafeRaw "\n"
@@ -438,18 +434,24 @@ exprToValue et@(e, t) = case e of
 
     EVar name -> gets (Map.lookup name . globals) >>= \case
         Just (typ@(Function _ ts), val) | length ts > 1 -> do
-            trace ("TYPE: " ++ show name ++ "      " ++ show typ) pure ()
             type_struct <- addStructType (mkClosureName name) [typ]
             emit $ Comment "Allocating structure"
             emit . SetVariable name $ Alloca type_struct
             emit $ Store typ val Ptr name
             pure $ VIdent name Ptr
 
-        Just (typ, _) -> do
+        Just _ | name == "main" -> do
             vc <- getNewVar
-            emit $ Comment (show $ type2LlvmType t)
-            emit $ SetVariable vc (Call FastCC typ Global name [(Ptr, VNull)])
-            pure $ VIdent vc typ
+            emit $ SetVariable vc (Call FastCC I64 Global name [])
+            pure $ VIdent vc I64
+
+
+        Just (Function t_return [_], _) -> do
+            vc <- getNewVar
+            emit $ SetVariable vc (Call FastCC t_return Global name [(Ptr, VNull)])
+            pure $ VIdent vc t_return
+
+        Just _ -> error "Bad"
 
         Nothing -> gets (Map.lookup name . constructors) >>= \case
 
@@ -497,7 +499,6 @@ exprToValue et@(e, t) = case e of
     --                         . locals
 
     EVarC cxt name -> do
-        emit $ Comment "EVARC"
         let cxt' = flip map cxt $ \(x, t) -> let t' = type2LlvmType t
                                              in (t', VIdent x t')
         cxt'' <- gets $ (:cxt')

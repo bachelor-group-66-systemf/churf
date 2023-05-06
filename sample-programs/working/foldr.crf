@@ -1,0 +1,15 @@
+
+data List a where 
+    Nil  : List a
+    Cons : a -> List a -> List a
+
+foldr : (a -> b -> b) -> b -> List a -> b
+foldr f y xs = case xs of
+    Nil       => y
+    Cons x xs => f x (foldr f y xs)
+
+
+main = let z = 2 in foldr (\x.\y. x + y + z) 0 (Cons 1000 (Cons 100 Nil))
+
+
+
