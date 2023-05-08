@@ -367,7 +367,7 @@ emitECased t e cases = do
 preludeFuns :: LLVMIr -> Ident -> LLVMValue -> LLVMValue -> CompilerState LLVMIr
 preludeFuns def (Ident xs) arg1 arg2
   | "$langle$$langle$" `isPrefixOf` xs = pure $ Icmp LLSlt I8 arg1 arg2
-  | "$langle$" `isPrefixOf` xs =  pure $ Icmp LLSlt I8 arg1 arg2
+  | "$langle$" `isPrefixOf` xs =  pure $ Icmp LLSlt I64 arg1 arg2
   | "$minus$" `isPrefixOf` xs = pure $ Sub I64 arg1 arg2
   | "printChar$" `isPrefixOf` xs = do
         pure . UnsafeRaw $
@@ -395,7 +395,7 @@ emitApp rt e1 e2 = do
 
             pure $ Call FastCC (type2LlvmType rt) visibility name args
     
-    call <- preludeFuns call name (snd (head args)) (snd (args !! 1))
+    call <- preludeFuns (fst (head typ)) call name (snd (head args)) (snd (args !! 1))
 
     emit $ Comment $ show (type2LlvmType rt)
     emit $ SetVariable vs call
