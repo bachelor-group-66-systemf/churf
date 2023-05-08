@@ -324,7 +324,11 @@ morphPattern p expectedType = case p of
   L.PVar ident     -> return $ Just ((M.PVar ident, expectedType), Set.singleton ident)
   L.PLit lit       -> return $ Just ((M.PLit (convertLit lit), expectedType), Set.empty)
   L.PCatch         -> return $ Just ((M.PCatch, expectedType), Set.empty)
-  L.PEnum ident    -> return $ Just ((M.PEnum (newName expectedType ident), expectedType), Set.empty)
+  L.PEnum ident    -> do
+    let newIdent = newName expectedType ident
+    isMarked <- isConsMarked newIdent
+    if isMarked then return $ Just ((M.PEnum newIdent, expectedType), Set.empty)
+                else return Nothing
   L.PInj ident pts -> do let newIdent = newName expectedType ident
                          isMarked <- isConsMarked newIdent
                          if isMarked
