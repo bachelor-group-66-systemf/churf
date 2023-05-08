@@ -326,22 +326,24 @@ morphPattern p expectedType = case p of
   L.PCatch         -> return $ Just ((M.PCatch, expectedType), Set.empty)
   L.PEnum ident    -> do
     let newIdent = newName expectedType ident
-    isMarked <- isConsMarked newIdent
-    if isMarked then return $ Just ((M.PEnum newIdent, expectedType), Set.empty)
-                else return Nothing
+    morphCons expectedType ident newIdent
+    return $ Just ((M.PEnum newIdent, expectedType), Set.empty)
   L.PInj ident pts -> do let newIdent = newName expectedType ident
-                         isMarked <- isConsMarked newIdent
-                         if isMarked
-                            then do
-                              ts' <- mapM (getMonoFromPoly . snd) pts
-                              let pts' = zip (map fst pts) ts'
-                              psSets <- mapM (uncurry morphPattern) pts'
-                              let maybePsSets = sequence psSets
-                              case maybePsSets of
-                                Nothing      -> return Nothing
-                                Just psSets' -> return $ Just
-                                  ((M.PInj newIdent (map fst psSets'), expectedType), Set.unions $ map snd psSets')
-                            else return Nothing
+                         ts' <- mapM (getMonoFromPoly . snd) pts
+                         morphCons (convertConsTypeToDataType expectedType ts') ident newIdent
+                         let pts' = zip (map fst pts) ts'
+                         psSets <- mapM (uncurry morphPattern) pts'
+                         let maybePsSets = sequence psSets
+                         case maybePsSets of
+                           Nothing      -> return Nothing
+                           Just psSets' -> return $ Just
+                             ((M.PInj newIdent (map fst psSets'), expectedType), Set.unions $ map snd psSets')
+
+-- Exampel: List a  =>  a -> List a
+convertConsTypeToDataType :: M.Type -> [M.Type] -> M.Type
+convertConsTypeToDataType inner (t:ts) = convertConsTypeToDataType (M.TFun t inner) ts
+convertConsTypeToDataType inner []     = inner
+
 
 -- | Creates a new identifier for a function with an assigned type.
 newFuncName :: M.Type -> L.Bind -> Ident
