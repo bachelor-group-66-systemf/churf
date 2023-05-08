@@ -367,9 +367,8 @@ emitApp rt e1 e2 = do
                 Global <$ Map.lookup name consts
                     <|> Global <$ Map.lookup (name, t) funcs
         -- this piece of code could probably be improved, i.e remove the double `const Global`
-
     call <- case name of
-        Ident ('l' : 't' : '$' : _) ->
+        Ident ('$' : 'l' : 'a' : 'n' : 'g' : 'l' : 'e' : '$' : _) ->
             pure $ Icmp LLSlt I64 (snd (head args)) (snd (args !! 1))
         Ident ('$' : 'm' : 'i' : 'n' : 'u' : 's' : '$' : '$' : _) ->
             pure $ Sub I64 (snd (head args)) (snd (args !! 1))

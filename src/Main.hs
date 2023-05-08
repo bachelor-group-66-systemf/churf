@@ -175,8 +175,8 @@ prelude =
         , "    False : Bool"
         , "    True  : Bool"
         , -- The function body of lt is replaced during code gen. It exists here for type checking purposes.
-          "lt : Int -> Int -> Bool"
-        , "lt x y = case x of"
+          ".< : Int -> Int -> Bool"
+        , ".< x y = case x of"
         , "    _ => True"
         , "    _ => False"
         , "\n"
