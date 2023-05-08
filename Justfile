@@ -33,3 +33,9 @@ hmdm FILE:
 
 bidm FILE:
     cabal run language -- -d -t bi -m {{FILE}}
+
+hmp FILE:
+    cabal run language -- -t hm -d -p {{FILE}}
+
+bip FILE:
+    cabal run language -- -t bi -p {{FILE}}

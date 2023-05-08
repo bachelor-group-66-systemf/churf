@@ -82,7 +82,7 @@ disableGC :: Options -> Options
 disableGC opts = opts{gc = False}
 
 disablePrelude :: Options -> Options
-disablePrelude opts = opts{preludeOpt = False}
+disablePrelude opts = opts{preludeOpt = True}
 
 chooseTypechecker :: String -> Options -> Options
 chooseTypechecker s options = options{typechecker = tc}
@@ -212,6 +212,6 @@ prelude =
         , "    Cons x xs => flipConst (printChar x) (printStr xs)"
         , "\n"
         , "data List a where"
-        , "    Cons : a -> List a -> List a"
         , "    Nil  : List a"
+        , "    Cons : a -> List a -> List a"
         ]

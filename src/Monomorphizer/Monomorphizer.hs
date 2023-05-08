@@ -45,6 +45,8 @@ import qualified LambdaLifterIr                as L
 
 import           Data.Maybe                    (fromJust, catMaybes)
 import           Data.Tuple.Extra              (secondM)
+import Debug.Trace (trace)
+import Test.QuickCheck.State (State(expected))
 
 {- | EnvM is the monad containing the read-only state as well as the
 output state containing monomorphized functions and to-be monomorphized
@@ -343,7 +345,8 @@ morphPattern p expectedType = case p of
     return $ Just ((M.PEnum newIdent, expectedType), Set.empty)
   L.PInj ident pts -> do let newIdent = newName expectedType ident
                          ts' <- mapM (getMonoFromPoly . snd) pts
-                         morphCons (convertConsTypeToDataType expectedType ts') ident newIdent
+                         trace ("Constructor: " ++ show ident ++ "expected: " ++ show expectedType ++ "\nTS': " ++ show ts' ++ "\n\n\n") pure ()
+                         morphCons (convertConsTypeToDataType expectedType (reverse ts')) ident newIdent
                          let pts' = zip (map fst pts) ts'
                          psSets <- mapM (uncurry morphPattern) pts'
                          let maybePsSets = sequence psSets
