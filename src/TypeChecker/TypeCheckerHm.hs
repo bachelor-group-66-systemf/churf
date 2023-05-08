@@ -194,7 +194,6 @@ checkBind (Bind name args e) = do
     case M.lookup (coerce name) s of
         Just (Just typSig) -> do
             env <- asks vars
-            trace ("ENV IN CHECKBIND: " ++ show env) pure ()
             let genInfSig = generalize mempty infSig
             sub <- genInfSig `unify` typSig
             unless
@@ -666,7 +665,6 @@ fresh = do
         let sub = M.fromList [(coerce x, fr) | (MkTVar x) <- tvars]
         let t1' = apply sub t1
         let t2' = apply sub t2
-        traceShow t1' (traceShow t2' pure ())
         return (t1' <<= t2')
 
 -- | A class for substitutions
