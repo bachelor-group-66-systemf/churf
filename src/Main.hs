@@ -197,4 +197,13 @@ prelude =
         , "        False => True"
         , "        _ => False"
         , "    False => False"
+        , "data Unit where"
+        , "  Unit : Unit"
+        , "\n"
+        , "printChar : Char -> Unit"
+        , "printChar = \\x. Unit"
+        , "\n"
+        , "printStr xs = case xs of"
+        , "    Nil => Nil"
+        , "    Cons x xs => Cons (print x) (printStr xs)"
         ]
