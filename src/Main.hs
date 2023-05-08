@@ -69,7 +69,7 @@ initOpts =
         , debug = False
         , gc = True
         , typechecker = Nothing
-        , preludeOpt = True
+        , preludeOpt = False
         }
 
 enableHelp :: Options -> Options
@@ -97,7 +97,7 @@ data Options = Options
     , debug       :: Bool
     , gc          :: Bool
     , typechecker :: Maybe TypeChecker
-    , preludeOpt     :: Bool
+    , preludeOpt  :: Bool
     }
 
 main' :: Options -> String -> IO ()
@@ -110,7 +110,8 @@ main' opts s =
             file <- readFile s
 
             printToErr "-- Parse Tree -- "
-            parsed <- fromErr . pProgram . resolveLayout True $ myLexer (file ++ prelude)
+            let file' = if opts.preludeOpt then file else file ++ prelude
+            parsed <- fromErr . pProgram . resolveLayout True $ myLexer file'
             log parsed
 
             printToErr "-- Desugar --"

@@ -82,6 +82,7 @@ define infixSymbol e1 vn e3 = EApp (EApp (EVarS (VSymbol vn)) e1) e3;
 
 LInt.  Lit ::= Integer;
 LChar. Lit ::= Char;
+LString. Lit ::= String ;
 
 -------------------------------------------------------------------------------
 -- * AUX

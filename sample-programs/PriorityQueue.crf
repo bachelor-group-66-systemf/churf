@@ -1,0 +1,41 @@
+data Skewheap where
+    Empty : Skewheap
+    Node : Skewheap -> Int -> Skewheap -> Skewheap
+
+data Maybe a where
+    Nothing : Maybe a
+    Just : a -> Maybe a
+
+data Pair a b where
+    Pair : a -> b -> Pair a b
+
+data List a where
+    Nil : List a
+    Cons : a -> List a -> List a
+
+empty = Empty
+
+singleton x = Node Empty x Empty
+
+peek : Skewheap -> Maybe Int
+peek tree = case tree of
+    Node _ x _ => Just x
+    _ => Nothing
+
+pop tree = case tree of
+    Node l x r => Just (Pair x (merge l r))
+    Empty => Nothing 
+
+merge tree1 tree2 = case tree1 of
+    Node left1 val1 right1 => case tree2 of
+        Node left2 val2 right2 => case val1 < val2 of
+            True => Node (merge right1 (Node left2 val2 right2)) val1 left1
+            False => Node (merge right2 (Node left1 val1 right1)) val2 left2
+        _ => tree1
+    Empty => tree2
+
+insert x tree = merge (singleton x) tree
+
+main = case peek (insert 1 (insert 2 (insert 3 (singleton 4)))) of
+    Nothing => (0 - 1)
+    Just x => x

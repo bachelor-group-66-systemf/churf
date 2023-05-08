@@ -71,9 +71,13 @@ desugarExp = \case
     EAnn e t                      -> EAnn (desugarExp e) (desugarType t)
     EVarS (VSymbol (Symbol symb)) -> EVar (LIdent $ fixName symb)
     EVarS (VIdent (LIdent ident)) -> EVar $ LIdent $ fixName ident
-    EVar i                        -> EVar i
+    EVar (LIdent i)                        -> EVar (LIdent $ fixName i)
+    ELit (LString str)            -> toList str
     ELit l                        -> ELit l
     EInj i                        -> EInj i
+
+toList :: String -> Exp
+toList = foldr (EApp . EApp (EInj (UIdent "Cons")) . ELit . LChar) (EInj (UIdent "Nil"))
 
 desugarBranch :: Branch -> Branch
 desugarBranch (Branch p e) = Branch (desugarPattern p) (desugarExp e)
@@ -89,6 +93,7 @@ desugarPattern = \case
 desugarLit :: Lit -> Lit
 desugarLit (LInt i)  = LInt i
 desugarLit (LChar c) = LChar c
+desugarLit (LString c) = LString c
 
 fixName :: String -> String
 fixName = concatMap mapSymbols
