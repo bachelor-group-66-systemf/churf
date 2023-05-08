@@ -68,7 +68,7 @@ desugarExp = \case
     -- EAbsS pat e -> EAbs (LIdent "$zz$") (ECase (EVar "$zz$") [Branch (desugarPattern pat) (desugarExp e)])
     ELet b e                      -> ELet (desugarBind b) (desugarExp e)
     ECase e br                    -> ECase (desugarExp e) (map desugarBranch br)
-    EAnn e t                      -> EAnn (desugarExp e) t
+    EAnn e t                      -> EAnn (desugarExp e) (desugarType t)
     EVarS (VSymbol (Symbol symb)) -> EVar (LIdent $ fixName symb)
     EVarS (VIdent (LIdent ident)) -> EVar $ LIdent $ fixName ident
     EVar i                        -> EVar i

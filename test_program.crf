@@ -1,59 +1,52 @@
--- Peano naturals
-data Nat where
-  Zero : Nat
-  Succ : Nat -> Nat
+data Expr where
+    EInt : Int -> Expr
+    EBool : Bool -> Expr
+    EAdd : Expr -> Expr -> Expr
+    EAnd : Expr -> Expr -> Expr
 
--- Returns 10_000
-main = toInt (fromInt 10000)
+data Val where
+    VInt : Int -> Val
+    VBool : Bool -> Val
 
--- Peano arithmetic --
+data Eval where
+    Just : Val -> Eval
+    Nothing : Eval
 
--- Peano addition
-add : Nat -> Nat -> Nat
-add left right = case left of
-    Zero => right
-    Succ n => Succ (add n right)
+interp : Expr -> Eval
+interp e = case e of
+    EInt i => Just (VInt i)
+    EBool b => Just (VBool b)
+    EAdd e1 e2 => case interp e1 of
+        Just x => case x of
+            VInt i => case interp e2 of
+                Nothing => Nothing
+                Just y => case y of
+                    VInt j => Just (VInt (i + j))
+                    _ => Nothing
+            _ => Nothing
+        Nothing => Nothing
+    EAnd e1 e2 => case interp e1 of
+        Just x => case x of
+            VBool i => case interp e2 of
+                Just y => case y of
+                    VBool j => case i of 
+                        True => case j of
+                            True => Just (VBool True)
+                            _ => Just (VBool False)
+                        _ => Just (VBool False)
+                Nothing => Nothing
+            _ => Nothing
+        Nothing => Nothing
+        
 
--- Peano multiplication
-mul : Nat -> Nat -> Nat
-mul left right = case right of
-    Zero => Zero
-    Succ n => add left (mul left n)
+readVal : Val -> Int
+readVal v = case v of
+    VInt i => i
+    VBool a => case a of
+        True => 1
+        False => 0
 
-eq : Nat -> Nat -> Nat
-eq a b = case a of
-    Zero => case b of 
-        Zero => Succ Zero
-        _    => Zero
-    Succ n => case b of
-        Zero => Zero
-        Succ m => eq n m
+main = case interp (EAdd (EAdd (EInt 3) (EInt 5)) (EBool True)) of
+    Nothing => (0 - 1)
+    Just x => case x of
 
-less : Nat -> Nat -> Nat
-less a b = case a of
-    Zero => case b of
-        Zero => Zero
-        Succ n => Succ Zero
-    Succ n => case b of
-        Zero => Zero
-        Succ m => less n m
-
-greater : Nat -> Nat -> Nat
-greater a b = case b of
-    Zero => case a of
-        Zero => Zero
-        Succ n => Succ Zero
-    Succ n => case a of
-        Zero => Zero
-        Succ m => less n m
-
--- Aux
-
-toInt : Nat -> Int
-toInt a = case a of
-    Succ n => 1 + toInt n
-    Zero => 0
-
-fromInt a = case a of
-    0 => Zero
-    n => Succ (fromInt (a - 1))
