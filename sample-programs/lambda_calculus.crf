@@ -1,0 +1,63 @@
+data Exp where
+    -- Integer for the variable name to be able to use (==)
+    -- as we do not have type classes.
+    EVar : Int -> Exp
+    EInt : Int -> Exp
+    EAbs : Int -> Exp -> Exp
+    EApp : Exp -> Exp -> Exp
+    EAdd : Exp -> Exp -> Exp
+
+data Pair a b where
+    Pair : a -> b -> Pair a b
+
+data Env where
+    Env : List (Pair Int Val) -> Env
+
+data Val where
+    VInt : Int -> Val
+    VClos : Env -> Int -> Exp -> Val
+
+data List a where
+    Nil : List a
+    Cons : a -> List a -> List a
+
+-- interp : Env -> Exp -> Val
+interp env exp = case exp of
+    EInt i => VInt i
+    EAdd e1 e2 => case interp env e1 of
+        VInt i => case interp env e2 of
+            VInt j => VInt (i + j)
+    EAbs ident expr => VClos env ident expr
+    EApp e1 e2 => case interp env e1 of
+        VClos closEnv ident exp => case interp env e2 of
+            v => interp (insert ident v closEnv) exp
+            -- Crash of incorrect program
+    EVar v => lookupVar v env
+
+-- lookupVar : Int -> Env -> Val
+lookupVar ident env = case env of
+    Env list => case list of
+        Cons a as => case a of
+            Pair identy val => case ident == identy of
+                True => val
+                False => lookupVar ident (Env as)
+        -- If the variable does not exist in
+        -- the context then we just crash the program
+
+-- insert : Int -> Val -> Env -> Env
+insert ident v env = case env of
+    Env list => Env (Cons (Pair ident v) list)
+
+-- eval : Val -> Int
+eval v = case v of
+    VInt i => i
+    -- Fail unless the final value is an integer
+
+-- expression : Exp
+expression = EApp (EAbs 0 (EAdd (EVar 0) (EInt 20))) (EInt 123)
+
+-- context : Env
+context = Env Nil
+
+-- main : Int
+main = eval (interp context expression)

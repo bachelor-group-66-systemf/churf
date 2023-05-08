@@ -58,6 +58,7 @@ flags =
     [ Option ['d'] ["debug"] (NoArg enableDebug) "Print debug messages."
     , Option ['t'] ["type-checker"] (ReqArg chooseTypechecker "bi/hm") "Choose type checker. Possible options are bi and hm"
     , Option ['m'] ["disable-gc"] (NoArg disableGC) "Disables the garbage collector and uses malloc instead."
+    , Option ['p'] ["disable-prelude"] (NoArg disablePrelude) "Do not include the prelude"
     , Option [] ["help"] (NoArg enableHelp) "Print this help message"
     ]
 
@@ -68,6 +69,7 @@ initOpts =
         , debug = False
         , gc = True
         , typechecker = Nothing
+        , preludeOpt = True
         }
 
 enableHelp :: Options -> Options
@@ -78,6 +80,9 @@ enableDebug opts = opts{debug = True}
 
 disableGC :: Options -> Options
 disableGC opts = opts{gc = False}
+
+disablePrelude :: Options -> Options
+disablePrelude opts = opts{preludeOpt = False}
 
 chooseTypechecker :: String -> Options -> Options
 chooseTypechecker s options = options{typechecker = tc}
@@ -92,6 +97,7 @@ data Options = Options
     , debug       :: Bool
     , gc          :: Bool
     , typechecker :: Maybe TypeChecker
+    , preludeOpt     :: Bool
     }
 
 main' :: Options -> String -> IO ()
@@ -184,4 +190,10 @@ prelude =
           ".- : Int -> Int -> Int"
         , ".- x y = 0"
         , "\n"
+        , ".== : Int -> Int -> Bool"
+        , ".== a b = case a < b of"
+        , "    False => case b < a of"
+        , "        False => True"
+        , "        _ => False"
+        , "    False => False"
         ]

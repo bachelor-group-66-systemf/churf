@@ -320,7 +320,7 @@ emitECased t e cases = do
         emit $ Label lbl_failPos
     emitCases rt ty label stackPtr vs (Branch (PEnum (Ident "True$Bool"), t) exp) = do
         emitCases rt ty label stackPtr vs (Branch (PLit $ LInt 1, t) exp)
-    emitCases rt ty label stackPtr vs (Branch (PEnum (Ident "False$Bool"), _) exp) = do
+    emitCases rt ty label stackPtr vs (Branch (PEnum (Ident "False$Bool"), t) exp) = do
         emitCases rt ty label stackPtr vs (Branch (PLit (LInt 0), t) exp)
     emitCases rt ty label stackPtr vs br@(Branch (PEnum consId, _) exp) = do
         emit $ Comment "Penum"
