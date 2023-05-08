@@ -11,12 +11,17 @@
 
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 #define HEAP_SIZE 320//65536
 #define FREE_THRESH (uint) 0
 =======
 #define HEAP_SIZE 16000//65536
 #define FREE_THRESH (uint) 100
 >>>>>>> c09da8a (now it works ok???)
+=======
+#define HEAP_SIZE 160000//65536
+#define FREE_THRESH (uint) 5
+>>>>>>> 5056624 (short profiler logs)
 // #define HEAP_DEBUG
 =======
 #define HEAP_SIZE 2097152 //256 //65536 //2097152

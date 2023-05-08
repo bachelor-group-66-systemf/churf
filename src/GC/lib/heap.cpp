@@ -288,23 +288,7 @@ namespace GC
 			stack_bottom++;
 		}
 	}
-
-	/**
-	 * Iterates through the stack, if an element on the stack points to a chunk,
-	 * called a root chunk, that chunk is marked (i.e. reachable).
-	 * Then it recursively follows all chunks which are possibly reachable from
-	 * the root chunk and mark those chunks.
-	 * If a chunk is marked it is removed from the worklist, since it's no longer of
-	 * concern for this method.
-	 * 
-	 * Time complexity: 0(N^2 * log(N)) as upper bound. 
-	 * 					Where N is either the size of the worklist or the size of
-	 * 					the stack frame, depending on which is the largest.
-	 *
-	 * @param start    Pointer to the start of the stack frame.
-	 * @param end      Pointer to the end of the stack frame.
-	 * @param worklist The currently allocated chunks, which haven't been marked.
-	 */
+	
 	void Heap::mark(vector<uintptr_t *> &roots)
 	{
 		bool prof_enabled = m_profiler_enable;
