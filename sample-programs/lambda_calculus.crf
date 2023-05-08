@@ -17,12 +17,18 @@ data Val where
     VInt : Int -> Val
     VClos : Env -> Int -> Exp -> Val
 
-data List a where
-    Nil : List a
-    Cons : a -> List a -> List a
+printExp : Exp -> Unit
+printExp exp = case exp of
+    EInt _ => printStr   "EInt\n"
+    EAdd _ _ => printStr "EAdd\n"
+    EAbs _ _ => printStr "EAbs\n"
+    EApp _ _ => printStr "EApp\n"
+    EVar _ => printStr   "EVar\n"
+
+const x y = x
 
 -- interp : Env -> Exp -> Val
-interp env exp = case exp of
+interp env exp = case const exp (printExp exp) of
     EInt i => VInt i
     EAdd e1 e2 => case interp env e1 of
         VInt i => case interp env e2 of
