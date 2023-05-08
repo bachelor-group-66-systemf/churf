@@ -395,7 +395,7 @@ emitApp rt e1 e2 = do
 
             pure $ Call FastCC (type2LlvmType rt) visibility name args
     
-    call <- preludeFuns (fst (head typ)) call name (snd (head args)) (snd (args !! 1))
+    call <- preludeFuns call name (snd (head args)) (snd (args !! 1))
 
     emit $ Comment $ show (type2LlvmType rt)
     emit $ SetVariable vs call
