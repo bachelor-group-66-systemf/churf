@@ -142,6 +142,19 @@ getMonoFromPoly t = do
         -- error $ "type not found! type: " ++ show ident ++ ", error in previous compilation steps"
         (L.TData ident args) -> M.TData ident (map (getMono polys) args)
 
+-- | Converts a monomorphic type to the output tree if that type is monomorphic
+getMonoFromMono :: L.Type -> Maybe M.Type
+getMonoFromMono t = case t of
+        L.TLit ident -> Just $ M.TLit ident
+        L.TFun t1 t2 -> do
+            t1' <- getMonoFromMono t1
+            t2' <- getMonoFromMono t2
+            return $ M.TFun t1' t2'
+        L.TVar _ -> Nothing
+        L.TData ident args -> do
+          args' <- mapM getMonoFromMono args
+          return $ M.TData ident args'
+
 {- | If ident not already in env's output, morphed bind to output
 (and all referenced binds within this bind).
 Returns the annotated bind name.
@@ -376,9 +389,14 @@ monomorphize (L.Program defs) =
   where
     monomorphize' :: EnvM ()
     monomorphize' = do
-        main <- getMain
-        morphBind (M.TLit $ Ident "Int") main
-        return ()
+        mainBind <- getMain
+        case mainBind of
+          (L.BindC _ _ _ _) -> error "main should not be a BindC node"
+          main@(L.Bind _ _ (_, mainType)) -> case getMonoFromMono mainType of
+            Nothing -> error "main should be monomorphic"
+            Just mainTypeMono -> do
+              morphBind mainTypeMono main
+              return ()
 
 -- | Runs and gives the output binds.
 runEnvM :: Output -> Env -> EnvM () -> Output
