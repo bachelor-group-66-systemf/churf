@@ -1,52 +1,13 @@
-data Expr where
-    EInt : Int -> Expr
-    EBool : Bool -> Expr
-    EAdd : Expr -> Expr -> Expr
-    EAnd : Expr -> Expr -> Expr
+data Two where
+    This : Two
+    That : Two 
 
-data Val where
-    VInt : Int -> Val
-    VBool : Bool -> Val
+main = reval (eval This)
 
-data Eval where
-    Just : Val -> Eval
-    Nothing : Eval
+eval x = case x of
+    That => That
+    This => eval That
 
-interp : Expr -> Eval
-interp e = case e of
-    EInt i => Just (VInt i)
-    EBool b => Just (VBool b)
-    EAdd e1 e2 => case interp e1 of
-        Just x => case x of
-            VInt i => case interp e2 of
-                Nothing => Nothing
-                Just y => case y of
-                    VInt j => Just (VInt (i + j))
-                    _ => Nothing
-            _ => Nothing
-        Nothing => Nothing
-    EAnd e1 e2 => case interp e1 of
-        Just x => case x of
-            VBool i => case interp e2 of
-                Just y => case y of
-                    VBool j => case i of 
-                        True => case j of
-                            True => Just (VBool True)
-                            _ => Just (VBool False)
-                        _ => Just (VBool False)
-                Nothing => Nothing
-            _ => Nothing
-        Nothing => Nothing
-        
-
-readVal : Val -> Int
-readVal v = case v of
-    VInt i => i
-    VBool a => case a of
-        True => 1
-        False => 0
-
-main = case interp (EAdd (EAdd (EInt 3) (EInt 5)) (EBool True)) of
-    Nothing => (0 - 1)
-    Just x => case x of
-
+reval x = case x of
+   This => 123 
+   That => 123
