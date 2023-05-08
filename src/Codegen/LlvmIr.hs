@@ -29,6 +29,8 @@ data LLVMType
     | I8
     | I32
     | I64
+    | I16
+    | Void
     | Ptr
     | Ref LLVMType
     | Function LLVMType [LLVMType]
@@ -47,9 +49,11 @@ instance ToIr LLVMType where
     toIr = \case
         I1 -> "i1"
         I8 -> "i8"
+        I16 -> "i16"
         I32 -> "i32"
         I64 -> "i64"
         Ptr -> "ptr"
+        Void -> "void"
         Ref ty -> toIr ty <> "*"
         Function t xs -> toIr t <> " (" <> intercalate ", " (map toIr xs) <> ")*"
         Array n ty -> concat ["[", show n, " x ", toIr ty, "]"]

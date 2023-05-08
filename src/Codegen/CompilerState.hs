@@ -174,9 +174,7 @@ getTypes bs = Map.fromList $ go bs
 getGlobals :: [MIR.Def] -> Map Ident (LLVMType, LLVMValue)
 getGlobals scs = Map.fromList [ go b | MIR.DBind b <- scs ]
   where
-    go bind | x == "main" = let typ = Function I64 []
-                            in (x, (typ, VFunction x Global typ))
-            | otherwise = (x, (typ, VFunction x Global typ))
+    go bind = (x, (typ, VFunction x Global typ))
       where
         typ = Function tr $ Ptr : ts
         Function tr ts = type2LlvmType' t

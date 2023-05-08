@@ -205,5 +205,9 @@ prelude =
         , "\n"
         , "printStr xs = case xs of"
         , "    Nil => Nil"
-        , "    Cons x xs => Cons (print x) (printStr xs)"
+        , "    Cons x xs => Cons (printChar x) (printStr xs)"
+        , "\n"
+        , "data List a where"
+        , "    Cons : a -> List a -> List a"
+        , "    Nil  : List a"
         ]

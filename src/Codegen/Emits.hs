@@ -22,6 +22,8 @@ import           Data.Maybe                    (fromJust, fromMaybe, isNothing)
 import           Data.Tuple.Extra              (second)
 import           Grammar.Print                 (printTree)
 import           Monomorphizer.MonomorphizerIr
+import Debug.Trace (traceShow)
+import Data.List (isPrefixOf)
 
 
 compileScs :: [Def] -> CompilerState ()
@@ -111,7 +113,7 @@ compileScs (DBind bind : xs) = do
 
     let args' = zip (mkCxtName : map fst args) t_args
 
-    emit $ Define FastCC t_return name args'
+    emit $ Define FastCC (if isMain then I64 else t_return) name args'
     modify $ \s -> s  { locals = foldr insertArg s.locals args' }
 
     -- Dereference ptr arguments
@@ -133,9 +135,22 @@ compileScs (DBind bind : xs) = do
 
     result <- exprToValue exp
 
+    when isMain $ case t_return of
+        I64 -> do 
+            emit . UnsafeRaw $
+                   "call i32 (ptr, ...) @printf(ptr noundef @.str, i64 noundef " <> toIr result <> ")\n"
+        I8 -> do
+            emit . UnsafeRaw $
+                   "call i32 (ptr, ...) @printf(ptr noundef @.char_print, i8 noundef " <> toIr result <> ")\n"
+        _ -> do
+            emit $ Comment "TODO"
     if isMain
-        then mapM_ emit $ lastMainContent gcEnabled result
+        then do 
+            emit $ UnsafeRaw "call i32 (ptr, ...) @printf(ptr noundef @.new_line)\n"
+            mapM_ emit $ lastMainContent gcEnabled
+            emit $ Ret I64 (VInteger 0)
         else emit $ Ret t_return result
+
 
     emit DefineEnd
     -- Reset variable count and empty locals
@@ -189,18 +204,9 @@ firstMainContent True =
     ]
 firstMainContent False = []
 
-lastMainContent :: Bool -> LLVMValue -> [LLVMIr]
-lastMainContent True var =
-    [ UnsafeRaw $
-        "call i32 (ptr, ...) @printf(ptr noundef @.str, i64 noundef " <> toIr var <> ")\n"
-    , UnsafeRaw "call void @cheap_dispose()\n"
-    , Ret I64 (VInteger 0)
-    ]
-lastMainContent False var =
-    [ UnsafeRaw $
-        "call i32 (ptr, ...) @printf(ptr noundef @.str, i64 noundef " <> toIr var <> ")\n"
-    , Ret I64 (VInteger 0)
-    ]
+lastMainContent :: Bool -> [LLVMIr]
+lastMainContent True = [UnsafeRaw "call void @cheap_dispose()\n"]
+lastMainContent False =[]
 
 compileExp :: T Exp -> CompilerState ()
 compileExp (ELit lit, _t)   = emitLit lit
@@ -322,6 +328,8 @@ emitECased t e cases = do
         emitCases rt ty label stackPtr vs (Branch (PLit $ LInt 1, t) exp)
     emitCases rt ty label stackPtr vs (Branch (PEnum (Ident "False$Bool"), t) exp) = do
         emitCases rt ty label stackPtr vs (Branch (PLit (LInt 0), t) exp)
+    emitCases rt ty label stackPtr vs (Branch (PEnum (Ident "Unit$Unit"), t) exp) = do
+        emitCases rt ty label stackPtr vs (Branch (PLit (LInt 0), t) exp)
     emitCases rt ty label stackPtr vs br@(Branch (PEnum consId, _) exp) = do
         emit $ Comment "Penum"
         cons <- gets constructors
@@ -356,6 +364,16 @@ emitECased t e cases = do
         lbl_failPos <- (\x -> Ident $ "failed_" <> show x) <$> getNewLabel
         emit $ Label lbl_failPos
 
+preludeFuns :: LLVMIr -> Ident -> LLVMValue -> LLVMValue -> CompilerState LLVMIr
+preludeFuns def (Ident xs) arg1 arg2
+  | "$langle$$langle$" `isPrefixOf` xs = pure $ Icmp LLSlt I8 arg1 arg2
+  | "$langle$" `isPrefixOf` xs =  pure $ Icmp LLSlt I8 arg1 arg2
+  | "$minus$" `isPrefixOf` xs = pure $ Sub I64 arg1 arg2
+  | "printChar$" `isPrefixOf` xs = pure . UnsafeRaw $
+        "call i32 (ptr, ...) @printf(ptr noundef @.char_print_no_nl, i8 noundef " <> toIr arg1 <> ")\n"
+  --char_print_no_nl
+  | otherwise = pure def
+
 emitApp :: Type -> T Exp -> T Exp -> CompilerState ()
 emitApp rt e1 e2 = do
     ((EVar name, t), args) <- go (EApp e1 e2, rt)
@@ -367,14 +385,7 @@ emitApp rt e1 e2 = do
                 Global <$ Map.lookup name consts
                     <|> Global <$ Map.lookup (name, t) funcs
         -- this piece of code could probably be improved, i.e remove the double `const Global`
-    call <- case name of
-        Ident ('$' : 'l' : 'a' : 'n' : 'g' : 'l' : 'e' : '$' : _) ->
-            pure $ Icmp LLSlt I64 (snd (head args)) (snd (args !! 1))
-        Ident ('$' : 'm' : 'i' : 'n' : 'u' : 's' : '$' : '$' : _) ->
-            pure $ Sub I64 (snd (head args)) (snd (args !! 1))
-
-        -- FIXME
-        _ -> do
+    call <- do
             let closure_call LocalElem { typ = Ptr, val } = (mkDerefName name, (Ptr, val) : args)
 
             (name, args) <- gets $ maybe (name, (Ptr, VNull) : args) closure_call
@@ -382,6 +393,8 @@ emitApp rt e1 e2 = do
                                  . locals
 
             pure $ Call FastCC (type2LlvmType rt) visibility name args
+    
+    call <- preludeFuns call name (snd (head args)) (snd (args !! 1))
 
     emit $ Comment $ show (type2LlvmType rt)
     emit $ SetVariable vs call
@@ -433,6 +446,7 @@ exprToValue et@(e, t) = case e of
 
     EVar "True$Bool" -> pure $ VInteger 1
     EVar "False$Bool" -> pure $ VInteger 0
+    EVar "Unit$Unit" -> pure $ VInteger 0
 
     EVar name -> gets (Map.lookup name . globals) >>= \case
         Just (typ@(Function _ ts), val) | length ts > 1 -> do
