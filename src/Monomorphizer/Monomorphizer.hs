@@ -29,14 +29,11 @@ module Monomorphizer.Monomorphizer (monomorphize, morphExp, morphBind) where
 
 import           Control.Monad.Reader          (MonadReader (ask, local),
                                                 Reader, asks, runReader)
-import           Control.Monad.State           (MonadState (get),
+import           Control.Monad.State           (MonadState,
                                                 StateT (runStateT), gets,
                                                 modify)
-import           Data.Coerce                   (coerce)
 import qualified Data.Map                      as Map
-import           Data.Maybe                    (catMaybes)
 import qualified Data.Set                      as Set
-import           Debug.Trace                   (trace)
 import           Grammar.Print                 (printTree)
 import           Monomorphizer.DataTypeRemover (removeDataTypes)
 import qualified Monomorphizer.MonomorphizerIr as O
@@ -46,15 +43,8 @@ import           LambdaLifterIr                (Ident (..))
 -- import TypeChecker.TypeCheckerIr qualified as T
 import qualified LambdaLifterIr                as L
 
-import           Control.Monad.Reader          (MonadReader (ask, local),
-                                                Reader, asks, runReader)
-import           Control.Monad.State           (MonadState, StateT (runStateT),
-                                                gets, modify)
-import qualified Data.Map                      as Map
-import           Data.Maybe                    (catMaybes, fromJust)
-import qualified Data.Set                      as Set
+import           Data.Maybe                    (fromJust, catMaybes)
 import           Data.Tuple.Extra              (secondM)
-import           Grammar.Print                 (printTree)
 
 {- | EnvM is the monad containing the read-only state as well as the
 output state containing monomorphized functions and to-be monomorphized
@@ -238,7 +228,6 @@ appear as expressions in the tree, or as patterns in case-expressions.
 -}
 morphCons :: M.Type -> Ident -> Ident -> EnvM ()
 morphCons expectedType ident newIdent = do
-    --trace ("Tjofras:" ++ show (newName expectedType ident)) $ return ()
     maybeD <- getInputData ident
     case maybeD of
         -- closures can have unbound variables
@@ -337,13 +326,9 @@ morphPattern p expectedType = case p of
   L.PCatch         -> return $ Just ((M.PCatch, expectedType), Set.empty)
   L.PEnum ident    -> return $ Just ((M.PEnum (newName expectedType ident), expectedType), Set.empty)
   L.PInj ident pts -> do let newIdent = newName expectedType ident
-                         outEnv <- get
-                         trace ("WOW: " ++ show (newName expectedType ident)) $ return ()
-                         trace ("WOW2: " ++ show (outEnv)) $ return ()
                          isMarked <- isConsMarked newIdent
                          if isMarked
                             then do
-                              trace ("WOW3") $ return ()
                               ts' <- mapM (getMonoFromPoly . snd) pts
                               let pts' = zip (map fst pts) ts'
                               psSets <- mapM (uncurry morphPattern) pts'
