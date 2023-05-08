@@ -38,8 +38,10 @@ valueGetType (VConstant s)     = Array (fromIntegral $ length s) I8
 valueGetType (VFunction _ _ t) = t
 
 typeByteSize :: LLVMType -> Integer
+typeByteSize Void           = 0
 typeByteSize I1             = 1
 typeByteSize I8             = 1
+typeByteSize I16            = 2
 typeByteSize I32            = 4
 typeByteSize I64            = 8
 typeByteSize Ptr            = 8
