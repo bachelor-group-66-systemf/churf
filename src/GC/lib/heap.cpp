@@ -234,6 +234,7 @@ namespace GC
 		// create_table();
 		// mark_hash(stack_bottom, stack_top);
 
+		create_table();
 		vector<uintptr_t *> roots;
 		// cout << "\nb4 find_roots\n";
 		find_roots(stack_bottom, roots);
@@ -299,7 +300,26 @@ namespace GC
 
 	void Heap::find_chunks(uintptr_t *stack_addr, std::queue<std::pair<uintptr_t, uintptr_t>> &chunk_spaces)
 	{
-		auto iter = m_allocated_chunks.begin();
+		Heap &heap = Heap::the();
+
+		auto it = heap.m_chunk_table.find(*stack_addr);
+		if (it != heap.m_chunk_table.end())
+		{
+			auto chunk = it->second;
+
+			if (!chunk->m_marked) 
+			{
+				auto c_start = reinterpret_cast<uintptr_t>(chunk->m_start);
+				auto c_size  = reinterpret_cast<uintptr_t>(chunk->m_size);
+				auto c_end   = reinterpret_cast<uintptr_t>(c_start + c_size);
+
+				chunk->m_marked = true;
+				chunk_spaces.push(std::make_pair(c_start, c_end));
+			}
+			
+		}
+
+/* 		auto iter = m_allocated_chunks.begin();
 		auto end = m_allocated_chunks.end();
 
 		while (iter != end)
@@ -318,7 +338,8 @@ namespace GC
 				chunk->m_marked = true;
 				chunk_spaces.push(std::make_pair(c_start, c_end));
 			}
-		}
+		} */
+
 	}
 
 	void Heap::create_table() 
