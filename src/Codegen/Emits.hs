@@ -369,8 +369,10 @@ preludeFuns def (Ident xs) arg1 arg2
   | "$langle$$langle$" `isPrefixOf` xs = pure $ Icmp LLSlt I8 arg1 arg2
   | "$langle$" `isPrefixOf` xs =  pure $ Icmp LLSlt I8 arg1 arg2
   | "$minus$" `isPrefixOf` xs = pure $ Sub I64 arg1 arg2
-  | "printChar$" `isPrefixOf` xs = pure . UnsafeRaw $
-        "add i16 0,0\n    call i32 (ptr, ...) @printf(ptr noundef @.char_print_no_nl, i8 noundef " <> toIr arg1 <> ")\n"
+  | "printChar$" `isPrefixOf` xs = do
+        increaseVarCount
+        pure . UnsafeRaw $
+            "add i16 0,0\n    call i32 (ptr, ...) @printf(ptr noundef @.char_print_no_nl, i8 noundef " <> toIr arg1 <> ")\n"
   --char_print_no_nl
   | otherwise = pure def
 
