@@ -7,7 +7,7 @@
 -- | A module for type checking and inference using algorithm W, Hindley-Milner
 module TypeChecker.TypeCheckerHm where
 
-import           Auxiliary                 (int, litType, maybeToRightM, unzip4)
+import           Auxiliary                 (int, maybeToRightM, typeof, unzip4)
 import qualified Auxiliary                 as Aux
 import           Control.Monad.Except
 import           Control.Monad.Identity    (Identity, runIdentity)
@@ -26,8 +26,8 @@ import qualified Data.Set                  as S
 import           Debug.Trace               (trace, traceShow)
 import           Grammar.Abs
 import           Grammar.Print             (printTree)
-import           TypeChecker.TypeCheckerIr (T, T')
 import qualified TypeChecker.TypeCheckerIr as T
+import           TypeChecker.TypeCheckerIr (T, T')
 
 {-
 TODO
@@ -309,7 +309,7 @@ algoW = \case
     -- \| ------------------
     -- \|   Γ ⊢ i : Int, ∅
 
-    ELit lit -> return (nullSubst, (T.ELit lit, litType lit))
+    ELit lit -> return (nullSubst, (T.ELit lit, typeof lit))
     -- \| x : σ ∈ Γ   τ = inst(σ)
     -- \| ----------------------
     -- \|     Γ ⊢ x : τ, ∅
@@ -452,7 +452,7 @@ inferBranch err@(Branch pat expr) = do
 
 inferPattern :: Pattern -> Infer (T.Pattern' Type, Type)
 inferPattern = \case
-    PLit lit -> let lt = litType lit in return (T.PLit lit, lt)
+    PLit lit -> let lt = typeof lit in return (T.PLit lit, lt)
     PCatch -> (T.PCatch,) <$> fresh
     PVar x -> do
         fr <- fresh

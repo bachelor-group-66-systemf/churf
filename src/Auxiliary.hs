@@ -50,9 +50,9 @@ liftMM2 f m1 m2 = do
     x2 <- m2
     f x1 x2
 
-litType :: Lit -> Type
-litType (LInt _)  = int
-litType (LChar _) = char
+typeof :: Lit -> Type
+typeof (LInt _)  = int
+typeof (LChar _) = char
 
 int = TLit "Int"
 char = TLit "Char"
