@@ -20,7 +20,6 @@ import TypeChecker.TypeCheckerIr (Program)
 testTypeCheckerHm = describe "Hindley-Milner type checker test" $ do
     sequence_ goods
     sequence_ bads
-    sequence_ bes
 
 goods =
     [ testSatisfy
@@ -53,6 +52,35 @@ goods =
             "    Cons Nil _ => 1;"
             "    _ => 0;"
             "};"
+        )
+        ok
+    , testSatisfy
+        "A basic arithmetic function should be able to be inferred"
+        ( D.do
+            "plusOne x = x + 1 ;"
+            "main x = plusOne x ;"
+        )
+        ok
+    , testSatisfy
+        "List of function Int -> Int functions should be inferred corretly"
+        ( D.do
+            _List
+            "main xs = case xs of {"
+            "    Cons f _ => f 1 ;"
+            "    Nil => 0 ;"
+            " };"
+        )
+        ok
+    , testSatisfy
+        "length function on int list infers correct signature"
+        ( D.do
+            "data List where "
+            "    Nil : List"
+            "    Cons : Int -> List -> List"
+
+            "length xs = case xs of"
+            "    Nil => 0"
+            "    Cons _ xs => 1 + length xs"
         )
         ok
     ]
@@ -121,97 +149,38 @@ bads =
             " };"
         )
         bad
-        -- FIXME FAILING TEST
-        -- , testSatisfy
-        --     "id with incorrect signature"
-        --     ( D.do
-        --         "id : a -> b;"
-        --         "id x = x;"
-        --     )
-        --     bad
-        -- FIXME FAILING TEST
-        -- , testSatisfy
-        --     "incorrect signature on const"
-        --     ( D.do
-        --         "const : a -> b -> b;"
-        --         "const x y = x"
-        --     )
-        --     bad
-        -- FIXME FAILING TEST
-        -- , testSatisfy
-        --     "incorrect type signature on id lambda"
-        --     ( D.do
-        --         "id = ((\\x. x) : a -> b);"
-        --     )
-        --     bad
-    ]
-
-bes =
-    [ testBe
-        "A basic arithmetic function should be able to be inferred"
+    , -- FIXME FAILING TEST
+      testSatisfy
+        "id with incorrect signature"
         ( D.do
-            "plusOne x = x + 1 ;"
-            "main x = plusOne x ;"
+            "id : a -> b;"
+            "id x = x;"
         )
+        bad
+    , -- FIXME FAILING TEST
+      testSatisfy
+        "incorrect signature on const"
         ( D.do
-            "plusOne : Int -> Int ;"
-            "plusOne x = x + 1 ;"
-            "main : Int -> Int ;"
-            "main x = plusOne x ;"
+            "const : a -> b -> b;"
+            "const x y = x"
         )
-    , testBe
-        "A basic arithmetic function should be able to be inferred"
+        bad
+    , -- FIXME FAILING TEST
+      testSatisfy
+        "incorrect type signature on id lambda"
         ( D.do
-            "plusOne x = x + 1 ;"
+            "id = ((\\x. x) : a -> b);"
         )
-        ( D.do
-            "plusOne : Int -> Int ;"
-            "plusOne x = x + 1 ;"
-        )
-    , testBe
-        "List of function Int -> Int functions should be inferred corretly"
-        ( D.do
-            _List
-            "main xs = case xs of {"
-            "    Cons f _ => f 1 ;"
-            "    Nil => 0 ;"
-            " };"
-        )
-        ( D.do
-            _List
-            "main : List (Int -> Int) -> Int ;"
-            "main xs = case xs of {"
-            "    Cons f _ => f 1 ;"
-            "    Nil => 0 ;"
-            " };"
-        )
-    , testBe
-        "length function on int list infers correct signature"
-        ( D.do
-            "data List where "
-            "    Nil : List"
-            "    Cons : Int -> List -> List"
-
-            "length xs = case xs of"
-            "    Nil => 0"
-            "    Cons _ xs => 1 + length xs"
-        )
-        ( D.do
-            "data List where"
-            "    Nil : List"
-            "    Cons : Int -> List -> List"
-
-            "length : List -> Int"
-            "length xs = case xs of"
-            "    Nil => 0"
-            "    Cons _ xs => 1 + length xs"
-        )
+        bad
     ]
 
 testSatisfy desc test satisfaction = specify desc $ run test `shouldSatisfy` satisfaction
 testBe desc test shouldbe = specify desc $ run test `shouldBe` run shouldbe
 
-run = fmap (printTree . fst) . typecheck <=< fmap desugar . pProgram . myLexer
+run s = do
+    p <- (fmap desugar . pProgram . resolveLayout True . myLexer) s
+    reportForall Hm p
+    (printTree . fst) <$> (typecheck <=< rename <=< annotateForall) p
 
 ok (Right _) = True
 ok (Left _) = False
@@ -221,45 +190,37 @@ bad = not . ok
 -- FUNCTIONS
 
 _const = D.do
-    "const : a -> b -> a ;"
-    "const x y = x ;"
+    "const : a -> b -> a"
+    "const x y = x"
 _List = D.do
-    "data List a where {"
-    "    Nil : List a;"
-    "    Cons : a -> List a -> List a;"
-    "};"
+    "data List a where { Nil : List a; Cons : a -> List a -> List a; }"
 
 _headSig = D.do
-    "head : List a -> a ;"
+    "head : List a -> a"
 
 _head = D.do
-    "head xs = "
-    "  case xs of {"
-    "    Cons x xs => x ;"
-    "  };"
+    "head xs = case xs of"
+    "    Cons x xs => x"
 
 _Bool = D.do
-    "data Bool where {"
+    "data Bool where"
     "    True : Bool"
     "    False : Bool"
-    "};"
 
 _not = D.do
     "not : Bool -> Bool ;"
-    "not x = case x of {"
-    "    True => False ;"
-    "    False => True ;"
-    "};"
+    "not x = case x of"
+    "    True => False"
+    "    False => True"
+
 _id = "id x = x ;"
 
 _Maybe = D.do
-    "data Maybe a where {"
+    "data Maybe a where"
     "    Nothing : Maybe a"
     "    Just : a -> Maybe a"
-    "    };"
 
 _fmap = D.do
-    "fmap f ma = case ma of {"
-    "    Nothing => Nothing ;"
-    "    Just a => Just (f a) ;"
-    "};"
+    "fmap f ma = case ma of"
+    "    Nothing => Nothing"
+    "    Just a => Just (f a)"

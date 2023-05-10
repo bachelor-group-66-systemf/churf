@@ -1,33 +1,32 @@
-{-# LANGUAGE LambdaCase          #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedRecordDot #-}
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE QualifiedDo         #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE QualifiedDo #-}
 {-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 
 -- | A module for type checking and inference using algorithm W, Hindley-Milner
 module TypeChecker.TypeCheckerHm where
 
-import           Auxiliary                 (int, maybeToRightM, typeof, unzip4)
-import qualified Auxiliary                 as Aux
-import           Control.Monad.Except
-import           Control.Monad.Identity    (Identity, runIdentity)
-import           Control.Monad.Reader
-import           Control.Monad.State
-import           Control.Monad.Writer
-import           Data.Coerce               (coerce)
-import           Data.Function             (on)
-import           Data.List                 (foldl', nub, sortOn)
-import           Data.List.Extra           (unsnoc)
-import           Data.Map                  (Map)
-import qualified Data.Map                  as M
-import           Data.Maybe                (fromJust)
-import           Data.Set                  (Set)
-import qualified Data.Set                  as S
-import           Debug.Trace               (trace, traceShow)
-import           Grammar.Abs
-import           Grammar.Print             (printTree)
-import qualified TypeChecker.TypeCheckerIr as T
-import           TypeChecker.TypeCheckerIr (T, T')
+import Auxiliary (int, maybeToRightM, typeof, unzip4)
+import Auxiliary qualified as Aux
+import Control.Monad.Except
+import Control.Monad.Identity (Identity, runIdentity)
+import Control.Monad.Reader
+import Control.Monad.State
+import Control.Monad.Writer
+import Data.Coerce (coerce)
+import Data.Function (on)
+import Data.List (foldl', nub, sortOn)
+import Data.List.Extra (unsnoc)
+import Data.Map (Map)
+import Data.Map qualified as M
+import Data.Maybe (fromJust)
+import Data.Set (Set)
+import Data.Set qualified as S
+import Grammar.Abs
+import Grammar.Print (printTree)
+import TypeChecker.TypeCheckerIr (T, T')
+import TypeChecker.TypeCheckerIr qualified as T
 
 {-
 TODO
@@ -42,7 +41,7 @@ typecheck :: Program -> Either String (T.Program' Type, [Warning])
 typecheck = onLeft msg . run . checkPrg
   where
     onLeft :: (Error -> String) -> Either Error a -> Either String a
-    onLeft f (Left x)  = Left $ f x
+    onLeft f (Left x) = Left $ f x
     onLeft _ (Right x) = Right x
 
 checkPrg :: Program -> Infer (T.Program' Type)
@@ -69,13 +68,13 @@ prettify s (T.Program defs) = T.Program $ map (go s) defs
 
 replace :: Map T.Ident T.Ident -> Type -> Type
 replace m def@(TVar (MkTVar (LIdent a))) = case M.lookup (coerce a) m of
-    Just t  -> TVar . MkTVar . LIdent $ coerce t
+    Just t -> TVar . MkTVar . LIdent $ coerce t
     Nothing -> def
 replace m (TFun t1 t2) = (TFun `on` replace m) t1 t2
 replace m (TData name ts) = TData name (map (replace m) ts)
 replace m def@(TAll (MkTVar forall_) t) = case M.lookup (coerce forall_) m of
     Just found -> TAll (MkTVar $ coerce found) (replace m t)
-    Nothing    -> def
+    Nothing -> def
 replace _ t = t
 
 bindCount :: [Def] -> Infer [(Int, Def)]
@@ -129,7 +128,7 @@ preRun (x : xs) = case x of
         s <- gets sigs
         case M.lookup (coerce n) s of
             Nothing -> insertSig (coerce n) Nothing >> preRun xs
-            Just _  -> preRun xs
+            Just _ -> preRun xs
     DData d@(Data t _) -> collect (collectTVars t) >> checkData d >> preRun xs
   where
     -- Check if function body / signature has been declared already
@@ -151,11 +150,11 @@ checkDef (x : xs) = case x of
         T.Data t $ map (\(Inj name typ) -> T.Inj (coerce name) typ) injs
 
 freeOrdered :: Type -> [T.Ident]
-freeOrdered (TVar (MkTVar a))       = return (coerce a)
+freeOrdered (TVar (MkTVar a)) = return (coerce a)
 freeOrdered (TAll (MkTVar bound) t) = return (coerce bound) ++ freeOrdered t
-freeOrdered (TFun a b)              = freeOrdered a ++ freeOrdered b
-freeOrdered (TData _ a)             = concatMap freeOrdered a
-freeOrdered _                       = mempty
+freeOrdered (TFun a b) = freeOrdered a ++ freeOrdered b
+freeOrdered (TData _ a) = concatMap freeOrdered a
+freeOrdered _ = mempty
 
 -- Much cleaner implementation, unfortunately one minor bug
 -- checkBind :: Bind -> Infer (T.Bind' Type)
@@ -193,14 +192,11 @@ checkBind (Bind name args e) = do
     s <- gets sigs
     case M.lookup (coerce name) s of
         Just (Just typSig) -> do
-            env <- asks vars
             let genInfSig = generalize mempty infSig
-            trace "\n\n" pure ()
-            trace ("genInfSig: " ++ printTree genInfSig) pure ()
-            trace ("typSig: " ++ printTree typSig ++ "\n\n") pure ()
             sub <- genInfSig `unify` typSig
-            --b <- (genInfSig <<= typSig)
-            unless True
+            b <- genInfSig <<= typSig
+            unless
+                b
                 ( throwError $
                     Error
                         ( Aux.do
@@ -231,7 +227,7 @@ checkData err@(Data typ injs) = do
                 pure (name, tvars')
         _ ->
             uncatchableErr $
-                unwords ["Bad data type definition: ", printTree typ]
+                unwords ["Bad data type definition: ", show typ]
 
 checkInj :: (MonadError Error m, MonadState Env m, Monad m) => Inj -> UIdent -> [TVar] -> m ()
 checkInj (Inj c inj_typ) name tvars
@@ -262,11 +258,11 @@ checkInj (Inj c inj_typ) name tvars
 toTVar :: Type -> Either Error TVar
 toTVar = \case
     TVar tvar -> pure tvar
-    _         -> uncatchableErr "Not a type variable"
+    _ -> uncatchableErr "Not a type variable"
 
 returnType :: Type -> Type
 returnType (TFun _ t2) = returnType t2
-returnType a           = a
+returnType a = a
 
 inferExp :: Exp -> Infer (T' T.Exp' Type)
 inferExp e = do
@@ -279,7 +275,7 @@ class CollectTVars a where
 
 instance CollectTVars Exp where
     collectTVars (EAnn e t) = collectTVars t `S.union` collectTVars e
-    collectTVars _          = S.empty
+    collectTVars _ = S.empty
 
 instance CollectTVars Type where
     collectTVars (TVar (MkTVar i)) = S.singleton (coerce i)
@@ -296,17 +292,17 @@ algoW :: Exp -> Infer (Subst, T' T.Exp' Type)
 algoW = \case
     err@(EAnn e t) -> do
         (sub0, (e', t')) <- exprErr (algoW e) err
-        sub1 <- unify t t'
-        sub2 <- unify t' t
-        b <- (apply sub1 t <<= apply sub2 t')
-        unless b
+        sub1 <- unify t' t
+        b <- t' <<= t
+        unless
+            b
             ( uncatchableErr $ Aux.do
                 "Annotated type"
                 quote $ printTree t
                 "does not match inferred type"
                 quote $ printTree t'
             )
-        let comp = sub2 `compose` sub1 `compose` sub0
+        let comp = sub1 `compose` sub0
         return (comp, (apply comp e', t))
 
     -- \| ------------------
@@ -605,12 +601,12 @@ generalize :: Map T.Ident Type -> Type -> Type
 generalize env t = go (S.toList $ free t S.\\ free env) (removeForalls t)
   where
     go :: [T.Ident] -> Type -> Type
-    go [] t       = t
+    go [] t = t
     go (x : xs) t = TAll (MkTVar (coerce x)) (go xs t)
     removeForalls :: Type -> Type
-    removeForalls (TAll _ t)   = removeForalls t
+    removeForalls (TAll _ t) = removeForalls t
     removeForalls (TFun t1 t2) = TFun (removeForalls t1) (removeForalls t2)
-    removeForalls t            = t
+    removeForalls t = t
 
 {- | Instantiate a polymorphic type. The free type variables are substituted
 with fresh ones.
@@ -640,11 +636,10 @@ fresh = do
     modify (\st -> st{count = succ (count st)})
     return $ TVar $ MkTVar $ LIdent $ show n
 
--- Is the left a subtype of the right
+-- Is the left more general than the right
 (<<=) :: Type -> Type -> Infer Bool
 (<<=) a b = case (a, b) of
-    (TVar a, TVar b) -> return $ a == b
-    (TVar a, _) -> return True
+    (TVar _, _) -> return True
     (TFun a b, TFun c d) -> do
         bfirst <- a <<= c
         bsecond <- b <<= d
@@ -652,37 +647,43 @@ fresh = do
     (TData n1 ts1, TData n2 ts2) -> do
         b <- and <$> zipWithM (<<=) ts1 ts2
         return (b && n1 == n2 && length ts1 == length ts2)
-    (t1@(TAll _ _ ), t2) -> let (tvars1, t1') = gatherTVars [] t1
-                                (tvars2, t2') = gatherTVars [] t2
-                             in go (tvars1 ++ tvars2) t1 t2
-    (t1, t2@(TAll _ _)) -> let (tvars1, t1') = gatherTVars [] t1
-                               (tvars2, t2') = gatherTVars [] t2
-                                        in go (tvars1 ++ tvars2) t1' t2'
+    (t1@(TAll _ _), t2) ->
+        let (tvars1, t1') = gatherTVars [] t1
+            (tvars2, t2') = gatherTVars [] t2
+         in go (tvars1 ++ tvars2) t1' t2'
+    (t1, t2@(TAll _ _)) ->
+        let (tvars1, t1') = gatherTVars [] t1
+            (tvars2, t2') = gatherTVars [] t2
+         in go (tvars1 ++ tvars2) t1' t2'
     (t1, t2) -> return $ t1 == t2
   where
     go :: [TVar] -> Type -> Type -> Infer Bool
     go tvars t1 t2 = do
+        -- probably not necessary
         freshies <- mapM (const fresh) tvars
         let sub = M.fromList $ zip [coerce x | (MkTVar x) <- tvars] freshies
         let t1' = apply sub t1
         let t2' = apply sub t2
-        trace ("t1': " ++ printTree t1') pure ()
-        trace ("t2': " ++ printTree t2') pure ()
-        t1' <<= t2'
-
-{-
-Renaming: a -> b -> a and c -> d -> c
-gives 0 -> 1 -> 0 and -> 2 -> 3 -> 2
-They have to be given the same name. Alpha-renaming in the subtype check is done incorrectly
--}
+        let alph = execState (alpha t1' t2') mempty
+        return $ apply alph t1' == t2'
 
     -- Pre-condition: All TAlls are outermost
     gatherTVars :: [TVar] -> Type -> ([TVar], Type)
-    gatherTVars tvars (TAll tvar t) =
-        let (tvars', t') = gatherTVars (tvar : tvars) t
-         in (tvars', t')
+    gatherTVars tvars (TAll tvar t) = gatherTVars (tvar : tvars) t
     gatherTVars tvars t = (tvars, t)
-                                
+
+    -- Alpha rename the first type's type variable to match second.
+    -- Pre-condition: No TAll are checked
+    alpha :: Type -> Type -> State (Map T.Ident Type) ()
+    alpha t1 t2 = case (t1, t2) of
+        (TVar (MkTVar (LIdent i)), t2) -> do
+            m <- get
+            put (M.insert (coerce i) t2 m)
+        (TFun t1 t2, TFun t3 t4) -> do
+            alpha t1 t3
+            alpha t2 t4
+        (TData _ ts1, TData _ ts2) -> zipWithM_ alpha ts1 ts2
+        _ -> return ()
 
 -- | A class for substitutions
 class SubstType t where
@@ -716,15 +717,15 @@ instance SubstType Type where
             TLit _ -> t
             TVar (MkTVar a) -> case M.lookup (coerce a) sub of
                 Nothing -> TVar (MkTVar $ coerce a)
-                Just t  -> t
+                Just t -> t
             TAll (MkTVar i) t -> case M.lookup (coerce i) sub of
                 Nothing -> TAll (MkTVar i) (apply sub t)
-                Just _  -> apply sub t
+                Just _ -> apply sub t
             TFun a b -> TFun (apply sub a) (apply sub b)
             TData name a -> TData name (apply sub a)
             TEVar (MkTEVar a) -> case M.lookup (coerce a) sub of
                 Nothing -> TEVar (MkTEVar $ coerce a)
-                Just t  -> t
+                Just t -> t
 
 instance FreeVars (Map T.Ident Type) where
     free :: Map T.Ident Type -> Set T.Ident
@@ -766,10 +767,10 @@ instance SubstType (T.Branch' Type) where
 instance SubstType (T.Pattern' Type) where
     apply s = \case
         T.PVar iden -> T.PVar iden
-        T.PLit lit  -> T.PLit lit
+        T.PLit lit -> T.PLit lit
         T.PInj i ps -> T.PInj i $ apply s ps
-        T.PCatch    -> T.PCatch
-        T.PEnum i   -> T.PEnum i
+        T.PCatch -> T.PCatch
+        T.PEnum i -> T.PEnum i
 
 instance SubstType (T.Pattern' Type, Type) where
     apply s (p, t) = (apply s p, apply s t)
@@ -810,11 +811,11 @@ withBindings xs =
 -- | Run the monadic action with a pattern
 withPattern :: (Monad m, MonadReader Ctx m) => (T.Pattern' Type, Type) -> m a -> m a
 withPattern (p, t) ma = case p of
-    T.PVar x    -> withBinding x t ma
+    T.PVar x -> withBinding x t ma
     T.PInj _ ps -> foldl' (flip withPattern) ma ps
-    T.PLit _    -> ma
-    T.PCatch    -> ma
-    T.PEnum _   -> ma
+    T.PLit _ -> ma
+    T.PCatch -> ma
+    T.PEnum _ -> ma
 
 -- | Insert a function signature into the environment
 insertSig :: T.Ident -> Maybe Type -> Infer ()
@@ -839,11 +840,11 @@ existInj n = gets (M.lookup n . injections)
 
 flattenType :: Type -> [Type]
 flattenType (TFun a b) = flattenType a <> flattenType b
-flattenType a          = [a]
+flattenType a = [a]
 
 typeLength :: Type -> Int
 typeLength (TFun _ b) = 1 + typeLength b
-typeLength _          = 1
+typeLength _ = 1
 
 {- | Catch an error if possible and add the given
 expression as addition to the error message
@@ -926,11 +927,11 @@ newtype Ctx = Ctx {vars :: Map T.Ident Type}
     deriving (Show)
 
 data Env = Env
-    { count         :: Int
-    , nextChar      :: Char
-    , sigs          :: Map T.Ident (Maybe Type)
+    { count :: Int
+    , nextChar :: Char
+    , sigs :: Map T.Ident (Maybe Type)
     , takenTypeVars :: Set T.Ident
-    , injections    :: Map T.Ident Type
+    , injections :: Map T.Ident Type
     , declaredBinds :: Set T.Ident
     }
     deriving (Show)
@@ -956,12 +957,3 @@ quote s = "'" ++ s ++ "'"
 
 letters :: [T.Ident]
 letters = map T.Ident $ [1 ..] >>= flip replicateM ['a' .. 'z']
-
-{-
-
-
-first = TAll (MkTVar (LIdent "a")) (TAll (MkTVar (LIdent "b")) (TFun (TVar (MkTVar (LIdent "a"))) (TFun (TVar (MkTVar (LIdent "b"))) (TVar (MkTVar (LIdent "b"))))))
-second = TAll (MkTVar (LIdent "a")) (TAll (MkTVar (LIdent "b")) (TFun (TVar (MkTVar (LIdent "a"))) (TFun (TVar (MkTVar (LIdent "b"))) (TVar (MkTVar (LIdent "a"))))))
-
--}
-
