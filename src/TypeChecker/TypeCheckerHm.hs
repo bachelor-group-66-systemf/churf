@@ -195,14 +195,17 @@ checkBind (Bind name args e) = do
         Just (Just typSig) -> do
             env <- asks vars
             let genInfSig = generalize mempty infSig
+            trace "\n\n" pure ()
+            trace ("genInfSig: " ++ printTree genInfSig) pure ()
+            trace ("typSig: " ++ printTree typSig ++ "\n\n") pure ()
             sub <- genInfSig `unify` typSig
-            unless
-                (genInfSig <<= typSig)
+            --b <- (genInfSig <<= typSig)
+            unless True
                 ( throwError $
                     Error
                         ( Aux.do
                             "Inferred type"
-                            quote $ printTree infSig
+                            quote $ printTree genInfSig
                             "doesn't match given type"
                             quote $ printTree typSig
                         )
@@ -295,8 +298,8 @@ algoW = \case
         (sub0, (e', t')) <- exprErr (algoW e) err
         sub1 <- unify t t'
         sub2 <- unify t' t
-        unless
-            (apply sub1 t <<= apply sub2 t')
+        b <- (apply sub1 t <<= apply sub2 t')
+        unless b
             ( uncatchableErr $ Aux.do
                 "Annotated type"
                 quote $ printTree t
@@ -638,34 +641,48 @@ fresh = do
     return $ TVar $ MkTVar $ LIdent $ show n
 
 -- Is the left a subtype of the right
-(<<=) :: Type -> Type -> Bool
+(<<=) :: Type -> Type -> Infer Bool
 (<<=) a b = case (a, b) of
-    (TVar _, _) -> True
-    (TFun a b, TFun c d) -> a <<= c && b <<= d
-    -- TAll still scuffed implementation here
-    (TAll tvar1 t1, TAll tvar2 t2) -> ungo [tvar1, tvar2] t1 t2
-    (TAll tvar t1, t2) -> ungo [tvar] t1 t2
-    (t1, TAll tvar t2) -> ungo [tvar] t1 t2
-    (TData n1 ts1, TData n2 ts2) ->
-        n1 == n2
-            && length ts1 == length ts2
-            && and (zipWith (<<=) ts1 ts2)
-    (t1, t2) -> t1 == t2
+    (TVar a, TVar b) -> return $ a == b
+    (TVar a, _) -> return True
+    (TFun a b, TFun c d) -> do
+        bfirst <- a <<= c
+        bsecond <- b <<= d
+        return (bfirst && bsecond)
+    (TData n1 ts1, TData n2 ts2) -> do
+        b <- and <$> zipWithM (<<=) ts1 ts2
+        return (b && n1 == n2 && length ts1 == length ts2)
+    (t1@(TAll _ _ ), t2) -> let (tvars1, t1') = gatherTVars [] t1
+                                (tvars2, t2') = gatherTVars [] t2
+                             in go (tvars1 ++ tvars2) t1 t2
+    (t1, t2@(TAll _ _)) -> let (tvars1, t1') = gatherTVars [] t1
+                               (tvars2, t2') = gatherTVars [] t2
+                                        in go (tvars1 ++ tvars2) t1' t2'
+    (t1, t2) -> return $ t1 == t2
   where
-    ungo :: [TVar] -> Type -> Type -> Bool
-    ungo tvars t1 t2 = case run (go tvars t1 t2) of
-        Right (b, _) -> b
-        _            -> False
-    -- TODO: Fix the following
-    -- Maybe locally using the Infer monad can cause trouble.
-    -- Since the fresh count starts from zero
     go :: [TVar] -> Type -> Type -> Infer Bool
     go tvars t1 t2 = do
-        fr <- fresh
-        let sub = M.fromList [(coerce x, fr) | (MkTVar x) <- tvars]
+        freshies <- mapM (const fresh) tvars
+        let sub = M.fromList $ zip [coerce x | (MkTVar x) <- tvars] freshies
         let t1' = apply sub t1
         let t2' = apply sub t2
-        return (t1' <<= t2')
+        trace ("t1': " ++ printTree t1') pure ()
+        trace ("t2': " ++ printTree t2') pure ()
+        t1' <<= t2'
+
+{-
+Renaming: a -> b -> a and c -> d -> c
+gives 0 -> 1 -> 0 and -> 2 -> 3 -> 2
+They have to be given the same name. Alpha-renaming in the subtype check is done incorrectly
+-}
+
+    -- Pre-condition: All TAlls are outermost
+    gatherTVars :: [TVar] -> Type -> ([TVar], Type)
+    gatherTVars tvars (TAll tvar t) =
+        let (tvars', t') = gatherTVars (tvar : tvars) t
+         in (tvars', t')
+    gatherTVars tvars t = (tvars, t)
+                                
 
 -- | A class for substitutions
 class SubstType t where
@@ -939,3 +956,12 @@ quote s = "'" ++ s ++ "'"
 
 letters :: [T.Ident]
 letters = map T.Ident $ [1 ..] >>= flip replicateM ['a' .. 'z']
+
+{-
+
+
+first = TAll (MkTVar (LIdent "a")) (TAll (MkTVar (LIdent "b")) (TFun (TVar (MkTVar (LIdent "a"))) (TFun (TVar (MkTVar (LIdent "b"))) (TVar (MkTVar (LIdent "b"))))))
+second = TAll (MkTVar (LIdent "a")) (TAll (MkTVar (LIdent "b")) (TFun (TVar (MkTVar (LIdent "a"))) (TFun (TVar (MkTVar (LIdent "b"))) (TVar (MkTVar (LIdent "a"))))))
+
+-}
+

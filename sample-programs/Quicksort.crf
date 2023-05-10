@@ -1,0 +1,23 @@
+filter p xs = case xs of
+    Nil => Nil
+    Cons x xs => case p x of
+        True => Cons x (filter p xs)
+        False => filter p xs
+
+.++ as bs = case as of
+    Nil => bs
+    Cons x xs => Cons x (xs ++ bs)
+
+.<= a b = case a < b of
+    False => a == b
+    True => True
+
+quicksort xs = case xs of
+    Nil => Nil
+    Cons a as => quicksort (filter (\y. a < y) xs) ++ (Cons a (quicksort (filter (\y. y <= a)) xs))
+
+head xs = case xs of
+    Cons a _ => a
+
+main : Int
+main = head (quicksort (Cons 9 (Cons 8 (Cons 7 (Cons 6 (Cons 5 (Cons 4 (Cons 3 (Cons 2 (Cons 1 (Cons 0 Nil)))))))))))

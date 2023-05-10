@@ -51,7 +51,7 @@ parseArgs argv = case getOpt RequireOrder flags argv of
         hPutStrLn stderr (concat errs ++ usageInfo header flags)
         exitWith (ExitFailure 1)
   where
-    header = "Usage: language [--help] [-d|--debug] [-t|type-checker bi/hm] FILE \n"
+    header = "Usage: language [--help] [-d|--debug] [-m|--disable-gc] [-t|--type-checker bi/hm] [-p|--disable-prelude] <FILE> \n"
 
 flags :: [OptDescr (Options -> Options)]
 flags =
@@ -206,6 +206,9 @@ prelude =
         , "flipConst : a -> b -> b"
         , "flipConst x y = y"
         , "\n"
+        , "const : a -> b -> a"
+        , "const x y = x"
+        , "\n"
         , "printStr : List Char -> Unit"
         , "printStr xs = case xs of"
         , "    Nil => Unit"
@@ -214,4 +217,8 @@ prelude =
         , "data List a where"
         , "    Nil  : List a"
         , "    Cons : a -> List a -> List a"
+        , "\n"
+        , "data Pair a b where"
+        , "    Pair : a -> b -> Pair a b"
+        , "asciiCode x = case x of { 'a' => 97; 'b' => 98; 'c' => 99; 'd' => 100; 'e' => 101; 'f' => 102; 'g' => 103; 'h' => 104; 'i' => 105; 'j' => 106; 'k' => 107; 'l' => 108; 'm' => 109; 'n' => 110; 'o' => 111; 'p' => 112; 'q' => 113; 's' => 114; 't' => 115; 'u' => 116; 'v' => 117; 'w' => 118; 'x' => 119; 'y' => 120; 'z' => 121; }"
         ]

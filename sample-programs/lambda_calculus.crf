@@ -1,34 +1,31 @@
 data Exp where
-    -- Integer for the variable name to be able to use (==)
-    -- as we do not have type classes.
-    EVar : Int -> Exp
+    EVar : Char -> Exp
     EInt : Int -> Exp
-    EAbs : Int -> Exp -> Exp
+    EAbs : Char -> Exp -> Exp
     EApp : Exp -> Exp -> Exp
     EAdd : Exp -> Exp -> Exp
 
-data Pair a b where
-    Pair : a -> b -> Pair a b
-
 data Env where
-    Env : List (Pair Int Val) -> Env
+    Env : List (Pair Char Context) -> Env
 
-data Val where
-    VInt : Int -> Val
-    VClos : Env -> Int -> Exp -> Val
+data Context where
+    VInt : Int -> Context
+    VClos : Env -> Char -> Exp -> Context
 
-printExp : Exp -> Unit
-printExp exp = case exp of
-    EInt _ => printStr   "EInt\n"
-    EAdd _ _ => printStr "EAdd\n"
-    EAbs _ _ => printStr "EAbs\n"
-    EApp _ _ => printStr "EApp\n"
-    EVar _ => printStr   "EVar\n"
+lookupVar : Char -> Env -> Context
+lookupVar ident1 env = case env of
+    Env list => case list of
+        Cons a as => case a of
+            Pair ident2 val => case (asciiCode ident1) == (asciiCode ident2) of
+                True => val
+                False => lookupVar ident1 (Env as)
 
-const x y = x
+insert : Char -> Context -> Env -> Env
+insert ident v env = case env of
+    Env list => Env (Cons (Pair ident v) list)
 
--- interp : Env -> Exp -> Val
-interp env exp = case const exp (printExp exp) of
+interp : Env -> Exp -> Context
+interp env exp = case exp of
     EInt i => VInt i
     EAdd e1 e2 => case interp env e1 of
         VInt i => case interp env e2 of
@@ -37,33 +34,20 @@ interp env exp = case const exp (printExp exp) of
     EApp e1 e2 => case interp env e1 of
         VClos closEnv ident exp => case interp env e2 of
             v => interp (insert ident v closEnv) exp
-            -- Crash of incorrect program
     EVar v => lookupVar v env
 
--- lookupVar : Int -> Env -> Val
-lookupVar ident env = case env of
-    Env list => case list of
-        Cons a as => case a of
-            Pair identy val => case ident == identy of
-                True => val
-                False => lookupVar ident (Env as)
-        -- If the variable does not exist in
-        -- the context then we just crash the program
-
--- insert : Int -> Val -> Env -> Env
-insert ident v env = case env of
-    Env list => Env (Cons (Pair ident v) list)
-
--- eval : Val -> Int
+eval : Context -> Int
 eval v = case v of
     VInt i => i
-    -- Fail unless the final value is an integer
+    _ => const (0 - 1) (printStr "Fail: final value is not an integer\n")
 
--- expression : Exp
-expression = EApp (EAbs 0 (EAdd (EVar 0) (EInt 20))) (EInt 123)
+expression : Exp
+expression = EApp (EAbs 'x' (EVar 'x')) (EApp (EAbs 'x' (EAdd (EVar 'x') (EInt 100))) (EInt 200))
+-- (λ x . x) (λ x . x + 100) 200
 
--- context : Env
+context : Env
 context = Env Nil
 
--- main : Int
+main : Int
 main = eval (interp context expression)
+
