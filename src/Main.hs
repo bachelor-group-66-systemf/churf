@@ -203,7 +203,7 @@ prelude =
         , "printChar : Char -> Unit"
         , "printChar = \\x. Unit"
         , "\n"
-        , "flipConst : a -> b -> a"
+        , "flipConst : a -> b -> b"
         , "flipConst x y = y"
         , "\n"
         , "printStr : List Char -> Unit"
