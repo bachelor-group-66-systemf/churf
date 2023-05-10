@@ -106,7 +106,7 @@ freeVarsBranch localVars (Branch pt e) =
       , term  = ABranch pt annae
       }
   where
-    annae = freeVarsExp localVars e
+    annae = freeVarsExp (localVars <|| varsInPattern) e
     varsInPattern = go [] pt
       where
         go acc (p, t) = case p of
