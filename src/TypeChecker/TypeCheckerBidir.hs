@@ -6,7 +6,8 @@
 
 module TypeChecker.TypeCheckerBidir (typecheck) where
 
-import           Auxiliary                 (int, litType, maybeToRightM, snoc)
+import           Auxiliary                 (int, maybeToRightM, onM, snoc,
+                                            typeof)
 import           Control.Applicative       (Applicative (liftA2), (<|>))
 import           Control.Monad.Except      (ExceptT, MonadError (throwError),
                                             forM, runExceptT, unless, zipWithM,
@@ -139,11 +140,10 @@ typecheckDataType (Data typ injs) = do
           -> pure (name, tvars')
       _ -> throwError $ unwords ["Bad data type definition: ", ppT typ]
 
--- TODO remove some checks
 typecheckInj :: Inj -> UIdent -> [TVar] -> Err (T.Inj' Type)
 typecheckInj (Inj inj_name inj_typ) name tvars
     | not $ boundTVars tvars inj_typ
-    = throwError "Unbound type variables"
+    = throwError ("Unbound type variables " ++ printTree name ++ " " ++ printTree tvars ++ " " ++ printTree inj_typ)
     | TData name' typs <- getDataId inj_typ
     , name'  == name
     , Right tvars' <- mapM toTVar typs
@@ -161,7 +161,7 @@ typecheckInj (Inj inj_name inj_typ) name tvars
         TAll tvar t  -> boundTVars (tvar:tvars') t
         TFun t1 t2   -> on (&&) (boundTVars tvars') t1 t2
         TVar tvar    -> elem tvar tvars'
-        TData _ typs -> all (boundTVars tvars) typs
+        TData _ typs -> all (boundTVars tvars') typs
         TLit _       -> True
         TEVar _      -> error "TEVar in data type declaration"
 
@@ -174,6 +174,7 @@ typecheckInj (Inj inj_name inj_typ) name tvars
 -- | Γ ⊢ e ↑ A ⊣ Δ
 -- Under input context Γ, e checks against input type A, with output context ∆
 check :: Exp -> Type -> Tc (T' T.Exp' Type)
+check (ELit lit) t | t == typeof lit = apply (T.ELit lit, t)
 
 --  Γ,α ⊢ e ↑ A ⊣ Δ,α,Θ
 --  ------------------- ∀I
@@ -197,22 +198,28 @@ check (EAbs x e) (TFun a b) = do
     putEnv env_l
     apply (T.EAbs (coerce x) e', TFun a b)
 
-                    --FIXME
---  Γ ⊢ e ↑ A ⊣ Θ   Θ ⊢ Π ∷ [Θ]A ↓ C ⊣ Δ
---  ------------------------------------ Case
---  Γ ⊢ case e of Π ↓ C ⊣ Δ
-check (ECase scrut pi) c = do
+
+--  Γ ⊢ e ↑ A ⊣ Θ  Θ ⊢ [Θ]A <: [Θ]C ⊣ Δ
+--  ----------------------------------- CaseEmpty
+--  Γ ⊢ case e of {} ↓ C ⊣ Δ
+
+--                  Θ₁ ⊢ p₁⇒e₁ ↓ [Θ₁]C ⊣ Θ₂
+--                        ...
+--  Γ ⊢ e ↑ A ⊣ Θ₁  Θₙ ⊢ pₙ⇒eₙ ↓ [Θₙ]C ⊣ Δ
+--  --------------------------------------- Case
+--  Γ ⊢ case e of {p₁⇒e₁ ‥ pₙ⇒eₙ} ↓ C ⊣ Δ
+check (ECase scrut branches) c = do
    (scrut', a) <- infer scrut
-   case pi of
+   case branches of
      [] -> do
          subtype a c
          apply (T.ECase (scrut', a) [], a)
      _  -> do
-         pi' <- forM pi $ \(Branch p e) -> do
+         branches' <- forM branches $ \(Branch p e) -> do
              p' <- checkPattern p =<< apply a
              e' <- check e c
              pure (T.Branch p' e')
-         apply (T.ECase (scrut', a) pi', c)
+         apply (T.ECase (scrut', a) branches', c)
 
 
 --  Γ,α ⊢ e ↓ A ⊣ Θ   Θ ⊢ [Θ]A <: [Θ]B ⊣ Δ
@@ -224,34 +231,70 @@ check e b = do
     subtype a b'
     apply (e', b)
 
+
 checkPattern :: Pattern -> Type -> Tc (T.Pattern' Type, Type)
-checkPattern patt t_patt = case patt of
 
-        --  -------------------
-        --  Γ ⊢ x ↑ A ⊣ Γ,(x:A)
-        PVar x -> do
-            insertEnv $ EnvVar x t_patt
-            apply (T.PVar (coerce x), t_patt)
+--  ------------------- PVar
+--  Γ ⊢ x ↑ A ⊣ Γ,(x:A)
+checkPattern (PVar x) a = do
+    insertEnv $ EnvVar x a
+    apply (T.PVar (coerce x), a)
 
-        --  -------------
-        --  Γ ⊢ _ ↑ A ⊣ Γ
-        PCatch -> apply (T.PCatch, t_patt)
+--  ------------- PCatch
+--  Γ ⊢ _ ↑ A ⊣ Γ
+checkPattern PCatch a = apply (T.PCatch, a)
 
-        --  Γ ⊢ τ ↓ A ⊣ Γ   Γ ⊢ A <: B ⊣ Δ
-        --  ------------------------------
-        --  Γ ⊢ τ ↑ B ⊣ Δ
-        PLit lit -> do
-          subtype (litType lit) t_patt
-          apply (T.PLit lit, t_patt)
+--  A = typeof(lit)
+--  ------------------------- PLit
+--  Γ ⊢ lit ↑ A ⊣ Γ
+checkPattern (PLit lit) a | a == typeof lit = apply (T.PLit lit, a)
 
-        --  Γ ∋ (K : A)  Γ ⊢ A <: B ⊣ Δ
-        --  ---------------------------
-        --  Γ ⊢ K ↑ B ⊣ Δ
-        PEnum name -> do
-            t <- maybeToRightM ("Unknown constructor " ++ show name)
-                     =<< lookupInj name
-            subtype t t_patt
-            apply (T.PEnum (coerce name), t_patt)
+--  Γ ∋ (K : T)  Γ ⊢ A <: B ⊣ Δ
+--  ---------------------------
+--  Γ ⊢ K ↑ T ⊣ Δ
+checkPattern (PEnum k) b = do
+    a <- maybeToRightM ("Unknown constructor " ++ show k) =<< lookupInj k
+    subtype a b
+    apply (T.PEnum (coerce k), a)
+
+
+
+
+
+--
+--  Γ ∋ (K : A)                                         Θ₂ ⊢ p₁ ↑ [Θ₁]A₁ ⊣ Θ₂
+--  Γ ⊢ ∀ά₁‥άₘ A₁ → ‥ → Aₙ₊₁ = substituteAll(A) ⊣ Θ₁             ...
+--  Θ₁ ⊢ Aₙ₊₁ <: B ⊣ Θ₂                               Θₙ₊₁ ⊢ pₙ ↑ [Θₙ₊₁]Aₙ ⊣ Δ
+--  -----------------------------------------------------------------------
+--  Γ ⊢ K p₁‥pₙ ↑ B ⊣ Δ
+{- checkPattern (PInj k ps) b = do
+    a <- maybeToRightM ("Unknown constructor " ++ show k) =<< lookupInj k
+    a <- substituteAll a
+    let as = getArgs a
+    unless (length as == length ps) $ throwError "Wrong number of arguments!"
+    ps' <- zipWithM (\p a -> checkPattern p =<< apply a) ps as
+    apply (T.PInj (coerce k) ps', a)
+  where
+    substituteAll t = case t of
+        TAll tvar t -> do
+            tevar <- fresh
+            substituteAll (substitute tvar tevar t)
+        TFun t1 t2 -> onM TFun substituteAll t1 t2
+        t -> pure t
+
+    getArgs = \case
+        TAll _ t -> getArgs t
+        t        -> go [] t
+      where
+        go acc = \case
+          TFun t1 t2 -> go (snoc t1 acc) t2
+          _          -> acc -}
+
+
+
+
+
+
 
         --  Example
         --  Γ ∋ (K : A)  let A = ∀α. A₁ -> A₂ -> Tτs
@@ -260,7 +303,7 @@ checkPattern patt t_patt = case patt of
         --  Θ₂ ⊢ p₂ ↑ [Θ₂][ά/α]A₂ ⊣ Δ
         --  ---------------------------
         --  Γ ⊢ K p₁ p₂ ↑ B ⊣ Δ
-        PInj name ps -> do
+checkPattern (PInj name ps) t_patt = do
             t_inj <- maybeToRightM "unknown constructor" =<< lookupInj name
             let ts = getArgs t_inj
             unless (length ts == length ps)
@@ -290,7 +333,7 @@ checkPattern patt t_patt = case patt of
 -- | Γ ⊢ e ↓ A ⊣ Δ
 -- Under input context Γ, e infers output type A, with output context ∆
 infer :: Exp -> Tc (T' T.Exp' Type)
-infer (ELit lit) = apply (T.ELit lit, litType lit)
+infer (ELit lit) = apply (T.ELit lit, typeof lit)
 
 --  Γ ∋ (x : A)         Γ ⊢ rec(x)
 --  ------------- Var   --------------------- VarRec
@@ -306,10 +349,13 @@ infer (EVar x) = do
         insertEnv (EnvVar x alpha)
         pure alpha
 
-infer (EInj kappa) = do
-    t <- maybeToRightM ("Unknown constructor: " ++ show kappa)
-         =<< lookupInj kappa
-    apply (T.EInj $ coerce kappa, t)
+--  Γ ∋ (k : A)
+--  ------------- Inj
+--  Γ ⊢ k ↓ A ⊣ Γ
+infer (EInj k) = do
+    t <- maybeToRightM ("Unknown constructor: " ++ show k)
+         =<< lookupInj k
+    apply (T.EInj $ coerce k, t)
 
 --  Γ ⊢ A   Γ ⊢ e ↑ A ⊣ Δ
 --  --------------------- Anno
@@ -361,18 +407,24 @@ infer (EAdd e1 e2) = do
     e2' <- check e2 int
     apply (T.EAdd e1' e2', int)
 
-                    --FIXME
---  Γ ⊢ e ↑ A ⊣ Θ   Θ ⊢ Π ∷ [Θ]A ↑ C ⊣ Δ
---  ------------------------------------ Case
---  Γ ⊢ case e of Π ↓ C ⊣ Δ
-infer (ECase scrut pi) = do
+
+--  Γ ⊢ e ↑ A ⊣ Δ
+--  ------------------------ CaseEmpty↓
+--  Γ ⊢ case e of {} ↑ A ⊣ Δ
+
+--                  Θ₁ ⊢ p₁⇒e₁ ↓ [Θ₁]C ⊣ Θ₂
+--                        ...
+--  Γ ⊢ e ↑ A ⊣ Θ₁  Θₙ ⊢ pₙ⇒eₙ ↓ [Θₙ]C ⊣ Δ
+--  --------------------------------------- Case↓
+--  Γ ⊢ case e of {p₁⇒e₁ ‥ pₙ⇒eₙ} ↓ C ⊣ Δ
+infer (ECase scrut branches) = do
    (scrut', a) <- infer scrut
-   case pi of
+   case branches of
      [] -> apply (T.ECase (scrut', a) [], a)
      (Branch _ e):_  -> do
          (_, b)<- infer e
-         (pi', b') <- foldlM go ([], b) pi
-         apply (T.ECase (scrut', a) pi', b')
+         (branches', b') <- foldlM go ([], b) branches
+         apply (T.ECase (scrut', a) branches', b')
        where
          go (pi, b) (Branch p e) = do
              p' <- checkPattern p =<< apply a
@@ -475,32 +527,31 @@ subtype (TEVar alpha) a | notElem alpha $ frees a = instantiateL alpha a
 subtype a  (TEVar alpha) | notElem alpha $ frees a = instantiateR a alpha
 
 
-subtype (TData name1 typs1) (TData name2 typs2)
+subtype (TData t1 as) (TData t2 bs)
 
-    --  D₁ = D₂
-    --  ----------------
-    --  Γ ⊢ D₁ () <: D₂ ()
-    | name1 == name2
-    , [] <- typs1
-    , [] <- typs2
+    --  -------------- <:TypeConEmpty
+    --  Γ ⊢ T <: T ⊣ Γ
+    | t1 == t2
+    , [] <- as
+    , [] <- bs
     = pure ()
 
-    --                    Γ ⊢ ά₁ <: έ₁ ⊣ Θ₁
-    --                           ...
-    -- D₁ = D₂   Θₙ₋₁ ⊢ [Θₙ₋₁]άₙ <: [Θₙ₋₁]έₙ ⊣ Δ
-    -- -------------------------------------------
-    -- Γ ⊢ D (ά₁ ‥ άₙ) <: D (έ₁ ‥ έₙ) ⊣ Δ
-    | name1 == name2
-    , t1:t1s <- typs1
-    , t2:t2s <- typs2
+    --    Γ ⊢ A₁ <: B₁ ⊣ Θ₁
+    --           ...
+    -- Θₙ₋₁ ⊢ [Θₙ₋₁]Aₙ <: [Θₙ₋₁]Bₙ ⊣ Δ
+    -- -------------------------------- <:TypeCon
+    -- Γ ⊢ T A₁ ‥ Aₙ <: T B₁ ‥ Bₙ ⊣ Δ
+    | t1 == t2
+    , a:as <- as
+    , b:bs <- bs
     = do
-    subtype t1 t2
-    zipWithM_ go t1s t2s
+    subtype a b
+    zipWithM_ go as bs
   where
-    go t1' t2' = do
-        t1'' <- apply t1'
-        t2'' <- apply t2'
-        subtype t1'' t2''
+    go a b = do
+        a' <- apply a
+        b' <- apply b
+        subtype a' b'
 
 subtype (TIdent t1) (TIdent t2) | t1 == t2 = pure ()
 
