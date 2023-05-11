@@ -161,6 +161,7 @@ typeOf = \case
     Store t _ _ _    -> t
     Type x _         -> CustomType x
     SetVariable _ ir -> typeOf ir
+    x -> error $ "\n -- MARTIN HJÄLP! -- \nType of: '" ++ show x ++ "' not found"
 
 
 

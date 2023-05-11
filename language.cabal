@@ -55,6 +55,7 @@ executable language
       Codegen.Emits
       Compiler
       Renamer.Renamer
+      ReportForall
       TreeConverter
       Desugar.Desugar
 

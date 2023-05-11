@@ -345,7 +345,6 @@ morphPattern p expectedType = case p of
     return $ Just ((M.PEnum newIdent, expectedType), Set.empty)
   L.PInj ident pts -> do let newIdent = newName expectedType ident
                          ts' <- mapM (getMonoFromPoly . snd) pts
-                         trace ("Constructor: " ++ show ident ++ "expected: " ++ show expectedType ++ "\nTS': " ++ show ts' ++ "\n\n\n") pure ()
                          morphCons (convertConsTypeToDataType expectedType (reverse ts')) ident newIdent
                          let pts' = zip (map fst pts) ts'
                          psSets <- mapM (uncurry morphPattern) pts'

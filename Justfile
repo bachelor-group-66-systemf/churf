@@ -22,6 +22,12 @@ hm FILE:
 bi FILE:
     cabal run language -- -t bi {{FILE}}
 
+hml FILE:
+    cabal run language -- -l -t hm {{FILE}}
+
+bil FILE:
+    cabal run language -- -l -t bi {{FILE}}
+
 hmd FILE:
     cabal run language -- -d -t hm {{FILE}}
 

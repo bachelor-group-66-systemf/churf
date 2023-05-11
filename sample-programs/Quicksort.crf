@@ -42,13 +42,3 @@ descList from to = case to < from of
 
 main = let list = (5 :: (2 :: (8 :: (9 :: (6 :: (0 :: (1 :: Nil)))))))
         in printStr (toStr (quicksort list))
-
-{-
-
--- Program output --
-0125689
-In dispose
-Out dispose
-ExitSuccess
-
--}

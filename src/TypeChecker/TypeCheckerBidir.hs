@@ -2,7 +2,7 @@
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE PatternSynonyms     #-}
-{-# OPTIONS_GHC -Wno-incomplete-patterns #-}
+-- {-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 
 module TypeChecker.TypeCheckerBidir (typecheck) where
 
@@ -248,6 +248,7 @@ checkPattern PCatch a = apply (T.PCatch, a)
 --  ------------------------- PLit
 --  Γ ⊢ lit ↑ A ⊣ Γ
 checkPattern (PLit lit) a | a == typeof lit = apply (T.PLit lit, a)
+checkPattern (PLit lit) a = error $ "\n -- MARTIN HJÄLP!! --\nUnimplemented match for: '" ++ printTree a ++ "' == '" ++ printTree (typeof lit) ++ "'"
 
 --  Γ ∋ (K : T)  Γ ⊢ A <: B ⊣ Δ
 --  ---------------------------

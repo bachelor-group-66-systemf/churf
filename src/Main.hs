@@ -51,14 +51,15 @@ parseArgs argv = case getOpt RequireOrder flags argv of
         hPutStrLn stderr (concat errs ++ usageInfo header flags)
         exitWith (ExitFailure 1)
   where
-    header = "Usage: language [--help] [-d|--debug] [-m|--disable-gc] [-t|--type-checker bi/hm] [-p|--disable-prelude] <FILE> \n"
+    header = "Usage: language [--help] [-l|--log-intermediate] [-d|--debug] [-m|--disable-gc] [-t|--type-checker bi/hm] [-p|--disable-prelude] <FILE> \n"
 
 flags :: [OptDescr (Options -> Options)]
 flags =
-    [ Option ['d'] ["debug"] (NoArg enableDebug) "Print debug messages."
+    [ Option ['d'] ["debug"] (NoArg $ enableDebug . logIntermediate) "Print debug messages. --debug implies --log-intermediate"
     , Option ['t'] ["type-checker"] (ReqArg chooseTypechecker "bi/hm") "Choose type checker. Possible options are bi and hm"
     , Option ['m'] ["disable-gc"] (NoArg disableGC) "Disables the garbage collector and uses malloc instead."
     , Option ['p'] ["disable-prelude"] (NoArg disablePrelude) "Do not include the prelude"
+    , Option ['l'] ["log-intermediate"] (NoArg logIntermediate) "Log intermediate languages"
     , Option [] ["help"] (NoArg enableHelp) "Print this help message"
     ]
 
@@ -70,6 +71,7 @@ initOpts =
         , gc = True
         , typechecker = Nothing
         , preludeOpt = False
+        , logIL = False
         }
 
 enableHelp :: Options -> Options
@@ -83,6 +85,10 @@ disableGC opts = opts{gc = False}
 
 disablePrelude :: Options -> Options
 disablePrelude opts = opts{preludeOpt = True}
+
+logIntermediate :: Options -> Options
+logIntermediate opts = opts{logIL = True}
+
 
 chooseTypechecker :: String -> Options -> Options
 chooseTypechecker s options = options{typechecker = tc}
@@ -98,6 +104,7 @@ data Options = Options
     , gc          :: Bool
     , typechecker :: Maybe TypeChecker
     , preludeOpt  :: Bool
+    , logIL       :: Bool
     }
 
 main' :: Options -> String -> IO ()
@@ -109,33 +116,33 @@ main' opts s =
         do
             file <- readFile s
 
-            printToErr "-- Parse Tree -- "
+           
             let file' = if opts.preludeOpt then file else file ++ prelude
             parsed <- fromErr . pProgram . resolveLayout True $ myLexer file'
-            log parsed
+            when opts.logIL (printToErr "-- Parse Tree -- " >> log parsed)
 
-            printToErr "-- Desugar --"
+            
             let desugared = desugar parsed
-            log desugared
+            when opts.logIL (printToErr "-- Desugar --" >> log desugared)
 
-            printToErr "\n-- Renamer --"
+            
             _ <- fromErr $ reportForall (fromJust opts.typechecker) desugared
             renamed <- fromErr $ (rename <=< annotateForall) desugared
-            log renamed
+            when opts.logIL (printToErr "\n-- Renamer --" >> log renamed) 
 
-            printToErr "\n-- TypeChecker --"
+            
             typechecked <- fromErr $ typecheck (fromJust opts.typechecker) (orderDefs renamed)
-            log typechecked
+            when opts.logIL (printToErr "\n-- TypeChecker --" >> log typechecked)
 
-            printToErr "\n-- Lambda Lifter --"
+            
             let lifted = lambdaLift typechecked
-            log lifted
+            when opts.logIL (printToErr "\n-- Lambda Lifter --" >> log lifted)
 
-            printToErr "\n -- Monomorphizer --"
+            
             let monomorphized = monomorphize lifted
-            log monomorphized
+            when opts.logIL (printToErr "\n -- Monomorphizer --" >> log monomorphized)
 
-            printToErr "\n -- Compiler --"
+            
             generatedCode <- fromErr $ generateCode monomorphized (gc opts)
             -- generatedCode <- fromErr $ generateCode monomorphized False
 
@@ -144,6 +151,7 @@ main' opts s =
             createDirectory "output"
             createDirectory "output/logs"
             when opts.debug $ do
+                printToErr "\n -- Compiler --"
                 writeFile "output/llvm.ll" generatedCode
                 debugDotViz
 

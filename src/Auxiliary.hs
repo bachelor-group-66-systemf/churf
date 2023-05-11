@@ -53,7 +53,9 @@ liftMM2 f m1 m2 = do
 typeof :: Lit -> Type
 typeof (LInt _)  = int
 typeof (LChar _) = char
+typeof (LString _) = string
 
+string = TLit "String"
 int = TLit "Int"
 char = TLit "Char"
 
