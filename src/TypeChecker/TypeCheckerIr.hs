@@ -90,13 +90,15 @@ prtSig (x, t) =
         ]
 
 instance (Print a, Print t) => Print (T a t) where
-    prt i (x, t) =
-        concatD
-            [ -- doc $ showString "("
-            {- , -} prt i x
---            , doc $ showString ":"
---            , prt 0 t
---            , doc $ showString ")"
+    prt i (x, t) = withT
+      where
+        noT = prt i x
+        withT = concatD
+            [ doc $ showString "("
+            , prt i x
+            , doc $ showString ":"
+            , prt 0 t
+            , doc $ showString ")"
             ]
 
 instance Print t => Print [Bind' t] where

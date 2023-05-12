@@ -1,4 +1,5 @@
-{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Codegen.LlvmIr (
     LLVMType (..),
@@ -57,6 +58,7 @@ instance ToIr LLVMType where
         Ref ty -> toIr ty <> "*"
         Function t xs -> toIr t <> " (" <> intercalate ", " (map toIr xs) <> ")*"
         Array n ty -> concat ["[", show n, " x ", toIr ty, "]"]
+        CustomType "void" -> "void"
         CustomType (Ident ty) -> "%" <> ty
 
 data LLVMComp
