@@ -35,6 +35,7 @@ executable language
       Auxiliary
       Renamer.Renamer
       TypeChecker.TypeChecker
+      Expander
       AnnForall
       OrderDefs
       TypeChecker.TypeCheckerHm

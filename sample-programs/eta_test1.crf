@@ -1,0 +1,4 @@
+id x = x
+f = id
+
+main = f 1

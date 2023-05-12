@@ -1,0 +1,19 @@
+data List a where
+    Nil : List a
+    Cons : a -> List a -> List a
+
+map : (a -> b) -> List a -> List b
+map f xs = case xs of
+    Nil => Nil
+    Cons a as => Cons (f a) (map f as)
+
+add : Int -> Int -> Int
+add x y = x + y
+
+sum : List Int -> Int
+sum xs = case xs of
+    Nil => 0
+    Cons a as => a + (sum xs)
+
+main : Int
+main = sum (map (add 1) (Cons 1 Nil))

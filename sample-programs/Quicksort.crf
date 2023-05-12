@@ -22,23 +22,20 @@ filter p xs = case xs of
         True => Cons x (filter p xs)
         False => filter p xs
 
-.++ as bs = case as of
+(++) as bs = case as of
     Nil => bs
     Cons x xs => Cons x (xs ++ bs)
-
-.:: a as = Cons a as
 
 quicksort : List Int -> List Int
 quicksort xs = case xs of
     Nil => Nil
     Cons a as => let smaller = quicksort (filter (\y. y < a) xs)
                   in let bigger = quicksort (filter (\y. a < y) xs)
-                      in smaller ++ (a :: bigger)
+                      in smaller ++ (Cons a bigger)
 
 descList : Int -> Int -> List Int
 descList from to = case to < from of
    False => Cons to (descList from (to - 1)) 
    True => Nil
 
-main = let list = (5 :: (2 :: (8 :: (9 :: (6 :: (0 :: (1 :: Nil)))))))
-        in printStr (toStr (quicksort list))
+-- main = let list = (5 :: (2 :: (8 :: (9 :: (6 :: (0 :: (1 :: Nil))))))) in printStr (toStr (quicksort list))

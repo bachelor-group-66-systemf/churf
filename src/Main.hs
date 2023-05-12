@@ -9,6 +9,7 @@ import           Control.Monad               (when, (<=<))
 import           Data.List.Extra             (isSuffixOf)
 import           Data.Maybe                  (fromJust, isNothing)
 import           Desugar.Desugar             (desugar)
+import           Expander                    (expand)
 import           GHC.IO.Handle.Text          (hPutStrLn)
 import           Grammar.ErrM                (Err)
 import           Grammar.Layout              (resolveLayout)
@@ -117,7 +118,7 @@ main' opts s =
             file <- readFile s
 
            
-            let file' = if opts.preludeOpt then file else file ++ prelude
+            let file' = if opts.preludeOpt then file ++ primitives else file ++ primitives ++ prelude
             parsed <- fromErr . pProgram . resolveLayout True $ myLexer file'
             when opts.logIL (printToErr "-- Parse Tree -- " >> log parsed)
 
@@ -134,8 +135,12 @@ main' opts s =
             typechecked <- fromErr $ typecheck (fromJust opts.typechecker) (orderDefs renamed)
             when opts.logIL (printToErr "\n-- TypeChecker --" >> log typechecked)
 
+
+            let etaexpanded = expand typechecked
+            when opts.logIL (printToErr "\n-- Eta expander --" >> log etaexpanded)
+
             
-            let lifted = lambdaLift typechecked
+            let lifted = lambdaLift etaexpanded
             when opts.logIL (printToErr "\n-- Lambda Lifter --" >> log lifted)
 
             
@@ -182,29 +187,33 @@ printToErr = hPutStrLn stderr
 fromErr :: Err a -> IO a
 fromErr = either (\s -> printToErr s >> exitFailure) pure
 
-prelude :: String
-prelude =
+primitives =
     unlines
-        [ "\n"
+        [ ""
         , "data Bool where"
         , "    False : Bool"
         , "    True  : Bool"
-        , -- The function body of lt is replaced during code gen. It exists here for type checking purposes.
-          ".< : Int -> Int -> Bool"
+        , "\n"
+        , ".< : Int -> Int -> Bool"
         , ".< x y = case x of"
         , "    _ => True"
         , "    _ => False"
-        , "\n"
-        , -- The function body of - is replaced during code gen. It exists here for type checking purposes.
-          ".- : Int -> Int -> Int"
+        , ".- : Int -> Int -> Int"
         , ".- x y = 0"
-        , "\n"
+        , ".+ : Int -> Int -> Int"
+        , ".+ x y = 0"
         , ".== : Int -> Int -> Bool"
         , ".== a b = case a < b of"
         , "    False => case b < a of"
         , "        False => True"
         , "        _ => False"
         , "    False => False"
+        ]
+
+prelude :: String
+prelude =
+    unlines
+        [ "\n"
         , "data Unit where"
         , "  Unit : Unit"
         , "\n"
