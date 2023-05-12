@@ -315,14 +315,14 @@ algoW = \case
     EVar (LIdent i) -> do
         var <- asks vars
         case M.lookup (coerce i) var of
-            Just t ->
-                inst t >>= \x ->
-                    return (nullSubst, (T.EVar $ coerce i, x))
+            Just t -> do
+                t <- inst t
+                return (nullSubst, (T.EVar $ coerce i, t))
             Nothing -> do
                 sig <- gets sigs
                 case M.lookup (coerce i) sig of
                     Just (Just t) -> do
-                        t <- freshen t
+                        t <- inst t
                         return (nullSubst, (T.EVar $ coerce i, t))
                     Just Nothing -> do
                         fr <- fresh
@@ -839,7 +839,7 @@ existInj :: (Monad m, MonadState Env m) => T.Ident -> m (Maybe Type)
 existInj n = gets (M.lookup n . injections)
 
 flattenType :: Type -> [Type]
-flattenType (TFun a b) = flattenType a <> flattenType b
+flattenType (TFun a b) = a : flattenType b
 flattenType a = [a]
 
 typeLength :: Type -> Int
