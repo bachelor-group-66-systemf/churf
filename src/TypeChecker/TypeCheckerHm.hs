@@ -16,7 +16,7 @@ import Control.Monad.State
 import Control.Monad.Writer
 import Data.Coerce (coerce)
 import Data.Function (on)
-import Data.List (foldl', nub, sortOn)
+import Data.List (foldl', nub)
 import Data.List.Extra (unsnoc)
 import Data.Map (Map)
 import Data.Map qualified as M
@@ -48,7 +48,6 @@ checkPrg :: Program -> Infer (T.Program' Type)
 checkPrg (Program bs) = do
     preRun bs
     -- sgs <- gets sigs
-    bs <- map snd . sortOn fst <$> bindCount bs
     bs <- checkDef bs
     -- return . prettify sgs . T.Program $ bs
     return . T.Program $ bs
@@ -76,37 +75,6 @@ replace m def@(TAll (MkTVar forall_) t) = case M.lookup (coerce forall_) m of
     Just found -> TAll (MkTVar $ coerce found) (replace m t)
     Nothing -> def
 replace _ t = t
-
-bindCount :: [Def] -> Infer [(Int, Def)]
-bindCount [] = return []
-bindCount (x : xs) = do
-    (o, d) <- go x
-    b <- bindCount xs
-    return $ (o, d) : b
-  where
-    go :: Def -> Infer (Int, Def)
-    go b@(DBind (Bind _ _ e)) = do
-        db <- gets declaredBinds
-        let n = runIdentity $ evalStateT (countBinds db e) mempty
-        return (n, b)
-    go (DSig sig) = pure (0, DSig sig)
-    go (DData data_) = pure (-1, DData data_)
-
-    countBinds :: Set T.Ident -> Exp -> StateT (Set T.Ident) Identity Int
-    countBinds declared = \case
-        EVar i -> do
-            found <- get
-            if coerce i `S.member` declared && not (coerce i `S.member` found)
-                then put (S.insert (coerce i) found) >> return 1
-                else return 0
-        ELet _ e -> countBinds declared e
-        EApp e1 e2 -> (+) <$> countBinds declared e1 <*> countBinds declared e2
-        EAdd e1 e2 -> (+) <$> countBinds declared e1 <*> countBinds declared e2
-        EAbs _ e -> countBinds declared e
-        ECase e1 brnchs -> do
-            let f (Branch _ e2) = countBinds declared e2
-            (+) . sum <$> mapM f brnchs <*> countBinds declared e1
-        _ -> return 0
 
 preRun :: [Def] -> Infer ()
 preRun [] = return ()
@@ -190,9 +158,9 @@ checkBind (Bind name args e) = do
     let lambda = makeLambda e (reverse (coerce args))
     (e, infSig) <- inferExp lambda
     s <- gets sigs
+    let genInfSig = generalize mempty infSig
     case M.lookup (coerce name) s of
         Just (Just typSig) -> do
-            let genInfSig = generalize mempty infSig
             sub <- genInfSig `unify` typSig
             b <- genInfSig <<= typSig
             unless
@@ -211,8 +179,8 @@ checkBind (Bind name args e) = do
             -- Unfortunately I do not know a better solution at the moment.
             return $ T.Bind (coerce name, apply sub typSig) [] (apply sub e, typSig)
         _ -> do
-            insertSig (coerce name) (Just infSig)
-            return (T.Bind (coerce name, infSig) [] (e, infSig))
+            insertSig (coerce name) (Just genInfSig)
+            return (T.Bind (coerce name, infSig) [] (e, genInfSig))
 
 checkData :: (MonadState Env m, Monad m, MonadError Error m) => Data -> m ()
 checkData err@(Data typ injs) = do
@@ -619,6 +587,10 @@ inst = \case
         apply s <$> inst t
     TFun t1 t2 -> TFun <$> inst t1 <*> inst t2
     rest -> return rest
+
+{-
+arrint = TFun (TLit "Int") (TLit "Int")
+-}
 
 -- Only one of 'freshen' and 'inst' should be needed but something doesn't work
 -- when I remove either.
