@@ -16,13 +16,15 @@ toChar x = case x of
     8 => '8'
     9 => '9'
 
+filter : (a -> Bool) -> List a -> List a
 filter p xs = case xs of
     Nil => Nil
     Cons x xs => case p x of
         True => Cons x (filter p xs)
         False => filter p xs
 
-(++) as bs = case as of
+.++ : List a -> List a -> List a
+.++ as bs = case as of
     Nil => bs
     Cons x xs => Cons x (xs ++ bs)
 
@@ -38,4 +40,5 @@ descList from to = case to < from of
    False => Cons to (descList from (to - 1)) 
    True => Nil
 
--- main = let list = (5 :: (2 :: (8 :: (9 :: (6 :: (0 :: (1 :: Nil))))))) in printStr (toStr (quicksort list))
+main = let list = Cons 5 (Cons 2 (Cons 8 (Cons 9 (Cons 6 (Cons 0 (Cons 1 Nil)))))) in 
+       printStr (toStr (quicksort list))
