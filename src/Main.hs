@@ -117,37 +117,37 @@ main' opts s =
         do
             file <- readFile s
 
-           
+
             let file' = if opts.preludeOpt then file ++ primitives else file ++ primitives ++ prelude
             parsed <- fromErr . pProgram . resolveLayout True $ myLexer file'
             when opts.logIL (printToErr "-- Parse Tree -- " >> log parsed)
 
-            
+
             let desugared = desugar parsed
             when opts.logIL (printToErr "-- Desugar --" >> log desugared)
 
-            
-            _ <- fromErr $ reportForall (fromJust opts.typechecker) desugared
-            renamed <- fromErr $ (rename <=< annotateForall) desugared
-            when opts.logIL (printToErr "\n-- Renamer --" >> log renamed) 
 
-            
-            typechecked <- fromErr $ typecheck (fromJust opts.typechecker) (orderDefs renamed)
+            _ <- fromErr $ reportForall (fromJust opts.typechecker) desugared
+            renamed <- fromErr $ orderDefs <$> (rename <=< annotateForall) desugared
+            when opts.logIL (printToErr "\n-- Renamer --" >> log renamed)
+
+
+            typechecked <- fromErr $ typecheck (fromJust opts.typechecker) renamed
             when opts.logIL (printToErr "\n-- TypeChecker --" >> log typechecked)
 
 
-            let etaexpanded = expand typechecked
-            when opts.logIL (printToErr "\n-- Eta expander --" >> log etaexpanded)
+            -- let etaexpanded = expand typechecked
+            -- when opts.logIL (printToErr "\n-- Eta expander --" >> log etaexpanded)
 
-            
-            let lifted = lambdaLift etaexpanded
+
+            let lifted = lambdaLift typechecked
             when opts.logIL (printToErr "\n-- Lambda Lifter --" >> log lifted)
 
-            
+
             let monomorphized = monomorphize lifted
             when opts.logIL (printToErr "\n -- Monomorphizer --" >> log monomorphized)
 
-            
+
             generatedCode <- fromErr $ generateCode monomorphized (gc opts)
             -- generatedCode <- fromErr $ generateCode monomorphized False
 
@@ -206,8 +206,8 @@ primitives =
         , ".== a b = case a < b of"
         , "    False => case b < a of"
         , "        False => True"
-        , "        _ => False"
-        , "    False => False"
+        , "        True => False"
+        , "    True => False"
         ]
 
 prelude :: String
@@ -237,5 +237,7 @@ prelude =
         , "\n"
         , "data Pair a b where"
         , "    Pair : a -> b -> Pair a b"
+        , "\n"
+        , "asciiCode : Char -> Int"
         , "asciiCode x = case x of { 'a' => 97; 'b' => 98; 'c' => 99; 'd' => 100; 'e' => 101; 'f' => 102; 'g' => 103; 'h' => 104; 'i' => 105; 'j' => 106; 'k' => 107; 'l' => 108; 'm' => 109; 'n' => 110; 'o' => 111; 'p' => 112; 'q' => 113; 's' => 114; 't' => 115; 'u' => 116; 'v' => 117; 'w' => 118; 'x' => 119; 'y' => 120; 'z' => 121; }"
         ]
