@@ -17,13 +17,13 @@ import           Control.Monad.State           (gets, modify)
 import           Data.Char                     (ord)
 import           Data.Coerce                   (coerce)
 import           Data.Foldable.Extra           (notNull)
+import           Data.List                     (isPrefixOf)
 import qualified Data.Map                      as Map
 import           Data.Maybe                    (fromJust, fromMaybe, isNothing)
 import           Data.Tuple.Extra              (second)
+import           Debug.Trace                   (traceShow)
 import           Grammar.Print                 (printTree)
 import           Monomorphizer.MonomorphizerIr
-import Debug.Trace (traceShow)
-import Data.List (isPrefixOf)
 
 
 compileScs :: [Def] -> CompilerState ()
@@ -136,7 +136,7 @@ compileScs (DBind bind : xs) = do
     result <- exprToValue exp
 
     when isMain $ case t_return of
-        I64 -> do 
+        I64 -> do
             emit . UnsafeRaw $
                    "call i32 (ptr, ...) @printf(ptr noundef @.str, i64 noundef " <> toIr result <> ")\n"
         I8 -> do
@@ -145,7 +145,7 @@ compileScs (DBind bind : xs) = do
         _ -> do
             emit $ Comment "TODO"
     if isMain
-        then do 
+        then do
             emit $ UnsafeRaw "call i32 (ptr, ...) @printf(ptr noundef @.new_line)\n"
             mapM_ emit $ lastMainContent gcEnabled
             emit $ Ret I64 (VInteger 0)
@@ -205,7 +205,7 @@ firstMainContent True =
 firstMainContent False = []
 
 lastMainContent :: Bool -> [LLVMIr]
-lastMainContent True = [UnsafeRaw "call void @cheap_dispose()\n"]
+lastMainContent True  = [UnsafeRaw "call void @cheap_dispose()\n"]
 lastMainContent False =[]
 
 compileExp :: T Exp -> CompilerState ()
@@ -395,7 +395,7 @@ emitApp rt e1 e2 = do
                                  . locals
 
             pure $ Call FastCC (type2LlvmType rt) visibility name args
-    
+
     call <- preludeFuns call name (snd (head args)) (snd (args !! 1))
 
     emit $ Comment $ show (type2LlvmType rt)
@@ -480,7 +480,7 @@ exprToValue et@(e, t) = case e of
                     pure $ VIdent vc (type2LlvmType t)
                 | otherwise -> pure $ VFunction name Global (type2LlvmType t)
                   where
-                    call = Call FastCC (type2LlvmType t) Global name []
+                    call = Call FastCC (type2LlvmType t) Global name [(Ptr, VNull)]
 
             Nothing -> gets $ val
                             . fromJust
