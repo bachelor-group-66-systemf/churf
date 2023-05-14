@@ -111,7 +111,8 @@ compileScs (DBind bind : xs) = do
                                      . Map.lookup name
                                      . globals
 
-    let args' = zip (mkCxtName : map fst args) t_args
+    let args' | isMain    = []
+              | otherwise = zip (mkCxtName : map fst args) t_args
 
     emit $ Define FastCC (if isMain then I64 else t_return) name args'
     modify $ \s -> s  { locals = foldr insertArg s.locals args' }
@@ -365,16 +366,13 @@ emitECased t e cases = do
         emit $ Label lbl_failPos
 
 preludeFuns :: LLVMIr -> Ident -> LLVMValue -> LLVMValue -> CompilerState LLVMIr
-preludeFuns def (Ident xs) arg1 arg2
-  | "$langle$$langle$" `isPrefixOf` xs = pure $ Icmp LLSlt I8 arg1 arg2
-  | "$langle$" `isPrefixOf` xs =  pure $ Icmp LLSlt I64 arg1 arg2
-  | "$minus$" `isPrefixOf` xs = pure $ Sub I64 arg1 arg2
-  | "$plus$" `isPrefixOf` xs = pure $ Add I64 arg1 arg2
-  | "printChar$" `isPrefixOf` xs = do
-        pure . UnsafeRaw $
-            "add i16 0,0\n    call void (ptr, ...) @printf(ptr noundef @.char_print_no_nl, i8 noundef " <> toIr arg1 <> ")\n"
-  --char_print_no_nl
-  | otherwise = pure def
+preludeFuns def xs arg1 arg2 = case xs of
+  "$langle$$langle$"      -> pure $ Icmp LLSlt I8 arg1 arg2 -- FIXME
+  "$langle$$Int_Int_Bool" -> pure $ Icmp LLSlt I64 arg1 arg2
+  "$minus$$Int_Int_Int"   -> pure $ Sub I64 arg1 arg2
+  "$plus$$Int_Int_Int"    -> pure $ Add I64 arg1 arg2
+  "printChar$Char_Unit"   -> pure . UnsafeRaw $ "add i16 0,0\n    call void (ptr, ...) @printf(ptr noundef @.char_print_no_nl, i8 noundef " <> toIr arg1 <> ")\n"
+  _                       -> pure def
 
 emitApp :: Type -> T Exp -> T Exp -> CompilerState ()
 emitApp rt e1 e2 = do
