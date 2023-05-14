@@ -90,7 +90,7 @@ prtSig (x, t) =
         ]
 
 instance (Print a, Print t) => Print (T a t) where
-    prt i (x, t) = withT
+    prt i (x, t) = noT
       where
         noT = prt i x
         withT = concatD
