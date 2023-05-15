@@ -30,9 +30,7 @@ void cheap_init()
 
 void cheap_dispose()
 {
-    std::cout << "In dispose\n";
     GC::Heap::dispose();
-    std::cout << "Out dispose" << std::endl;
 }
 
 void *cheap_alloc(unsigned long size)

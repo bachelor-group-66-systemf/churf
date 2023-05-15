@@ -59,12 +59,14 @@ namespace GC
             case AllocStart:        return "AllocStart";
             case CollectStart:      return "CollectStart";
             case MarkStart:         return "MarkStart";
+            case SweepStart:        return "SweepStart";
             case ChunkMarked:       return "ChunkMarked";
             case ChunkSwept:        return "ChunkSwept";
             case ChunkFreed:        return "ChunkFreed";
             case NewChunk:          return "NewChunk";
             case ReusedChunk:       return "ReusedChunk";
             case ProfilerDispose:   return "ProfilerDispose";
+            case FreeStart:         return "FreeStart";
             default:                return "[Unknown]";
         }
     }
