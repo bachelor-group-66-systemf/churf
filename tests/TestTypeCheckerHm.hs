@@ -57,6 +57,8 @@ goods =
     , testSatisfy
         "A basic arithmetic function should be able to be inferred"
         ( D.do
+            ".+ : Int -> Int -> Int"
+            ".+ x y = x"
             "plusOne x = x + 1 ;"
             "main x = plusOne x ;"
         )
@@ -74,6 +76,8 @@ goods =
     , testSatisfy
         "length function on int list infers correct signature"
         ( D.do
+            ".+ : Int -> Int -> Int"
+            ".+ x y = x"
             "data List where "
             "    Nil : List"
             "    Cons : Int -> List -> List"
@@ -114,6 +118,8 @@ bads =
     , testSatisfy
         "Using a concrete function (primitive type) on a skolem variable should not succeed"
         ( D.do
+            ".+ : Int -> Int -> Int"
+            ".+ x y = x"
             "plusOne : Int -> Int ;"
             "plusOne x = x + 1 ;"
             "f : a -> Int ;"
@@ -131,6 +137,8 @@ bads =
         "Pattern matching on literal and _List should not succeed"
         ( D.do
             _List
+            ".+ : Int -> Int -> Int"
+            ".+ x y = x"
             "length : List c -> Int;"
             "length _List = case _List of {"
             "  0         => 0;"

@@ -1,28 +1,28 @@
-{-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE PatternSynonyms   #-}
+{-# LANGUAGE PatternSynonyms #-}
 {-# HLINT ignore "Use camelCase" #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
 module TestTypeCheckerBidir (test, testTypeCheckerBidir) where
 
-import           Test.Hspec
+import Test.Hspec
 
-import           AnnForall                    (annotateForall)
-import           Control.Monad                ((<=<))
-import           Desugar.Desugar              (desugar)
-import           Grammar.Abs                  (Program)
-import           Grammar.ErrM                 (Err, pattern Bad, pattern Ok)
-import           Grammar.Layout               (resolveLayout)
-import           Grammar.Par                  (myLexer, pProgram)
-import           Grammar.Print                (printTree)
-import           Renamer.Renamer              (rename)
-import           ReportForall                 (reportForall)
-import           TypeChecker.RemoveForall     (removeForall)
-import           TypeChecker.ReportTEVar      (reportTEVar)
-import           TypeChecker.TypeChecker      (TypeChecker (Bi))
-import           TypeChecker.TypeCheckerBidir (typecheck)
-import qualified TypeChecker.TypeCheckerIr    as T
+import AnnForall (annotateForall)
+import Control.Monad ((<=<))
+import Desugar.Desugar (desugar)
+import Grammar.Abs (Program)
+import Grammar.ErrM (Err, pattern Bad, pattern Ok)
+import Grammar.Layout (resolveLayout)
+import Grammar.Par (myLexer, pProgram)
+import Grammar.Print (printTree)
+import Renamer.Renamer (rename)
+import ReportForall (reportForall)
+import TypeChecker.RemoveForall (removeForall)
+import TypeChecker.ReportTEVar (reportTEVar)
+import TypeChecker.TypeChecker (TypeChecker (Bi))
+import TypeChecker.TypeCheckerBidir (typecheck)
+import TypeChecker.TypeCheckerIr qualified as T
 
 test = hspec testTypeCheckerBidir
 
@@ -54,13 +54,19 @@ tc_id =
 tc_double =
     specify "Addition inference" $
         run
-            ["double x = x + x"]
+            [ ".+ : Int -> Int -> Int"
+            , ".+ x y = x"
+            , "double x = x + x"
+            ]
             `shouldSatisfy` ok
 
 tc_add_lam =
     specify "Addition lambda inference" $
         run
-            ["four = (\\x. x + x) 2"]
+            [ ".+ : Int -> Int -> Int"
+            , ".+ x y = x"
+            , "four = (\\x. x + x) 2"
+            ]
             `shouldSatisfy` ok
 
 tc_const =
@@ -88,6 +94,8 @@ tc_rank2 =
         run
             [ "const : a -> b -> a"
             , "const x y = x"
+            , ".+ : Int -> Int -> Int"
+            , ".+ x y = x"
             , "rank2 : a -> (forall c. c -> Int) -> b -> Int"
             , "rank2 x f y = f x + f y"
             , "main = rank2 3 (\\x. const 5 x : a -> Int) 'h'"
@@ -195,18 +203,21 @@ tc_pol_case = describe "Polymophic and recursive pattern matching" $ do
     --     run (fs ++ correct1) `shouldSatisfy` ok
     specify "Second correct case expression accepted" $
         run (fs ++ correct2) `shouldSatisfy` ok
+  where
     -- specify "Third correct case expression accepted" $
     --     run (fs ++ correct3) `shouldSatisfy` ok
     -- specify "Forth correct case expression accepted" $
     --     run (fs ++ correct4) `shouldSatisfy` ok
-  where
+
     fs =
         [ "data List a where"
         , "  Nil  : List a"
         , "  Cons : a -> List a -> List a"
         ]
     wrong1 =
-        [ "length : List c -> Int"
+        [ ".+ : Int -> Int -> Int"
+        , ".+ x y = x"
+        , "length : List c -> Int"
         , "length = \\list. case list of"
         , "  Nil       => 0"
         , "  Cons 6 xs => 1 + length xs"
@@ -254,10 +265,10 @@ tc_pol_case = describe "Polymophic and recursive pattern matching" $ do
     correct4 =
         [ "elems : List (List c) -> Int"
         , "elems = \\list. case list of"
-      --, "  Nil                => 0"
-      --, "  Cons Nil Nil       => 0"
-      --, "  Cons Nil xs        => elems xs"
-        , "  Cons (Cons _ ys) xs => 1 + elems (Cons ys xs)"
+        , -- , "  Nil                => 0"
+          -- , "  Cons Nil Nil       => 0"
+          -- , "  Cons Nil xs        => elems xs"
+          "  Cons (Cons _ ys) xs => 1 + elems (Cons ys xs)"
         ]
 
 tc_if = specify "Test if else case expression" $ do
@@ -298,12 +309,19 @@ tc_infer_case = describe "Infer case expression" $ do
 
 tc_rec1 =
     specify "Infer simple recursive definition" $
-        run ["test x = 1 + test (x + 1)"] `shouldSatisfy` ok
+        run
+            [ ".+ : Int -> Int -> Int"
+            , ".+ x y = x"
+            , "test x = 1 + test (x + 1)"
+            ]
+            `shouldSatisfy` ok
 
 tc_rec2 =
     specify "Infer recursive definition with pattern matching" $
         run
-            [ "data Bool where"
+            [ ".+ : Int -> Int -> Int"
+            , ".+ x y = x"
+            , "data Bool where"
             , "  False : Bool"
             , "  True  : Bool"
             , "test = \\x. case x of"
@@ -329,5 +347,5 @@ runPrint =
         ["double x = x + x"]
 
 ok = \case
-    Ok _  -> True
+    Ok _ -> True
     Bad _ -> False

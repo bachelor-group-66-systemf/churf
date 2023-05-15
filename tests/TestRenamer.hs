@@ -76,14 +76,18 @@ rn_sig =
 rn_bind1 =
     specify "Rename simple bind" $
         shouldSatisfyOk
-            "f x = (\\y. let y2 = y + 1 in y2) (x + 1)"
+            ( unlines
+                [ ".+ x y = x"
+                , "f x = (\\y. let y2 = y + 1 in y2) (x + 1)"
+                ]
+            )
 
 rn_bind2 = specify "Rename bind with case" . shouldSatisfyOk $
     D.do
         "data forall a. List a where"
         "    Nil  : List a "
         "    Cons : a -> List a -> List a"
-
+        ".+ x y = x"
         "length : forall a. List a -> Int"
         "length list = case list of"
         "    Nil => 0"
