@@ -39,10 +39,10 @@ valueGetType (VFunction _ _ t) = t
 
 typeByteSize :: LLVMType -> Integer
 typeByteSize Void           = 0
-typeByteSize I1             = 1
-typeByteSize I8             = 1
-typeByteSize I16            = 2
-typeByteSize I32            = 4
+typeByteSize I1             = 8 -- 1, 8 due to memory padding
+typeByteSize I8             = 8 -- 1, 8 due to memory padding
+typeByteSize I16            = 8 -- 2, 8 due to memory padding
+typeByteSize I32            = 8 -- 4, 8 due to memory padding
 typeByteSize I64            = 8
 typeByteSize Ptr            = 8
 typeByteSize (Ref _)        = 8
