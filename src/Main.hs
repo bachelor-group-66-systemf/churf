@@ -158,7 +158,7 @@ main' opts s =
             when opts.debug $ do
                 printToErr "\n -- Compiler --"
                 writeFile "output/llvm.ll" generatedCode
-                debugDotViz
+                --debugDotViz
 
             compile generatedCode (gc opts)
             -- compile generatedCode False
