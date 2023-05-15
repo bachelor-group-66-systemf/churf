@@ -1,7 +1,3 @@
--- data List a where
---     Nil  : List a
---     Cons : a -> List a -> List a
-
 data Exp where
     EVar : Char -> Exp
     EAbs : Char -> Exp -> Exp
@@ -25,24 +21,22 @@ insert x v cxt = Cons (Pair x v) cxt
 
 eval : List (Pair Char Val) -> Exp -> Val
 eval cxt exp = case exp of
---  EVar x => case lookup x cxt of
---      VInt i             => VInt i
---      VClosure delta x e => eval delta e
+    EVar x => case lookup x cxt of
+        VInt i             => VInt i
+        VClosure delta x e => eval delta e
     EAbs x e => VClosure cxt x e
     EApp e1 e2 => case eval cxt e1 of
-        -- FIXME segmentation fault när man löser f istället för 1000
-        VClosure delta x f => eval delta f
---  EApp e1 e2 => case eval cxt e1 of
---      VClosure delta x f => 
---          let v = VClosure cxt x e2 in
---          eval (insert x v delta) f
+        VClosure delta x f => 
+            let v = VClosure cxt x e2 in
+            eval (insert x v delta) f
     EInt i => VInt i
---  EAdd e1 e2 => 
---      let i1 = case eval cxt e1 of { VInt i => i } in 
---      let i2 = case eval cxt e2 of { VInt i => i } in 
---      VInt (i1 + i2)
+    EAdd e1 e2 => 
+        let i1 = case eval cxt e1 of { VInt i => i } in 
+        let i2 = case eval cxt e2 of { VInt i => i } in 
+        VInt (i1 + i2)
 
-exp = EApp (EAbs 'x' (EInt 40)) (EInt 20)
+exp = EApp (EAbs 'x' (EVar 'x')) (EApp (EAbs 'x' (EAdd (EVar 'x') (EInt 100))) (EInt 200))
+-- (λ x . x) (λ x . x + 100) 200
 
 main : Int
 main = case eval Nil exp of
