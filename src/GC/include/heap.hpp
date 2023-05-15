@@ -12,6 +12,7 @@
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 #define HEAP_SIZE 320//65536
 #define FREE_THRESH (uint) 0
 =======
@@ -28,6 +29,11 @@
 #define FREE_THRESH (uint) 100000 //1000
 #define DEBUG
 >>>>>>> 74e0282 (Added Hash map marking)
+=======
+#define HEAP_SIZE 160000//65536
+#define FREE_THRESH (uint) 5
+// #define HEAP_DEBUG
+>>>>>>> 7e93aab6268ac896dea03dcd045b8bc249f2576c
 
 namespace GC
 {
@@ -82,10 +88,15 @@ namespace GC
 		std::vector<Chunk *> m_allocated_chunks;
 		std::vector<Chunk *> m_freed_chunks;
 <<<<<<< HEAD
+<<<<<<< HEAD
 		std::list<Chunk *> m_free_list;
 =======
 		std::unordered_map<uintptr_t, Chunk*> m_chunk_table;
 >>>>>>> 74e0282 (Added Hash map marking)
+=======
+		std::list<Chunk *> m_free_list;
+		std::unordered_map<uintptr_t, Chunk*> m_chunk_table;
+>>>>>>> 7e93aab6268ac896dea03dcd045b8bc249f2576c
 
 		static bool profiler_enabled();
 		// static Chunk *get_at(std::vector<Chunk *> &list, size_t n);

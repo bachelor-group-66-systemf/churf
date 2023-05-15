@@ -69,6 +69,7 @@ static_lib:
 	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -c -o lib/event.o lib/event.cpp -fPIC
 	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -c -o lib/profiler.o lib/profiler.cpp -fPIC
 	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -c -o lib/heap.o lib/heap.cpp -fPIC
+<<<<<<< HEAD
 # create static library
 	ar r lib/gcoll.a lib/event.o lib/profiler.o lib/heap.o
 
@@ -92,6 +93,8 @@ wrapper:
 	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -O3 -g -c -o lib/heap.o lib/heap.cpp -fPIC
 	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -O3 -g -c -o lib/cheap.o lib/cheap.cpp -fPIC
 <<<<<<< HEAD
+=======
+>>>>>>> 7e93aab6268ac896dea03dcd045b8bc249f2576c
 # create static library
 	ar r lib/gcoll.a lib/event.o lib/profiler.o lib/heap.o
 =======
@@ -100,19 +103,35 @@ wrapper:
 alloc_free_list: static_lib
 	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -o tests/alloc_fl.out tests/alloc_free_list.cpp lib/gcoll.a
 
+<<<<<<< HEAD
 linked_list_test: static_lib
 	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -o tests/linkedlist.out tests/linkedlist.cpp lib/gcoll.a
 
 <<<<<<< HEAD
 >>>>>>> d7ea27e (testing testing...)
 =======
+=======
+# create test program
+static_lib_test: static_lib
+	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -o tests/extern_lib.out tests/extern_lib.cpp lib/gcoll.a
+
+alloc_free_list: static_lib
+	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -o tests/alloc_fl.out tests/alloc_free_list.cpp lib/gcoll.a
+
+linked_list_test: static_lib
+	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -o tests/linkedlist.out tests/linkedlist.cpp lib/gcoll.a
+
+>>>>>>> 7e93aab6268ac896dea03dcd045b8bc249f2576c
 revrange: static_lib
 	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -o tests/revrange.out tests/revrange.cpp lib/gcoll.a
 
 pointers: static_lib
 	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -o tests/pointers.out tests/pointers.cpp lib/gcoll.a
 
+<<<<<<< HEAD
 >>>>>>> a910d54 (rip gc)
+=======
+>>>>>>> 7e93aab6268ac896dea03dcd045b8bc249f2576c
 wrapper:
 # remove old files 
 	rm -f lib/event.o lib/profiler.o lib/heap.o lib/coll.a tests/wrapper.out
@@ -122,8 +141,14 @@ wrapper:
 	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -O3 -c -o lib/heap.o lib/heap.cpp -fPIC
 	$(CC) $(STDFLAGS) $(WFLAGS) $(LIB_INCL) -O3 -c -o lib/cheap.o lib/cheap.cpp -fPIC
 # compile object files into library
+<<<<<<< HEAD
 >>>>>>> 01c93a6 (Wrapper docs)
 	ar rcs lib/gcoll.a lib/event.o lib/profiler.o lib/heap.o lib/cheap.o
 # compile test program wrapper.c with normal clang
 	clang -stdlib=libc++ $(WFLAGS) $(LIB_INCL) -o tests/wrapper.out tests/wrapper.c lib/gcoll.a -lstdc++
 >>>>>>> 12816ea (Wrapper works)
+=======
+	ar rcs lib/gcoll.a lib/event.o lib/profiler.o lib/heap.o lib/cheap.o
+# compile test program wrapper.c with normal clang
+	clang -stdlib=libc++ $(WFLAGS) $(LIB_INCL) -o tests/wrapper.out tests/wrapper.c lib/gcoll.a -lstdc++
+>>>>>>> 7e93aab6268ac896dea03dcd045b8bc249f2576c
