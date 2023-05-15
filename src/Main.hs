@@ -144,7 +144,7 @@ main' opts s =
             when opts.logIL (printToErr "\n-- Lambda Lifter --" >> log lifted)
 
 
-            let monomorphized = monomorphize lifted
+            monomorphized <- fromErr $ monomorphize lifted
             when opts.logIL (printToErr "\n -- Monomorphizer --" >> log monomorphized)
 
 

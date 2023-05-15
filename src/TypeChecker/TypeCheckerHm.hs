@@ -16,7 +16,7 @@ import Control.Monad.State
 import Control.Monad.Writer
 import Data.Coerce (coerce)
 import Data.Function (on)
-import Data.List (foldl', nub)
+import Data.List (foldl')
 import Data.List.Extra (unsnoc)
 import Data.Map (Map)
 import Data.Map qualified as M
@@ -27,14 +27,6 @@ import Grammar.Abs
 import Grammar.Print (printTree)
 import TypeChecker.TypeCheckerIr (T, T')
 import TypeChecker.TypeCheckerIr qualified as T
-
-{-
-TODO
-Prettifying the types of generated variables does only need to be done when
-presenting the types to the user, i.e, when the user has made a mistake.
-For succesfully typed programs the types only need to match.
-
--}
 
 -- | Type check a program
 typecheck :: Program -> Either String (T.Program' Type, [Warning])
@@ -245,7 +237,7 @@ algoW = \case
                 "does not match inferred type"
                 quote $ printTree t'
             )
-        let comp = sub1 `compose` sub0
+        let comp = sub1 <> sub0
         return (comp, (apply comp e', t))
 
     -- \| ------------------
@@ -309,7 +301,7 @@ algoW = \case
         (s2, (e1', t1)) <- algoW e1
         s3 <- exprErr (unify t0 int) err
         s4 <- exprErr (unify t1 int) err
-        let comp = s4 `compose` s3 `compose` s2 `compose` s1
+        let comp = s4 <> s3 <> s2 <> s1
         return
             ( comp
             , apply comp (T.EAdd (e0', t0) (e1', t1), int)
@@ -327,7 +319,7 @@ algoW = \case
             (s1, (e1', t1)) <- algoW e1
             s2 <- unify (apply s1 t0) (TFun t1 fr)
             let t = apply s2 fr
-            let comp = s2 `compose` s1 `compose` s0
+            let comp = s2 <> s1 <> s0
             return (comp, apply comp (T.EApp (e0', t0) (e1', t1), t))
 
     -- \| Γ ⊢ e₀ : τ, S₀     S₀Γ, x : S̅₀Γ̅(τ) ⊢ e₁ : τ', S₁
@@ -344,7 +336,7 @@ algoW = \case
             let t' = generalize (apply s1 env) t0
             withBinding (coerce name) t' $ do
                 (s2, (e1', t2)) <- algoW e1
-                let comp = s2 `compose` s1
+                let comp = s2 <> s1
                 return
                     ( comp
                     , apply
@@ -354,7 +346,7 @@ algoW = \case
     ECase caseExpr injs -> do
         (sub, (e', t)) <- algoW caseExpr
         (subst, injs, ret_t) <- checkCase t injs
-        let comp = subst `compose` sub
+        let comp = subst <> sub
         return (comp, apply comp (T.ECase (e', t) injs, ret_t))
 
 checkCase :: Type -> [Branch] -> Infer (Subst, [T.Branch' Type], Type)
@@ -367,18 +359,18 @@ checkCase expT brnchs = do
     (sub1, _) <-
         foldM
             ( \(sub, acc) x ->
-                (\a -> (a `compose` sub, a `apply` acc)) <$> unify x acc
+                (\a -> (a <> sub, a `apply` acc)) <$> unify x acc
             )
             (nullSubst, expT)
             branchTs
     (sub2, returns_type) <-
         foldM
             ( \(sub, acc) x ->
-                (\a -> (a `compose` sub, a `apply` acc)) <$> unify x acc
+                (\a -> (a <> sub, a `apply` acc)) <$> unify x acc
             )
             (nullSubst, head returns)
             (tail returns)
-    let comp = sub2 `compose` sub1 `compose` sub0
+    let comp = sub2 <> sub1 <> sub0
     return (comp, apply comp injs, apply comp returns_type)
 
 inferBranch :: Branch -> Infer (Subst, Type, T.Branch' Type, Type)
@@ -463,7 +455,7 @@ unify t0 t1 = case (t0, t1) of
     (TFun a b, TFun c d) -> do
         s1 <- unify a c
         s2 <- unify (apply s1 b) (apply s1 d)
-        return $ s2 `compose` s1
+        return $ s2 <> s1
     (TVar a, t@(TData _ _)) -> return $ singleton a t
     (t@(TData _ _), TVar b) -> return $ singleton b t
     (TVar a, t) -> occurs a t
@@ -575,7 +567,7 @@ fresh :: Infer Type
 fresh = do
     n <- gets count
     modify (\st -> st{count = succ (count st)})
-    return $ TVar $ MkTVar $ LIdent $ show n
+    return . TVar . MkTVar . LIdent $ letters !! n
 
 -- Is the left more general than the right
 (<<=) :: Type -> Type -> Infer Bool
@@ -730,13 +722,15 @@ instance SubstType (T T.Ident Type) where
 nullSubst :: Subst
 nullSubst = mempty
 
--- | Compose two substitution sets
+{- | Compose two substitution sets
+The monoid instance of Subst uses this definition
+-}
 compose :: Subst -> Subst -> Subst
 compose m1@(Subst m1') (Subst m2) = Subst $ M.map (apply m1) m2 `M.union` m1'
 
 -- | Compose a list of substitution sets into one
 composeAll :: [Subst] -> Subst
-composeAll = foldl' compose nullSubst
+composeAll = mconcat
 
 {- | Convert a function with arguments to its pointfree version
 > makeLambda (add x y = x + y) = add = \x. \y. x + y
@@ -914,5 +908,5 @@ uncatchableErr msg = throwError $ Error msg False
 quote :: String -> String
 quote s = "'" ++ s ++ "'"
 
-letters :: [T.Ident]
-letters = map T.Ident $ [1 ..] >>= flip replicateM ['a' .. 'z']
+letters :: [String]
+letters = [1 ..] >>= flip replicateM ['a' .. 'z']

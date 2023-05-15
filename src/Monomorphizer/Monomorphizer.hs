@@ -28,7 +28,7 @@ module Monomorphizer.Monomorphizer (monomorphize, morphExp, morphBind) where
 
 
 import           Control.Monad.Reader          (MonadReader (ask, local),
-                                                Reader, asks, runReader)
+                                                ReaderT, asks, runReaderT)
 import           Control.Monad.State           (MonadState,
                                                 StateT (runStateT), gets,
                                                 modify)
@@ -38,22 +38,20 @@ import           Grammar.Print                 (printTree)
 import           Monomorphizer.DataTypeRemover (removeDataTypes)
 import qualified Monomorphizer.MonomorphizerIr as O
 import qualified Monomorphizer.MorbIr          as M
--- import TypeChecker.TypeCheckerIr (Ident (Ident))
 import           LambdaLifterIr                (Ident (..))
--- import TypeChecker.TypeCheckerIr qualified as T
 import qualified LambdaLifterIr                as L
 
 import           Data.Maybe                    (fromJust, catMaybes)
 import           Data.Tuple.Extra              (secondM)
-import Debug.Trace (trace)
-import Test.QuickCheck.State (State(expected))
+import Control.Monad.Except (throwError, Except, runExcept, MonadError)
+import Data.List (foldl')
 
 {- | EnvM is the monad containing the read-only state as well as the
 output state containing monomorphized functions and to-be monomorphized
 data type declarations.
 -}
-newtype EnvM a = EnvM (StateT Output (Reader Env) a)
-    deriving (Functor, Applicative, Monad, MonadState Output, MonadReader Env)
+newtype EnvM a = EnvM (StateT Output (ReaderT Env (Except String)) a)
+    deriving (Functor, Applicative, Monad, MonadState Output, MonadReader Env, MonadError String)
 
 type Output = Map.Map Ident Outputted
 
@@ -106,25 +104,26 @@ isConsMarked ident = gets (Map.member ident)
 
 -- | Finds main bind.
 getMain :: EnvM L.Bind
-getMain = asks (\env -> case Map.lookup (Ident "main") (input env) of
-                          Just mainBind -> mainBind
-                          Nothing -> error "main not found in monomorphizer!"
-                        )
+getMain = do
+    env <- ask
+    case Map.lookup (Ident "main") (input env) of
+          Just mainBind -> return mainBind
+          Nothing -> throwError "main not found in monomorphizer!"
 
 {- | Makes a kv pair list of polymorphic to monomorphic mappings, throws runtime
 error when encountering different structures between the two arguments. Debug:
 First argument is the name of the bind.
 -}
-mapTypes :: Ident -> L.Type -> M.Type -> [(Ident, M.Type)]
-mapTypes _ident (L.TLit _) (M.TLit _) = []
-mapTypes _ident (L.TVar (L.MkTVar i1)) tm = [(i1, tm)]
+mapTypes :: Ident -> L.Type -> M.Type -> EnvM [(Ident, M.Type)]
+mapTypes _ident (L.TLit _) (M.TLit _) = return []
+mapTypes _ident (L.TVar (L.MkTVar i1)) tm = return [(i1, tm)]
 mapTypes ident (L.TFun pt1 pt2) (M.TFun mt1 mt2) =
-    mapTypes ident pt1 mt1
-        ++ mapTypes ident pt2 mt2
+    (++) <$> mapTypes ident pt1 mt1 <*> mapTypes ident pt2 mt2
 mapTypes ident (L.TData tIdent pTs) (M.TData mIdent mTs) =
     if tIdent /= mIdent
-        then error "the data type names of monomorphic and polymorphic data types does not match"
-        else foldl (\xs (p, m) -> mapTypes ident p m ++ xs) [] (zip pTs mTs)
+        then throwError "the data type names of monomorphic and polymorphic data types does not match"
+        else foldl' (\xs (p, m) -> do x <- mapTypes ident p m; (++x) <$> xs) (return []) (zip pTs mTs)
+-- This is a proper callstack error as a previous phase has a bug.
 mapTypes ident t1 t2 = error $ "in bind: '" ++ printTree ident ++ "', " ++
   "structure of types not the same: '" ++ printTree t1 ++ "', '" ++ printTree t2 ++ "'"
 
@@ -166,11 +165,12 @@ morphBind expectedType b@(L.Bind (ident, btype) args (exp, expt)) = do
     -- The "new name" is used to find out if it is already marked or not.
     let name' = newFuncName expectedType b
     bindMarked <- isBindMarked name'
+    mt <- mapTypes ident btype expectedType
     local
         ( \env ->
             env
                 { locals = Set.fromList (map fst args)
-                , polys = Map.fromList (mapTypes ident btype expectedType)
+                , polys = Map.fromList mt
                 }
         )
         $ do
@@ -196,11 +196,12 @@ morphBind expectedType b@(L.BindC cxt (ident, btype) args (exp, expt)) = do
     -- The "new name" is used to find out if it is already marked or not.
     let name' = newFuncName expectedType b
     bindMarked <- isBindMarked name'
+    mt <- mapTypes ident btype expectedType
     local
         ( \env ->
             env
                 { locals = Set.fromList (map fst args)
-                , polys = Map.fromList (mapTypes ident btype expectedType)
+                , polys = Map.fromList mt
                 }
         )
         $ do
@@ -234,8 +235,7 @@ morphArg (ident, t) = do
 -- | Gets the data bind from the name of a constructor.
 getInputData :: Ident -> EnvM (Maybe L.Data)
 getInputData ident = do
-    env <- ask
-    return $ Map.lookup ident (dataDefs env)
+    asks (Map.lookup ident . dataDefs)
 
 {- | Monomorphize a constructor using it's global name. Constructors may
 appear as expressions in the tree, or as patterns in case-expressions.
@@ -248,12 +248,13 @@ morphCons expectedType ident newIdent = do
         -- closures can have unbound variables
         Nothing -> pure ()
         Just d -> do
-            modify (\output -> Map.insert newIdent (Data expectedType d) output)
+            modify (Map.insert newIdent (Data expectedType d))
 
 -- | Converts literals from input to output tree.
 convertLit :: L.Lit -> M.Lit
 convertLit (L.LInt v)  = M.LInt v
 convertLit (L.LChar v) = M.LChar v
+convertLit l           = error $ "Unexpected lit in monomorphizer: '" ++ printTree l ++ "'"
 
 
 -- | Monomorphizes an expression, given an expected type.
@@ -292,7 +293,7 @@ morphExp expectedType exp = case exp of
             else do
                 bind <- getInputBind ident
                 case bind of
-                    Nothing -> error $ "unbound variable: '" ++ printTree ident ++ "'"
+                    Nothing -> throwError $ "unbound variable: '" ++ printTree ident ++ "'"
                     Just bind' -> do
                         -- New bind to process
                         newBindName <- morphBind expectedType bind'
@@ -356,8 +357,7 @@ morphPattern p expectedType = case p of
 
 -- Exampel: List a  =>  a -> List a
 convertConsTypeToDataType :: M.Type -> [M.Type] -> M.Type
-convertConsTypeToDataType inner (t:ts) = convertConsTypeToDataType (M.TFun t inner) ts
-convertConsTypeToDataType inner []     = inner
+convertConsTypeToDataType = foldl (flip M.TFun)
 
 
 -- | Creates a new identifier for a function with an assigned type.
@@ -381,28 +381,26 @@ newName t (Ident str) = Ident $ str ++ "$" ++ newName' t
     newName' (M.TData (Ident str) ts) = str ++ foldl (\s t -> s ++ "." ++ newName' t) "" ts
 
 -- | Monomorphization step.
-monomorphize :: L.Program -> O.Program
-monomorphize (L.Program defs) =
-    removeDataTypes $
-        M.Program
-            ( getDefsFromOutput
-                (runEnvM Map.empty (createEnv defs) monomorphize')
-            )
+monomorphize :: L.Program -> Either String O.Program
+monomorphize (L.Program defs) = do
+    op <- runEnvM Map.empty (createEnv defs) monomorphize'
+    let prg = getDefsFromOutput op
+    return . removeDataTypes $ M.Program prg
   where
     monomorphize' :: EnvM ()
     monomorphize' = do
         mainBind <- getMain
         case mainBind of
-          (L.BindC _ _ _ _) -> error "main should not be a BindC node"
+          (L.BindC {}) -> error "main should not be a BindC node"
           main@(L.Bind _ _ (_, mainType)) -> case getMonoFromMono mainType of
-            Nothing -> error "main should be monomorphic"
+            Nothing -> throwError "main should be monomorphic"
             Just mainTypeMono -> do
               morphBind mainTypeMono main
               return ()
 
 -- | Runs and gives the output binds.
-runEnvM :: Output -> Env -> EnvM () -> Output
-runEnvM o env (EnvM stateM) = snd $ runReader (runStateT stateM o) env
+runEnvM :: Output -> Env -> EnvM () -> Either String Output
+runEnvM o env (EnvM stateM) = snd <$> runExcept (runReaderT (runStateT stateM o) env)
 
 -- | Creates the environment based on the input binds.
 createEnv :: [L.Def] -> Env
@@ -485,7 +483,7 @@ createNewData ((consIdent, consType, polyData) : input) o =
 getDataType :: M.Type -> M.Type
 getDataType (M.TFun _t1 t2)     = getDataType t2
 getDataType tData@(M.TData _ _) = tData
-getDataType _                   = error "???"
+getDataType _                   = error "Bug in previous phase of compilation"
 
 
 addLocal :: Ident -> Env -> Env
