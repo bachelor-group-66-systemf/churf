@@ -1,6 +1,6 @@
 # Thesis
 
-The branch `thesis` contain the state of the project when the thesis report was submitted. (2023-05-15)
+The branch [thesis](https://github.com/bachelor-group-66-systemf/churf/tree/thesis) contain the state of the project when the thesis report was submitted (2023-05-15).
 
 # Build
 First generate the parser using [BNFC](https://bnfc.digitalgrammars.com/),
