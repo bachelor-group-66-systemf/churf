@@ -14,6 +14,7 @@ namespace GC {
 
     enum RecordOption
     {
+        TimingInfo      = 0,
         FunctionCalls   = (GC::AllocStart | GC::CollectStart | GC::MarkStart | GC::SweepStart | GC::FreeStart),
         ChunkOps        = (GC::ChunkMarked | GC::ChunkSwept | GC::ChunkFreed | GC::NewChunk | GC::ReusedChunk),
         AllOps          = 0xFFFFFF
@@ -41,7 +42,7 @@ namespace GC {
         std::vector<GCEvent *> m_events;
         ProfilerEvent *m_last_prof_event {new ProfilerEvent(HeapInit)};
         std::vector<ProfilerEvent *> m_prof_events;
-        RecordOption flags;
+        RecordOption flags {AllOps};
 
         std::chrono::microseconds alloc_time {0};
         // size_t alloc_counts {0};
@@ -52,7 +53,7 @@ namespace GC {
         std::ofstream create_file_stream();
         std::string get_log_folder();
         static void dump_trace();
-        static void dump_prof_trace();
+        static void dump_prof_trace(bool timing_only);
         static void dump_chunk_trace();
         // static void dump_trace_short();
         // static void dump_trace_full();

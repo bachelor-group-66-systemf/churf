@@ -11,7 +11,7 @@
 #include "event.hpp"
 #include "profiler.hpp"
 
-#define MAC_OS
+// #define MAC_OS
 
 namespace GC
 {
@@ -83,8 +83,10 @@ namespace GC
     void Profiler::dump_trace()
     {
         Profiler &prof = Profiler::the();
-        if (prof.flags & FunctionCalls)
-            dump_prof_trace();
+        if (prof.flags == TimingInfo)
+            dump_prof_trace(true);
+        else if (prof.flags & FunctionCalls)
+            dump_prof_trace(false);
         else
             dump_chunk_trace();
     }
@@ -127,7 +129,7 @@ namespace GC
         }
     }
 
-    void Profiler::dump_prof_trace()
+    void Profiler::dump_prof_trace(bool timing_only)
     {
         Profiler &prof = Profiler::the();
         prof.m_prof_events.push_back(prof.m_last_prof_event);
@@ -147,9 +149,12 @@ namespace GC
             else if (event->m_type == CollectStart)
                 collects += event->m_n;
 
-            fstr << "\n--------------------------------\n"
+            if (!timing_only)
+            {
+                fstr << "\n--------------------------------\n"
                 << Profiler::type_to_string(event->m_type) << " "
                 << event->m_n << " times:"; 
+            }
         }
         fstr << "\n--------------------------------";
 
