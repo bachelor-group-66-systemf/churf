@@ -2,32 +2,18 @@
 #include <stdexcept>
 #include <stdlib.h>
 #include <vector>
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
 #include <unordered_map>
->>>>>>> 7e93aab6268ac896dea03dcd045b8bc249f2576c
 #include <chrono>
 #include <queue>
 #include <set>
 
+// #include "heap.hpp"
 #include "heap.hpp"
 
 #define time_now	std::chrono::high_resolution_clock::now()
 #define to_us		std::chrono::duration_cast<std::chrono::microseconds>
 
-<<<<<<< HEAD
-using std::cout, std::endl, std::vector, std::hex, std::dec;
-=======
-#include <unordered_map>
-
-#include "heap.hpp"
-
 using std::cout, std::endl, std::vector, std::hex, std::dec, std::unordered_map;
->>>>>>> 74e0282 (Added Hash map marking)
-=======
-using std::cout, std::endl, std::vector, std::hex, std::dec, std::unordered_map;
->>>>>>> 7e93aab6268ac896dea03dcd045b8bc249f2576c
 
 namespace GC
 {
@@ -111,38 +97,23 @@ namespace GC
 			auto stack_bottom = reinterpret_cast<uintptr_t *>(__builtin_frame_address(0));
 			heap.collect(stack_bottom);
 			// If memory is not enough after collect, crash with OOM error
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
 			if (heap.m_size + size > HEAP_SIZE)
 			{
 				if (profiler_enabled)
 					Profiler::dispose();
 				throw std::runtime_error(std::string("Error: Heap out of memory"));
 			}
-=======
-=======
->>>>>>> 208ff86 (Fixed bug in size handling and mark hash)
-=======
->>>>>>> 7e93aab6268ac896dea03dcd045b8bc249f2576c
 			if (heap.m_size > HEAP_SIZE)
 			{
 				throw std::runtime_error(std::string("Error: Heap out of memory"));
 			}
 			//throw std::runtime_error(std::string("Error: Heap out of memory"));
-<<<<<<< HEAD
-<<<<<<< HEAD
->>>>>>> 74e0282 (Added Hash map marking)
-=======
-=======
->>>>>>> 7e93aab6268ac896dea03dcd045b8bc249f2576c
 		}
 		if (heap.m_size + size > HEAP_SIZE)
 		{
 			if (profiler_enabled)
 				Profiler::dispose();
 			throw std::runtime_error(std::string("Error: Heap out of memory"));
->>>>>>> 208ff86 (Fixed bug in size handling and mark hash)
 		}
 
 		// If a chunk was recycled, return the old chunk address
@@ -270,7 +241,6 @@ namespace GC
 		// create_table();
 		// mark_hash(stack_bottom, stack_top);
 
-<<<<<<< HEAD
 		vector<uintptr_t *> roots;
 		// cout << "\nb4 find_roots\n";
 		find_roots(stack_bottom, roots);
@@ -278,16 +248,6 @@ namespace GC
 		// cout << "b4 mark\n";''
 		mark(roots);
 
-=======
-		create_table();
-		vector<uintptr_t *> roots;
-		// cout << "\nb4 find_roots\n";
-		find_roots(stack_bottom, roots);
-
-		// cout << "b4 mark\n";''
-		mark(roots);
-
->>>>>>> 7e93aab6268ac896dea03dcd045b8bc249f2576c
 		// cout << "b4 sweep\n";
 		sweep(heap);
 
@@ -345,7 +305,6 @@ namespace GC
 	}
 
 	void Heap::find_chunks(uintptr_t *stack_addr, std::queue<std::pair<uintptr_t, uintptr_t>> &chunk_spaces)
-<<<<<<< HEAD
 	{
 		auto iter = m_allocated_chunks.begin();
 		auto end = m_allocated_chunks.end();
@@ -369,11 +328,7 @@ namespace GC
 		}
 	}
 
-<<<<<<< HEAD
-<<<<<<< HEAD
 	void Heap::mark_range(vector<AddrRange *> &ranges, vector<Chunk *> &worklist)
-=======
->>>>>>> 7e93aab6268ac896dea03dcd045b8bc249f2576c
 	{
 		Heap &heap = Heap::the();
 
@@ -435,47 +390,6 @@ namespace GC
 		if (profiler_enabled)
 			Profiler::record(MarkStart);
 
-<<<<<<< HEAD
-		auto iter = ranges.begin();
-		auto stop = ranges.end();
-
-		while (iter != stop)
-		{
-			auto range = *iter++;
-			uintptr_t *start = (uintptr_t *)range->start;
-			const uintptr_t *end = range->end;
-			if (start == nullptr)
-				cout << "\nstart is null\n";
-			for (; start <= end; start++)
-			{
-				auto wliter = worklist.begin();
-				auto wlstop = worklist.end();
-				while (wliter != wlstop)
-				{
-					Chunk *chunk = *wliter;
-					auto c_start = reinterpret_cast<uintptr_t>(chunk->m_start);
-					auto c_size  = reinterpret_cast<uintptr_t>(chunk->m_size);
-					auto c_end   = reinterpret_cast<uintptr_t>(c_start + c_size);
-					
-					if (c_start <= *start && *start < c_end)
-					{
-						if (!chunk->m_marked)
-						{
-							chunk->m_marked = true;
-							wliter = worklist.erase(wliter);
-							ranges.push_back(new AddrRange((uintptr_t *)c_start, (uintptr_t *)c_end));
-							stop = ranges.end();
-						}
-						else
-						{
-							wliter++;
-						}
-					}
-					else
-					{
-						wliter++;
-					}
-=======
 	void Heap::create_table() 
 	{
 		Heap &heap = Heap::the();
@@ -489,21 +403,19 @@ namespace GC
 	void Heap::mark_hash(uintptr_t *start, const uintptr_t* const end) 
 	{
 		Heap &heap = Heap::the();
-		for (; start <= end; start++) 
-		{
-			auto search = heap.m_chunk_table.find(*start);
-			if (search != heap.m_chunk_table.end())
-			{
-				Chunk *chunk = search->second;
-				auto c_start = reinterpret_cast<uintptr_t>(chunk->m_start);
-				auto c_size = reinterpret_cast<uintptr_t>(chunk->m_size);
-				auto c_end = reinterpret_cast<uintptr_t*>(c_start + c_size);
-				if (!chunk->m_marked) 
-				{
-					chunk->m_marked = true;
-					mark_hash(chunk->m_start, c_end);
->>>>>>> 74e0282 (Added Hash map marking)
-=======
+		// for (; start <= end; start++) 
+		// {
+		// 	auto search = heap.m_chunk_table.find(*start);
+		// 	if (search != heap.m_chunk_table.end())
+		// 	{
+		// 		Chunk *chunk = search->second;
+		// 		auto c_start = reinterpret_cast<uintptr_t>(chunk->m_start);
+		// 		auto c_size = reinterpret_cast<uintptr_t>(chunk->m_size);
+		// 		auto c_end = reinterpret_cast<uintptr_t*>(c_start + c_size);
+		// 		if (!chunk->m_marked) 
+		// 		{
+		// 			chunk->m_marked = true;
+		// 			mark_hash(chunk->m_start, c_end);
 		for (; start <= end; start++) 
 		{
 			auto search = heap.m_chunk_table.find(*start);
@@ -537,18 +449,11 @@ namespace GC
 							next = find_pointer_hash((uintptr_t *) c_start, (uintptr_t *) c_end);
 						}
 					}
->>>>>>> 7e93aab6268ac896dea03dcd045b8bc249f2576c
 				}
 			}
 		}
 	}
-<<<<<<< HEAD
-=======
 
->>>>>>> 74e0282 (Added Hash map marking)
-
-=======
->>>>>>> 830d863 (bugfix)
 	void Heap::create_table() 
 	{
 		Heap &heap = Heap::the();
@@ -559,7 +464,6 @@ namespace GC
 		}
 	}
 
-<<<<<<< HEAD
 	void Heap::mark_hash(uintptr_t *start, const uintptr_t* const end) 
 	{
 		Heap &heap = Heap::the();
@@ -606,8 +510,6 @@ namespace GC
 		}
 	}
 
-=======
->>>>>>> 7e93aab6268ac896dea03dcd045b8bc249f2576c
 	/**
 	 * Sweeps the heap, unmarks the marked chunks for the next cycle,
 	 * adds the unmarked nodes to the list of freed chunks; to be freed.
