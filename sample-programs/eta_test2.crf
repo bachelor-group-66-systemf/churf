@@ -13,7 +13,7 @@ add x y = x + y
 sum : List Int -> Int
 sum xs = case xs of
     Nil => 0
-    Cons a as => a + (sum xs)
+    Cons x xs => x + (sum xs)
 
 main : Int
-main = sum (map (add 1) (Cons 1 Nil))
+main = sum (map (add 1) (Cons 4 (Cons 3 (Cons 2 (Cons 1 Nil)))))

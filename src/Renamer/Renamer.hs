@@ -94,7 +94,7 @@ newtype Rn a = Rn {runRn :: ExceptT String (State Cxt) a}
 
 getName :: LIdent -> Rn LIdent
 getName name = maybeToRightM err =<< gets (Map.lookup name . names)
-  where err = "Can't find new name " ++ printTree name
+  where err = "Unbound variable: '" ++ printTree name ++ "'"
 
 newName :: LIdent -> Rn LIdent
 newName name = do
