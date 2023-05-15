@@ -108,7 +108,7 @@ getMain = do
     env <- ask
     case Map.lookup (Ident "main") (input env) of
           Just mainBind -> return mainBind
-          Nothing -> throwError "main not found in monomorphizer!"
+          Nothing -> throwError "Error: Program does not contain 'main' not found in monomorphizer!"
 
 {- | Makes a kv pair list of polymorphic to monomorphic mappings, throws runtime
 error when encountering different structures between the two arguments. Debug:
@@ -121,7 +121,7 @@ mapTypes ident (L.TFun pt1 pt2) (M.TFun mt1 mt2) =
     (++) <$> mapTypes ident pt1 mt1 <*> mapTypes ident pt2 mt2
 mapTypes ident (L.TData tIdent pTs) (M.TData mIdent mTs) =
     if tIdent /= mIdent
-        then throwError "the data type names of monomorphic and polymorphic data types does not match"
+        then throwError $ "The data type '" ++ printTree tIdent ++ "' does not match '" ++ printTree mIdent ++ "'"
         else foldl' (\xs (p, m) -> do x <- mapTypes ident p m; (++x) <$> xs) (return []) (zip pTs mTs)
 -- This is a proper callstack error as a previous phase has a bug.
 mapTypes ident t1 t2 = error $ "in bind: '" ++ printTree ident ++ "', " ++
@@ -293,7 +293,7 @@ morphExp expectedType exp = case exp of
             else do
                 bind <- getInputBind ident
                 case bind of
-                    Nothing -> throwError $ "unbound variable: '" ++ printTree ident ++ "'"
+                    Nothing -> error $ "Unbound variable: '" ++ printTree ident ++ "', bug in previous phase of compilation"
                     Just bind' -> do
                         -- New bind to process
                         newBindName <- morphBind expectedType bind'
@@ -393,7 +393,7 @@ monomorphize (L.Program defs) = do
         case mainBind of
           (L.BindC {}) -> error "main should not be a BindC node"
           main@(L.Bind _ _ (_, mainType)) -> case getMonoFromMono mainType of
-            Nothing -> throwError "main should be monomorphic"
+            Nothing -> throwError "Error: main must be monomorphic"
             Just mainTypeMono -> do
               morphBind mainTypeMono main
               return ()
