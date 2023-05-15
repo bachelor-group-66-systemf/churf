@@ -7,16 +7,8 @@
 extern "C" {
 #endif
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-#define WRAPPER_DEBUG
-=======
-#define DEBUG
->>>>>>> 74e0282 (Added Hash map marking)
-=======
 #define DEBUG
 #define WRAPPER_DEBUG
->>>>>>> 7e93aab6268ac896dea03dcd045b8bc249f2576c
 
 #ifdef WRAPPER_DEBUG
 typedef struct cheap
