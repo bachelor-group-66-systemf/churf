@@ -155,6 +155,7 @@ main' opts s =
             when check (removeDirectoryRecursive "output")
             createDirectory "output"
             createDirectory "output/logs"
+            when opts.logIL (writeFile "output/logs/tc.log" (printTree typechecked))
             when opts.debug $ do
                 printToErr "\n -- Compiler --"
                 writeFile "output/llvm.ll" generatedCode

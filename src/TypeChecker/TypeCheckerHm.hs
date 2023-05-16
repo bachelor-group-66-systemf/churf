@@ -2,7 +2,6 @@
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QualifiedDo #-}
-{-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 
 -- | A module for type checking and inference using algorithm W, Hindley-Milner
 module TypeChecker.TypeCheckerHm where
@@ -17,10 +16,8 @@ import Control.Monad.Writer
 import Data.Coerce (coerce)
 import Data.Function (on)
 import Data.List (foldl')
-import Data.List.Extra (unsnoc)
 import Data.Map (Map)
 import Data.Map qualified as M
-import Data.Maybe (fromJust)
 import Data.Set (Set)
 import Data.Set qualified as S
 import Grammar.Abs
@@ -333,7 +330,7 @@ algoW = \case
         withBinding (coerce name) fr $ do
             (s1, e@(_, t0)) <- algoW (makeLambda e (coerce args))
             env <- asks vars
-            let t' = generalize (apply s1 env) t0
+            let t' = generalize (apply s1 (M.elems env)) t0
             withBinding (coerce name) t' $ do
                 (s2, (e1', t2)) <- algoW e1
                 let comp = s2 <> s1
@@ -355,6 +352,7 @@ checkCase _ [] = do
     return (nullSubst, [], fr)
 checkCase expT brnchs = do
     (subs, branchTs, injs, returns) <- unzip4 <$> mapM inferBranch brnchs
+    -- compose all probably wrong
     let sub0 = composeAll subs
     (sub1, _) <-
         foldM
@@ -431,8 +429,7 @@ inferPattern = \case
                 )
                 t
         let numArgs = typeLength t - 1
-        let (vs, ret) = fromJust (unsnoc $ flattenType t)
-        patterns <- mapM inferPattern patterns
+        (pats, typs) <- mapAndUnzipM inferPattern patterns
         unless
             (length patterns == numArgs)
             ( catchableErr $ Aux.do
@@ -443,10 +440,11 @@ inferPattern = \case
                 " arguments but has been given "
                 show (length patterns)
             )
-        sub <- composeAll <$> zipWithM unify vs (map snd patterns)
+        fr <- fresh
+        sub <- unify t (foldr TFun fr typs)
         return
-            ( T.PInj (coerce constr) (apply sub patterns)
-            , apply sub ret
+            ( T.PInj (coerce constr) (apply sub $ zip pats typs)
+            , apply sub fr
             )
 
 -- | Unify two types producing a new substitution
@@ -485,15 +483,6 @@ unify t0 t1 = case (t0, t1) of
                     "does not match with:"
                     printTree name'
                     quote $ printTree t'
-    (TEVar a, TEVar b) ->
-        if a == b
-            then return nullSubst
-            else catchableErr $
-                Aux.do
-                    "Can not unify"
-                    quote $ printTree (TEVar a)
-                    "with"
-                    quote $ printTree (TEVar b)
     (a, b) -> do
         catchableErr $
             Aux.do
@@ -507,7 +496,6 @@ I.E. { a = a -> b } is an unsolvable constraint since there is no substitution
 where these are equal
 -}
 occurs :: TVar -> Type -> Infer Subst
-occurs i t@(TEVar _) = return (singleton i t)
 occurs i t@(TVar _) = return (singleton i t)
 occurs i t
     | S.member i (free t) =
@@ -526,7 +514,7 @@ occurs i t
         Type checks: let f = \x. x in (f True, f 'a')
         Does not type check: (\f. (f True, f 'a')) (\x. x)
 -}
-generalize :: Map T.Ident Type -> Type -> Type
+generalize :: [Type] -> Type -> Type
 generalize env t = go (S.toList $ free t S.\\ free env) (removeForalls t)
   where
     go :: [TVar] -> Type -> Type
@@ -570,6 +558,7 @@ fresh = do
     return . TVar . MkTVar . LIdent $ letters !! n
 
 -- Is the left more general than the right
+-- TODO: A bug might exist
 (<<=) :: Type -> Type -> Infer Bool
 (<<=) a b = case (a, b) of
     (TVar _, _) -> return True
@@ -592,7 +581,6 @@ fresh = do
   where
     go :: [TVar] -> Type -> Type -> Infer Bool
     go tvars t1 t2 = do
-        -- probably not necessary
         freshies <- mapM (const fresh) tvars
         let sub = Subst . M.fromList $ zip tvars freshies
         let t1' = apply sub t1
@@ -638,7 +626,6 @@ instance FreeVars Type where
     free (TLit _) = mempty
     free (TFun a b) = free a `S.union` free b
     free (TData _ a) = free a
-    free (TEVar _) = S.empty
 
 instance FreeVars a => FreeVars [a] where
     free = let f acc x = acc `S.union` free x in foldl' f S.empty
@@ -656,9 +643,6 @@ instance SubstType Type where
                 Just _ -> apply sub t
             TFun a b -> TFun (apply sub a) (apply sub b)
             TData name a -> TData name (apply sub a)
-            TEVar (MkTEVar a) -> case find (MkTVar a) sub of
-                Nothing -> TEVar (MkTEVar $ coerce a)
-                Just t -> t
 
 instance FreeVars (Map T.Ident Type) where
     free :: Map T.Ident Type -> Set TVar

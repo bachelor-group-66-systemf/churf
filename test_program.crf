@@ -1,6 +1,34 @@
-main = sigma 0 10
+data Maybe a where
+    Nothing : Maybe a
+    Just : a -> Maybe a
 
-sigma : Int -> Int -> Int
-sigma from to = case from == to of
-        True => from
-        False => to + sigma from (to - 1)
+data Either a b where
+    Left : a -> Either a b
+    Right : b -> Either a b
+
+data List a where
+    Nil : List a
+    Cons : a -> List a -> List a
+
+data Foo a where
+    Foo : List a -> Foo a
+
+data Bar a where
+    Bar : Foo a -> Bar a
+
+test = \x . case x of 
+    Left (Just (Bar (Foo (Cons 1 Nil)))) => 1
+    _ => 0
+
+main = 0
+
+-- pattern1 = PInj (UIdent "Foo") [PInj (UIdent "Cons") [PLit (LInt 1), PEnum (UIdent "Nil")]]
+-- env = Env { sigs = mempty, count = 0, nextChar = 'a', declaredBinds = mempty, takenTypeVars = mempty, injections = M.insert (T.Ident "Foo") (TFun list foo) $ M.insert (T.Ident "Nil") list $ M.singleton (T.Ident "Cons") (TFun a (TFun list list))}
+-- list = TData (UIdent "List") [a]
+-- foo = TData (UIdent "Foo") [a]
+-- a = TVar $ MkTVar "a"
+-- pattern2 = PInj (UIdent "Foo") [PInj (UIdent "Cons") [PLit (LInt 1),PEnum (UIdent "Nil")]]
+
+-- (snd . fst) <$> run' env initCtx (inferPattern pattern1)
+-- (snd . fst) <$> run' env initCtx (inferPattern pattern2)
+
