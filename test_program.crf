@@ -1,15 +1,6 @@
-data Two where
-    This : Two
-    That : Two 
+main = sigma 0 10
 
-main = reval (eval This)
-
-eval x = case x of
-    That => That
-    This => eval That
-
-reval x = case x of
-   This => 123 
-   That => 123
-
--- test comment
+sigma : Int -> Int -> Int
+sigma from to = case from == to of
+        True => from
+        False => to + sigma from (to - 1)
