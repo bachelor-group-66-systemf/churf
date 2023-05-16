@@ -11,7 +11,7 @@ pkgs.haskellPackages.developPackage {
                   ghc 
                   jasmin 
                   llvmPackages_15.libllvm 
-                  llvmPackages_15.clang-unwrapped
+#                  llvmPackages_15.clang-unwrapped
 #                  texlive.combined.scheme-full
                   graphviz
                   
