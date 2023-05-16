@@ -1,0 +1,17 @@
+
+data List a where 
+    Nil  : List a
+    Cons : a -> List a -> List a
+
+foldr : (a -> b -> b) -> b -> List a -> b
+foldr f y xs = case xs of
+    Nil       => y
+    Cons x xs => f x (foldr f y xs)
+
+sum xs = foldr (\x.\acc. x + acc) 0 xs
+
+main = sum (Cons 1 (Cons 2 (Cons 3 (Cons 4 Nil)))) 
+
+
+
+
