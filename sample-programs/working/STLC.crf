@@ -1,0 +1,113 @@
+data Exp where
+    EVar : Char -> Exp
+    EAbs : Pair Char Type -> Exp -> Exp
+    EApp : Exp -> Exp -> Exp
+    EInt : Int -> Exp
+    EAdd : Exp -> Exp -> Exp
+
+data Type where
+    TLit : Char -> Type
+    TArr : Type -> Type -> Type
+
+data Maybe a where
+  Nothing : Maybe a 
+  Just : a -> Maybe a 
+
+data Ctx where
+    Ctx : List (Pair Char Type) -> Ctx
+
+data Tri a b c where
+  Tri : a -> b -> c -> Tri a b c
+
+lookupVar : Char -> Ctx -> Maybe Type
+lookupVar c ctx = case ctx of
+    Ctx ls => case ls of
+        Nil => Nothing
+        Cons a as => case a of
+            Pair name type => case (asciiCode name) == (asciiCode c) of
+                True => Just type
+                _ => lookupVar c (Ctx as)
+
+insertVar : Char -> Type -> Ctx -> Ctx
+insertVar c t ctx = case ctx of
+        Ctx ls => Ctx (Cons (Pair c t) ls)
+
+infer : Ctx -> Exp -> Maybe (Pair Type Ctx)
+infer ctx e = case ctx of
+    Ctx ls => case e of
+        EVar c => case lookupVar c ctx of
+            Nothing => Nothing
+            Just t => Just (Pair t ctx)
+        EAbs pair e => case pair of
+             Pair name targ => 
+                 let newCtx = insertVar name targ ctx
+                  in case infer newCtx e of
+                       Nothing => Nothing
+                       Just p => case p of
+                            Pair tret newCtx => Just (Pair (TArr targ tret) newCtx)
+        EApp e1 e2 => case infer ctx e1 of
+            Just p => case p of
+                Pair t ctx => case t of
+                    TArr t1 t2 => case infer ctx e2 of
+                        Just p => case p of
+                            Pair t ctx => case eq t1 t of
+                                True => Just (Pair t2 ctx)
+                                _ => Nothing
+                        Nothing => Nothing
+                    _ => Nothing
+            Nothing => Nothing
+        EInt i => Just (Pair (TLit 'i') ctx)
+        EAdd e1 e2 =>
+            case infer ctx e1 of
+                Just p => case p of
+                    Pair t ctx => case eq t (TLit 'i') of
+                        True => case infer ctx e2 of
+                            Just p => case p of
+                                Pair t ctx => case eq t (TLit 'i') of
+                                    True => Just (Pair (TLit 'i') ctx)
+                                    _ => Nothing
+                            _ => Nothing
+                        _ => Nothing
+                _ => Nothing
+
+eq : Type -> Type -> Bool
+eq t1 t2 = case t1 of
+    TArr left1 right1 => case t2 of
+        TArr left2 right2 => (eq left1 left2) && (eq right1 right2)
+        _ => False
+    TLit l1 => case t2 of
+        TLit l2 => (asciiCode l1) == (asciiCode l2)
+    _ => False
+
+
+
+.&& l r = case l of
+    True => r
+    _ => False
+
+.++ xs ys = case xs of
+    Nil => ys
+    Cons a as => Cons a (as ++ ys)
+
+emptyCtx = Ctx Nil
+
+expression = (EApp
+                (EAbs (Pair 'a' (TLit 'i'))
+                      (EAbs (Pair 'x' (TArr (TLit 'a') (TLit 'b')))
+                            (EVar 'x')))
+                (EInt 100))
+
+-- (\a : int . (\x : (a -> b) . x)) 100
+-- should infer the type (a -> b) -> (a -> b), which it does
+
+pretty : Type -> List Char
+pretty t = case t of
+    TLit t => Cons t Nil
+    TArr t1 t2 => Cons '(' ((pretty t1) ++ (" -> ") ++ (pretty t2) ++ (Cons ')' Nil))
+
+getType c e = case infer c e of
+        Nothing => printStr "fail"
+        Just p => case p of
+            Pair t _ => printStr (pretty t)
+
+main = getType emptyCtx expression
