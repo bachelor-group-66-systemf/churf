@@ -2,6 +2,9 @@
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QualifiedDo #-}
+-- This should really not be used. Unfortunately time has not allowed us to
+-- really implement the desugaring phase correctly
+{-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 
 -- | A module for type checking and inference using algorithm W, Hindley-Milner
 module TypeChecker.TypeCheckerHm where
@@ -24,6 +27,7 @@ import Grammar.Abs
 import Grammar.Print (printTree)
 import TypeChecker.TypeCheckerIr (T, T')
 import TypeChecker.TypeCheckerIr qualified as T
+import Debug.Trace (trace)
 
 -- | Type check a program
 typecheck :: Program -> Either String (T.Program' Type, [Warning])
@@ -88,35 +92,6 @@ freeOrdered (TFun a b) = freeOrdered a ++ freeOrdered b
 freeOrdered (TData _ a) = concatMap freeOrdered a
 freeOrdered _ = mempty
 
--- Much cleaner implementation, unfortunately one minor bug
--- checkBind :: Bind -> Infer (T.Bind' Type)
--- checkBind (Bind name args expr) = do
---     fr <- fresh
---     let lambda = makeLambda expr (reverse (coerce args))
---     withBinding (coerce name) fr $ do
---         (sub, (e, infSig)) <- algoW lambda
---         env <- asks vars
---         let genInfSig = generalize (apply sub env) infSig
---         maybeSig <- gets (join . M.lookup (coerce name) . sigs)
---         case maybeSig of
---             Just typSig -> do
---                 unless
---                     (genInfSig <<= typSig)
---                     ( throwError $
---                         Error
---                             ( Aux.do
---                                 "Inferred type"
---                                 quote $ printTree infSig
---                                 "doesn't match given type"
---                                 quote $ printTree typSig
---                             )
---                             False
---                     )
---                 return $ T.Bind (coerce name, typSig) [] (apply sub e, typSig)
---             _ -> do
---                 insertSig (coerce name) (Just genInfSig)
---                 return $ T.Bind (coerce name, genInfSig) [] (apply sub e, genInfSig)
-
 checkBind :: Bind -> Infer (T.Bind' Type)
 checkBind (Bind name args e) = do
     let lambda = makeLambda e (reverse (coerce args))
@@ -139,8 +114,6 @@ checkBind (Bind name args e) = do
                         )
                         False
                 )
-            -- Applying sub to typSig will worsen error messages.
-            -- Unfortunately I do not know a better solution at the moment.
             return $ T.Bind (coerce name, apply sub typSig) [] (apply sub e, typSig)
         _ -> do
             insertSig (coerce name) (Just genInfSig)
@@ -354,6 +327,7 @@ checkCase expT brnchs = do
     (subs, branchTs, injs, returns) <- unzip4 <$> mapM inferBranch brnchs
     -- compose all probably wrong
     let sub0 = composeAll subs
+    trace ("Substitutions: " ++ show subs) pure ()
     (sub1, _) <-
         foldM
             ( \(sub, acc) x ->
@@ -435,9 +409,9 @@ inferPattern = \case
             ( catchableErr $ Aux.do
                 "The constructor"
                 quote $ printTree constr
-                " should have "
+                "should have"
                 show numArgs
-                " arguments but has been given "
+                "arguments but has been given"
                 show (length patterns)
             )
         fr <- fresh
