@@ -85,6 +85,7 @@ eq t1 t2 = case t1 of
     True => r
     _ => False
 
+.++ : List a -> List a -> List a
 .++ xs ys = case xs of
     Nil => ys
     Cons a as => Cons a (as ++ ys)
@@ -108,6 +109,6 @@ pretty t = case t of
 getType c e = case infer c e of
         Nothing => printStr "fail"
         Just p => case p of
-            Pair t _ => printStr (pretty t)
+            Pair t e => printStr (pretty t)
 
 main = getType emptyCtx expression
