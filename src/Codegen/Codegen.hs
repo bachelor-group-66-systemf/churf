@@ -20,7 +20,7 @@ import           Monomorphizer.MonomorphizerIr as MIR (Bind (..), Data (..),
                                                        Type (TLit))
 import           TypeChecker.TypeCheckerIr     (Ident (..))
 
-{- | Compiles an AST and produces a LLVM Ir string.
+{- | Compiles an AST and produces a LLVM IR string.
   An easy way to actually "compile" this output is to
   Simply pipe it to LLI
 -}
@@ -36,6 +36,8 @@ generateCode (MIR.Program scs) addGc = do
                    ++ map inst (Map.elems state.structTypes)
                    ++ state.instructions
 
+-- | Detects certain types and functions.
+--   Used to filter out and replace definitions with LLVM equivelents
 detectPrelude :: Def -> Bool
 detectPrelude (DData (Data (TLit (Ident "Bool")) _))              = True
 detectPrelude (DData (Data (TLit (Ident "Unit")) _))              = True

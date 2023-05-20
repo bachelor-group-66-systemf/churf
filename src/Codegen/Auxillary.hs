@@ -5,6 +5,7 @@ import           Control.Monad                 (foldM_)
 import           Monomorphizer.MonomorphizerIr as MIR (Exp, T, Type (..))
 import qualified TypeChecker.TypeCheckerIr     as TIR
 
+-- | Converts a normal type into a fitting LLVM IR type
 type2LlvmType :: MIR.Type -> LLVMType
 type2LlvmType (MIR.TLit id@(TIR.Ident name)) = case name of
     "Int"  -> I64
@@ -20,9 +21,11 @@ type2LlvmType (MIR.TFun t xs) = do
     function2LLVMType (TFun t xs) s = function2LLVMType xs (type2LlvmType t : s)
     function2LLVMType x s           = (type2LlvmType x, s)
 
+-- | Extracts the type from a typed expression
 getType :: T Exp -> LLVMType
 getType (_, t) = type2LlvmType t
 
+-- | Extracts the type ident from a normal type
 extractTypeName :: MIR.Type -> TIR.Ident
 extractTypeName (MIR.TLit id) = id
 extractTypeName (MIR.TFun t xs) =
@@ -30,6 +33,7 @@ extractTypeName (MIR.TFun t xs) =
         (TIR.Ident is) = extractTypeName xs
      in TIR.Ident $ i <> "_$_" <> is
 
+-- | Get the type from a LLVM IR value
 valueGetType :: LLVMValue -> LLVMType
 valueGetType (VInteger _)      = I64
 valueGetType (VChar _)         = I8
@@ -37,6 +41,9 @@ valueGetType (VIdent _ t)      = t
 valueGetType (VConstant s)     = Array (fromIntegral $ length s) I8
 valueGetType (VFunction _ _ t) = t
 
+-- | Returns the byte size of a LLVM IR type.
+--   TO accomodate for memory padding,
+--   most of these have been set to 8 bytes
 typeByteSize :: LLVMType -> Integer
 typeByteSize Void           = 0
 typeByteSize I1             = 8 -- 1, 8 due to memory padding

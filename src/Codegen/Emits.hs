@@ -26,6 +26,8 @@ import           Grammar.Print                 (printTree)
 import           Monomorphizer.MonomorphizerIr
 
 
+-- | Compiles the AST into LLVM IR code.§
+--   Uses the State monad to store state
 compileScs :: [Def] -> CompilerState ()
 compileScs [] = do
     emit $ UnsafeRaw "\n"
@@ -196,6 +198,7 @@ compileScs (DData (Data typ ts) : xs) = do
         ts
     compileScs xs
 
+-- | The first content of the main function
 firstMainContent :: Bool -> [LLVMIr]
 firstMainContent True =
     [ -- UnsafeRaw "%prof = call ptr @cheap_the()\n"
@@ -205,10 +208,12 @@ firstMainContent True =
     ]
 firstMainContent False = []
 
+-- | The last content of the main function
 lastMainContent :: Bool -> [LLVMIr]
 lastMainContent True  = [UnsafeRaw "call void @cheap_dispose()\n"]
 lastMainContent False =[]
 
+-- | Simply compiles and creates LLVM IR code for an expression
 compileExp :: T Exp -> CompilerState ()
 compileExp (ELit lit, _t)   = emitLit lit
 compileExp (EAdd e1 e2, t)  = emitAdd t e1 e2
@@ -217,6 +222,7 @@ compileExp (EApp e1 e2, t)  = emitApp t e1 e2
 compileExp (ELet bind e, _) = emitLet bind e
 compileExp (ECase e cs, t)  = emitECased t e (map (t,) cs)
 
+-- | Emits a let bind.
 emitLet :: Bind -> T Exp -> CompilerState ()
 emitLet (Bind id [] innerExp) e = do
     evaled <- exprToValue innerExp
@@ -228,6 +234,8 @@ emitLet (Bind id [] innerExp) e = do
     compileExp e
 emitLet b _ = error $ "Non empty argument list in let-bind " <> show b
 
+-- | Emits a case expression.
+--   WARNING: Does not support nested pattern matches at the moment.
 emitECased :: Type -> T Exp -> [(Type, Branch)] -> CompilerState ()
 emitECased t e cases = do
     let cs = snd <$> cases
@@ -365,6 +373,7 @@ emitECased t e cases = do
         lbl_failPos <- (\x -> Ident $ "failed_" <> show x) <$> getNewLabel
         emit $ Label lbl_failPos
 
+-- | Some prelude functions which get replaced with their LLVM IR equivelents.
 preludeFuns :: LLVMIr -> Ident -> LLVMValue -> LLVMValue -> CompilerState LLVMIr
 preludeFuns def xs arg1 arg2 = case xs of
   "$langle$$langle$"      -> pure $ Icmp LLSlt I8 arg1 arg2 -- FIXME
@@ -374,6 +383,8 @@ preludeFuns def xs arg1 arg2 = case xs of
   "printChar$Char_Unit"   -> pure . UnsafeRaw $ "add i16 0,0\n    call void (ptr, ...) @printf(ptr noundef @.char_print_no_nl, i8 noundef " <> toIr arg1 <> ")\n"
   _                       -> pure def
 
+-- | Emits a function call.
+--   Uncurries the EApp chain.
 emitApp :: Type -> T Exp -> T Exp -> CompilerState ()
 emitApp rt e1 e2 = do
     ((EVar name, t), args) <- go (EApp e1 e2, rt)
@@ -414,6 +425,8 @@ emitApp rt e1 e2 = do
       TFun _ _ -> Ptr
       t        -> type2LlvmType t
 
+-- | Emits an ident.
+--   This should ideally never have to happen.
 emitIdent :: Ident -> CompilerState ()
 emitIdent id = do
     -- !!this should never happen!!
@@ -421,6 +434,8 @@ emitIdent id = do
     emit $ Variable id
     emit $ UnsafeRaw "\n"
 
+-- | Emits a literal.
+--   This should ideally never have to happen.
 emitLit :: Lit -> CompilerState ()
 emitLit i = do
     -- !!this should never happen!!
@@ -431,6 +446,8 @@ emitLit i = do
     emit $ Comment "This should not have happened!"
     emit $ SetVariable varCount (Add t i' (VInteger 0))
 
+-- | Genereates LLVM IR code for adding the result
+--   of two expressions together
 emitAdd :: Type -> T Exp -> T Exp -> CompilerState ()
 emitAdd t e1 e2 = do
     v1 <- exprToValue e1
@@ -438,7 +455,10 @@ emitAdd t e1 e2 = do
     v <- getNewVar
     emit $ SetVariable v (Add (type2LlvmType t) v1 v2)
 
-
+-- | Generates LLVM IR code for a typed expression.
+--   This function returns a LLVM IR value,
+--   which can either be a literal or a variable,
+--   to be used in other expressions.
 exprToValue :: T Exp -> CompilerState LLVMValue
 exprToValue et@(e, t) = case e of
     ELit (LInt i) -> pure $ VInteger i
