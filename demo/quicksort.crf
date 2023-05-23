@@ -1,0 +1,17 @@
+filter : (a -> Bool) -> List a -> List a
+filter p xs = case xs of
+    Nil => Nil
+    Cons x xs => case p x of
+        True => Cons x (filter p xs)
+        False => filter p xs
+
+quicksort : List Int -> List Int
+quicksort xs = case xs of
+    Nil => Nil
+    Cons a as => let smaller = quicksort (filter (\y. y < a) xs) in
+                 let bigger = quicksort (filter (\y. a < y) xs) in
+                 smaller ++ (Cons a bigger)
+
+-- [5, 2, 8, 9, 6, 0, 1]
+main = let list = Cons 5 (Cons 2 (Cons 8 (Cons 9 (Cons 6 (Cons 0 (Cons 1 Nil)))))) in 
+       printList (quicksort list)

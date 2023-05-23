@@ -1,0 +1,49 @@
+data Exp where
+    EVar : Char -> Exp
+    EAbs : Char -> Exp -> Exp
+    EApp : Exp -> Exp -> Exp
+    EInt : Int -> Exp
+    EAdd : Exp -> Exp -> Exp
+
+data Val where
+    VInt     : Int -> Val
+    VClosure : Cxt -> Char -> Exp -> Val
+
+data Cxt where 
+    Cxt : List (Pair Char Val) -> Cxt
+
+lookup : Char -> Cxt -> Val
+lookup x cxt = case cxt of
+    Cxt ps => case ps of
+        Cons p ps => case p of
+            Pair y v => case (asciiCode x) == (asciiCode y) of
+                True  => v
+                False => lookup x (Cxt ps)
+
+insert : Char -> Val -> Cxt -> Cxt
+insert x v cxt = case cxt of
+    Cxt ps => Cxt (Cons (Pair x v) ps)
+
+eval : Cxt -> Exp -> Val
+eval cxt exp = case exp of
+    EVar x => case lookup x cxt of
+        VInt i             => VInt i
+        VClosure delta x e => eval delta e
+    EAbs x e => VClosure cxt x e
+    EApp e1 e2 => case eval cxt e1 of
+        VClosure delta x f => 
+            let v = VClosure cxt x e2 in
+            eval (insert x v delta) f
+    EInt i => VInt i
+    EAdd e1 e2 => 
+        let i1 = case eval cxt e1 of { VInt i => i } in 
+        let i2 = case eval cxt e2 of { VInt i => i } in 
+        VInt (i1 + i2)
+
+exp = EApp (EAbs 'x' (EVar 'x')) (EApp (EAbs 'x' (EAdd (EVar 'x') (EInt 100))) (EInt 200))
+-- (λ x . x) (λ x . x + 100) 200
+
+main : Int
+main = case eval (Cxt Nil) exp of
+           VInt i => i
+
