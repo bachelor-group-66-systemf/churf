@@ -9,7 +9,7 @@ import           Control.Monad               (when, (<=<))
 import           Data.List.Extra             (isSuffixOf)
 import           Data.Maybe                  (fromJust, isNothing)
 import           Desugar.Desugar             (desugar)
-import           Expander                    (expand)
+-- import           Expander                    (expand)
 import           GHC.IO.Handle.Text          (hPutStrLn)
 import           Grammar.ErrM                (Err)
 import           Grammar.Layout              (resolveLayout)
@@ -227,18 +227,44 @@ prelude =
         , "const : a -> b -> a"
         , "const x y = x"
         , "\n"
+        -- Printing as a list for the demonstration
         , "printStr : List Char -> Unit"
         , "printStr xs = case xs of"
         , "    Nil => Unit"
         , "    Cons x xs => flipConst (printChar x) (printStr xs)"
         , "\n"
-        , "data List a where"
-        , "    Nil  : List a"
-        , "    Cons : a -> List a -> List a"
-        , "\n"
-        , "data Pair a b where"
-        , "    Pair : a -> b -> Pair a b"
-        , "\n"
         , "asciiCode : Char -> Int"
         , "asciiCode x = case x of { 'a' => 97; 'b' => 98; 'c' => 99; 'd' => 100; 'e' => 101; 'f' => 102; 'g' => 103; 'h' => 104; 'i' => 105; 'j' => 106; 'k' => 107; 'l' => 108; 'm' => 109; 'n' => 110; 'o' => 111; 'p' => 112; 'q' => 113; 's' => 114; 't' => 115; 'u' => 116; 'v' => 117; 'w' => 118; 'x' => 119; 'y' => 120; 'z' => 121; }"
+        , "toChar : Int -> Char"
+        , "toChar x = case x of {0 => '0'; 1 => '1'; 2 => '2'; 3 => '3'; 4 => '4'; 5 => '5'; 6 => '6'; 7 => '7'; 8 => '8'; 9 => '9'; }"
+        , "\n"
+        , "toStr : List Int -> List Char"
+        , "toStr xs = case xs of"
+        , "    Cons a as => Cons (toChar a) (toStr as)"
+        , "    Nil => Nil"
+        , "\n"
+        , "interleave : Char -> List Char -> List Char"
+        , "interleave c ls = case ls of"
+        , "    Nil => Nil"
+        , "    Cons a as => case as of"
+        , "        Nil => Cons a Nil"
+        , "        Cons y ys => Cons a (Cons c (interleave c as))"
+        , "\n"
+        , "bracketify : List Char -> List Char"
+        , "bracketify xs = Cons '[' (xs ++ (Cons ']' Nil))"
+        , "\n"
+        , "printList : List Int -> Unit"
+        , "printList xs = printStr (bracketify (interleave ',' (toStr xs)))"
+        , "\n"
+        , ".++ : List a -> List a -> List a"
+        , ".++ as bs = case as of"
+        , "    Nil => bs"
+        , "    Cons x xs => Cons x (xs ++ bs)"
+        , "\n"
+        , "data List a where"
+        , "  Nil : List a"
+        , "  Cons : a -> List a -> List a"
+        , "\n"
+        , "data Pair a b where"
+        , "  Pair : a -> b -> Pair a b"
         ]

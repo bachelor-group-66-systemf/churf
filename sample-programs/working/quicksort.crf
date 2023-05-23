@@ -1,21 +1,3 @@
-toStr : List Int -> List Char
-toStr xs = case xs of
-    Cons a as => Cons (toChar a) (toStr as)
-    Nil => Nil
-
-toChar : Int -> Char
-toChar x = case x of
-    0 => '0'
-    1 => '1'
-    2 => '2'
-    3 => '3'
-    4 => '4'
-    5 => '5'
-    6 => '6'
-    7 => '7'
-    8 => '8'
-    9 => '9'
-
 filter : (a -> Bool) -> List a -> List a
 filter p xs = case xs of
     Nil => Nil
@@ -23,22 +5,14 @@ filter p xs = case xs of
         True => Cons x (filter p xs)
         False => filter p xs
 
-.++ : List a -> List a -> List a
-.++ as bs = case as of
-    Nil => bs
-    Cons x xs => Cons x (xs ++ bs)
-
 quicksort : List Int -> List Int
 quicksort xs = case xs of
     Nil => Nil
-    Cons a as => let smaller = quicksort (filter (\y. y < a) xs)
-                  in let bigger = quicksort (filter (\y. a < y) xs)
-                      in smaller ++ (Cons a bigger)
+    Cons a as => let smaller = quicksort (filter (\y. y < a) xs) in
+                 let bigger = quicksort (filter (\y. a < y) xs) in
+                 smaller ++ (Cons a bigger)
 
-descList : Int -> Int -> List Int
-descList from to = case to < from of
-   False => Cons to (descList from (to - 1)) 
-   True => Nil
-
+-- [5, 2, 8, 9, 6, 0, 1]
 main = let list = Cons 5 (Cons 2 (Cons 8 (Cons 9 (Cons 6 (Cons 0 (Cons 1 Nil)))))) in 
-       printStr (toStr (quicksort list))
+       printList (quicksort list)
+
