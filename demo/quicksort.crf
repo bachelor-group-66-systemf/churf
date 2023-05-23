@@ -1,3 +1,4 @@
+
 filter : (a -> Bool) -> List a -> List a
 filter p xs = case xs of
     Nil => Nil
@@ -12,6 +13,10 @@ quicksort xs = case xs of
                  let bigger = quicksort (filter (\y. a < y) xs) in
                  smaller ++ (Cons a bigger)
 
--- [5, 2, 8, 9, 6, 0, 1]
-main = let list = Cons 5 (Cons 2 (Cons 8 (Cons 9 (Cons 6 (Cons 0 (Cons 1 Nil)))))) in 
-       printList (quicksort list)
+mkDescList : Int -> Int -> List Int
+mkDescList from to = case from == to of
+    True => Nil
+    False => Cons from (mkDescList (from - 1) to)    
+    
+main = printList (quicksort (mkDescList 1000 0))
+

@@ -381,7 +381,7 @@ preludeFuns def xs arg1 arg2 = case xs of
   "$minus$$Int_Int_Int"   -> pure $ Sub I64 arg1 arg2
   "$plus$$Int_Int_Int"    -> pure $ Add I64 arg1 arg2
   "printChar$Char_Unit"   -> pure . UnsafeRaw $ "add i16 0,0\n    call void (ptr, ...) @printf(ptr noundef @.char_print_no_nl, i8 noundef " <> toIr arg1 <> ")\n"
-  "printInt$Int_Unit"     -> pure . UnsafeRaw $ "add i16 0,0\n    call void (ptr, ...) @printf(ptr noundef @.int_print_no_nl, i8 noundef " <> toIr arg1 <> ")\n"
+  "printInt$Int_Unit"     -> pure . UnsafeRaw $ "add i16 0,0\n    call void (ptr, ...) @printf(ptr noundef @.int_print_no_nl, i64 noundef " <> toIr arg1 <> ")\n"
   _                       -> pure def
 
 -- | Emits a function call.
