@@ -58,6 +58,7 @@ defaultStart =
     , UnsafeRaw "@.non_exhaustive_patterns = private unnamed_addr constant [41 x i8] c\"Non-exhaustive patterns in case at %i:%i\n\"\n"
     , UnsafeRaw "@.char_print = private unnamed_addr constant [2 x i8] c\"%c\"\n"
     , UnsafeRaw "@.char_print_no_nl = private unnamed_addr constant [3 x i8] c\"%c\0\"\n"
+    , UnsafeRaw "@.int_print_no_nl = private unnamed_addr constant [3 x i8] c\"%i\0\"\n"
     , UnsafeRaw "declare i32 @printf(ptr noalias nocapture, ...)\n"
     , UnsafeRaw "declare i32 @exit(i32 noundef)\n"
     , UnsafeRaw "declare ptr @malloc(i32 noundef)\n"
