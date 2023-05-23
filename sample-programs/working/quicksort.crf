@@ -15,4 +15,3 @@ quicksort xs = case xs of
 -- [5, 2, 8, 9, 6, 0, 1]
 main = let list = Cons 5 (Cons 2 (Cons 8 (Cons 9 (Cons 6 (Cons 0 (Cons 1 Nil)))))) in 
        printList (quicksort list)
-

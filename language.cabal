@@ -16,7 +16,7 @@ extra-source-files:
   Grammar.cf
 
 common warnings
-    ghc-options: -W
+    ghc-options: -w
 
 executable language
     import:           warnings

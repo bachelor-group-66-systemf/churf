@@ -51,3 +51,9 @@ hmdp FILE:
 
 bidp FILE:
     cabal run language -- -t bi -d -p {{FILE}}
+
+quicksort:
+    cabal run language -- -t bi sample-programs/working/quicksort.crf
+
+lc:
+    cabal run language -- -t bi sample-programs/working/lambda_calculus-2.crf
