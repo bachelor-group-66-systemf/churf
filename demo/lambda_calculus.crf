@@ -40,10 +40,14 @@ eval cxt exp = case exp of
         let i2 = case eval cxt e2 of { VInt i => i } in 
         VInt (i1 + i2)
 
-exp = EApp (EAbs 'x' (EVar 'x')) (EApp (EAbs 'x' (EAdd (EVar 'x') (EInt 100))) (EInt 200))
--- (λ x . x) (λ x . x + 100) 200
+-- (λx. x + x) 200
+exp = EApp 
+        (EAbs 'x' 
+            (EAdd 
+                (EVar 'x') 
+                (EVar 'x'))) 
+        (EInt 200)
 
 main : Int
 main = case eval (Cxt Nil) exp of
            VInt i => i
-
