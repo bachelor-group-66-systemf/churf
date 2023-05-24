@@ -7,8 +7,8 @@
 
 module TypeChecker.TypeCheckerBidir (typecheck) where
 
-import           Auxiliary                 (int, mapAccumM, maybeToRightM, onM,
-                                            snoc, typeof)
+import           Auxiliary                 (int, iterate', mapAccumM,
+                                            maybeToRightM, onM, snoc, typeof)
 import           Control.Applicative       (Applicative (liftA2), liftA3, (<|>))
 import           Control.Monad.Except      (ExceptT, MonadError (throwError),
                                             MonadTrans (lift), foldM, forM,
@@ -112,12 +112,12 @@ typecheckBind (Bind name vars rhs) = do
     bind' <- lookupSig name >>= \case
         Just t  -> do
             insertSig (coerce name) t
-            (rhs', _) <- check (foldr EAbs rhs vars) t
-            pure (T.Bind (coerce name, t) [] (rhs', t))
+            e <- check (foldr EAbs rhs vars) t
+            pure (T.Bind (coerce name, t) [] e)
         Nothing -> do
-            (e, t) <- apply =<< infer (foldr EAbs rhs vars)
+            e@(_, t) <- apply =<< infer (foldr EAbs rhs vars)
             insertSig (coerce name) t
-            pure (T.Bind (coerce name, t) [] (e, t))
+            pure (T.Bind (coerce name, t) [] e)
     env <- gets env
     unless (isComplete env) err
     putEnv Empty
@@ -183,10 +183,10 @@ check (ELit lit) t | t == typeof lit = apply (T.ELit lit, t)
 check e (TAll alpha a) = do
     let env_tvar = EnvTVar alpha
     insertEnv env_tvar
-    e' <- check e a
+    (e', a') <- check e a
     (env_l, _) <- gets (splitOn env_tvar . env)
     putEnv env_l
-    apply e'
+    apply (e', TAll alpha a')
 
 --  Γ,(x:A) ⊢ e ↑ B ⊢ Δ,(x:A),Θ
 --  --------------------------- →I
@@ -298,18 +298,17 @@ infer (EAbs name e) = do
 --  -------------------------------------------- LetI
 --  Γ ⊢ let x ys = rhs in e' ↑ C ⊣ Δ
 infer (ELet (Bind x vars rhs) e) = do
-    (rhs', a) <- infer $ foldr EAbs rhs vars
-    let (a_ret, a_vars) = go vars a
-        env_var         = EnvVar x a
+    rhs'@(_, a) <- infer $ foldr EAbs rhs vars
+    let env_var         = EnvVar x a
+        (rhs'', vars')  = iterate' (length vars) go (rhs', [])
     insertEnv env_var
     e'@(_, c) <- infer e
     (env_l, _) <- gets (splitOn env_var . env)
     putEnv env_l
-    apply (T.ELet (T.Bind (coerce x, a) a_vars (rhs', a_ret)) e', c)
+    apply (T.ELet (T.Bind (coerce x, a) vars' rhs'') e', c)
   where
-    go []     t            = (t, [])
-    go (x:xs) (TFun t1 t2) = second (snoc (coerce x, t1)) $ go xs t2
-    go _      _            = error "IMPOSSIBLE"
+    go ((T.EAbs x e, TFun a _), xs) = (e, (x,a):xs)
+
 
 --  Γ ⊢ e₁ ↑ Int ⊣ Θ  Θ ⊢ e₂ ↑ Int
 --  --------------------------- +I
@@ -850,7 +849,7 @@ traceEnv s = do
 
 traceD s x = trace (s ++ " " ++ show x) pure ()
 
-traceT s x = trace (s ++ " : " ++ ppT x) pure ()
+traceT s x = trace (s ++ " : " ++ printTree x) pure ()
 
 traceTs s xs = trace (s ++ " [ " ++ intercalate ", " (map ppT xs) ++ " ]") pure ()
 
