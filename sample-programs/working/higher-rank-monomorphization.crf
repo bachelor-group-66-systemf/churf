@@ -1,0 +1,14 @@
+.+ : Int -> Int -> Int
+.+ x y = 0
+
+const : a -> b -> a
+const x y = x
+
+applyId : (forall a. a -> a) -> b -> b
+applyId f x = const (f x) (f 'B')
+
+id : a -> a
+id x = x
+
+main = applyId id 5 + const 10 (applyId id 'A')
+

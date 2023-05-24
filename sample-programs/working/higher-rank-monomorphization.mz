@@ -1,0 +1,34 @@
+($plus$$IntIntInt : Int -> Int -> Int) ($5x$Int : Int) ($6y$Int : Int) = (0 : Int);
+
+(applyId$CharCharIntIntCharChar : (Char -> Char) -> (Int -> Int) -> Char -> Char) ($9f$CharChar : Char -> Char) ($9f$IntInt : Int -> Int) ($10x$Char : Char) = 
+    (((const$CharCharChar : Char -> Char -> Char) 
+        ((($9f$CharChar : Char -> Char) 
+            ($10x$Char : Char)) : Char) : Char -> Char) 
+        ((($9f$CharChar : Char -> Char) 
+            ('B' : Char)) : Char) : Char);
+
+(applyId$CharCharIntIntIntInt : (Char -> Char) -> (Int -> Int) -> Int -> Int) ($9f$CharChar : Char -> Char) ($9f$IntInt : Int -> Int) ($10x$Int : Int) = 
+    (((const$IntCharInt : Int -> Char -> Int) 
+        ((($9f$IntInt : Int -> Int) 
+            ($10x$Int : Int)) : Int) : Char -> Int) 
+        ((($9f$CharChar : Char -> Char) 
+            ('B' : Char)) : Char) : Int);
+
+(const$IntCharInt : Int -> Char -> Int) ($7x$Int : Int) ($8y$Char : Char) = ($7x$Int : Int);
+(const$CharCharChar : Char -> Char -> Char) ($7x$Char : Char) ($8y$Char : Char) = ($7x$Char : Char);
+
+(id$CharChar : Char -> Char) ($11x$Char : Char) = ($11x$Char : Char);
+(id$IntInt : Int -> Int) ($11x$Int : Int) = ($11x$Int : Int);
+
+(main : Int) = 
+((($plus$$IntIntInt : Int -> Int -> Int) 
+    (((((applyId$CharCharIntIntIntInt : (Char -> Char) -> (Int -> Int) -> Int -> Int) 
+        (id$CharChar : Char -> Char) : (Int -> Int) -> Int -> Int) 
+        (id$IntInt : Int -> Int) : Int -> Int) (5 : Int)) : Int) : Int -> Int) 
+
+    ((((const$IntCharInt : Int -> Char -> Int) 
+        (10 : Int) : Char -> Int) 
+        (((((applyId$CharCharIntIntCharChar : (Char -> Char) -> (Int -> Int) -> Char -> Char) 
+            (id$CharChar : Char -> Char) : (Int -> Int) -> Char -> Char) 
+            (id$IntInt : Int -> Int) : Char -> Char) 
+            ('A' : Char)) : Char)) : Int) : Int)

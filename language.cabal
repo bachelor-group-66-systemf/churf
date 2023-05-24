@@ -98,6 +98,7 @@ Test-suite language-testsuite
       OrderDefs
       Auxiliary
       Monomorphizer.Monomorphizer
+      Monomorphizer.Monomorphizer2
       Monomorphizer.MonomorphizerIr
       Renamer.Renamer
       TypeChecker.TypeChecker

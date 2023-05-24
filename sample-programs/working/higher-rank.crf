@@ -1,0 +1,8 @@
+
+applyId : (forall a. a -> a) -> b -> b
+applyId f x = f x
+
+id : a -> a
+id x = x
+
+main = applyId id 5
