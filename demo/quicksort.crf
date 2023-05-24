@@ -2,16 +2,19 @@ data List a where
     Nil : List a
     Cons : a -> List a -> List a
 
+main = printList (quicksort (mkDescList 1000 0))
+
+mkDescList : Int -> Int -> List Int
+mkDescList from to = case from == to of
+    True => Nil
+    False => Cons from (mkDescList (from - 1) to)    
+
 quicksort : List Int -> List Int
 quicksort xs = case xs of
     Nil => Nil
     Cons a as => let smaller = quicksort (filter (\y. y < a) xs) in
                  let bigger = quicksort (filter (\y. a < y) xs) in
                  smaller ++ (Cons a bigger)
-
-.++ list1 list2 = case list1 of
-    Nil => list2
-    Cons x xs => Cons x (xs ++ list2)
 
 filter : (a -> Bool) -> List a -> List a
 filter p xs = case xs of
@@ -20,9 +23,6 @@ filter p xs = case xs of
         True => Cons x (filter p xs)
         False => filter p xs
 
-mkDescList : Int -> Int -> List Int
-mkDescList from to = case from == to of
-    True => Nil
-    False => Cons from (mkDescList (from - 1) to)    
-    
-main = printList (quicksort (mkDescList 1000 0))
+.++ list1 list2 = case list1 of
+    Nil => list2
+    Cons x xs => Cons x (xs ++ list2)
