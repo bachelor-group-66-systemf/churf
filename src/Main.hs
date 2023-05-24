@@ -2,6 +2,7 @@
 
 module Main where
 
+<<<<<<< Updated upstream
 import           AnnForall                   (annotateForall)
 import           Codegen.Codegen             (generateCode)
 import           Compiler                    (compile)
@@ -35,6 +36,42 @@ import           System.Exit                 (ExitCode (ExitFailure),
 import           System.IO                   (stderr)
 import           System.Process              (spawnCommand, waitForProcess)
 import           TypeChecker.TypeChecker     (TypeChecker (Bi, Hm), typecheck)
+=======
+import           AnnForall                    (annotateForall)
+import           Codegen.Codegen              (generateCode)
+import           Compiler                     (compile)
+import           Control.Monad                (when, (<=<))
+import           Data.List.Extra              (isSuffixOf)
+import           Data.Maybe                   (fromJust, isNothing)
+import           Desugar.Desugar              (desugar)
+import           Expander                     (expand)
+import           GHC.IO.Handle.Text           (hPutStrLn)
+import           Grammar.ErrM                 (Err)
+import           Grammar.Layout               (resolveLayout)
+import           Grammar.Par                  (myLexer, pProgram)
+import           Grammar.Print                (Print, printTree)
+import           LambdaLifter                 (lambdaLift)
+import           Monomorphizer.Monomorphizer  (monomorphize)
+import qualified Monomorphizer.Monomorphizer2 as M2
+import           OrderDefs                    (orderDefs)
+import           Renamer.Renamer              (rename)
+import           ReportForall                 (reportForall)
+import           System.Console.GetOpt        (ArgDescr (NoArg, ReqArg),
+                                               ArgOrder (RequireOrder),
+                                               OptDescr (Option), getOpt,
+                                               usageInfo)
+import           System.Directory             (createDirectory, doesPathExist,
+                                               getDirectoryContents,
+                                               removeDirectoryRecursive,
+                                               setCurrentDirectory)
+import           System.Environment           (getArgs)
+import           System.Exit                  (ExitCode (ExitFailure),
+                                               exitFailure, exitSuccess,
+                                               exitWith)
+import           System.IO                    (stderr)
+import           System.Process               (spawnCommand, waitForProcess)
+import           TypeChecker.TypeChecker      (TypeChecker (Bi, Hm), typecheck)
+>>>>>>> Stashed changes
 
 main :: IO ()
 main = getArgs >>= parseArgs >>= uncurry main'
@@ -118,7 +155,7 @@ main' opts s =
             file <- readFile s
 
 
-            let file' = if opts.preludeOpt then file ++ primitives else file ++ primitives ++ prelude
+            let file' = if opts.preludeOpt then file {- ++ primitives -} else file ++ primitives ++ prelude
             parsed <- fromErr . pProgram . resolveLayout True $ myLexer file'
             when opts.logIL (printToErr "-- Parse Tree -- " >> log parsed)
 
@@ -144,7 +181,7 @@ main' opts s =
             when opts.logIL (printToErr "\n-- Lambda Lifter --" >> log lifted)
 
 
-            monomorphized <- fromErr $ monomorphize lifted
+            monomorphized <- fromErr $ M2.monomorphize lifted
             when opts.logIL (printToErr "\n -- Monomorphizer --" >> log monomorphized)
 
 
