@@ -12,7 +12,7 @@ import           TypeChecker.TypeCheckerIr
 data TypeChecker = Bi | Hm deriving Eq
 
 typecheck :: TypeChecker -> G.Program -> Err Program
-typecheck tc = fmap removeForall . (reportTEVar <=< f)
+typecheck tc = reportTEVar <=< f
   where
     f = case tc of
         Bi -> Bi.typecheck

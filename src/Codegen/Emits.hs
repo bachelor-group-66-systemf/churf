@@ -13,7 +13,8 @@ import           Codegen.LlvmIr                as LIR
 import           Control.Applicative           (Applicative (liftA2), (<|>))
 import           Control.Monad                 (forM_, when, zipWithM_)
 import           Control.Monad.Extra           (whenJust)
-import           Control.Monad.State           (gets, modify)
+import           Control.Monad.State           (MonadState (get), get, gets,
+                                                modify)
 import           Data.Char                     (ord)
 import           Data.Coerce                   (coerce)
 import           Data.Foldable.Extra           (notNull)
@@ -21,7 +22,7 @@ import           Data.List                     (isPrefixOf)
 import qualified Data.Map                      as Map
 import           Data.Maybe                    (fromJust, fromMaybe, isNothing)
 import           Data.Tuple.Extra              (second)
-import           Debug.Trace                   (traceShow)
+import           Debug.Trace                   (trace, traceShow)
 import           Grammar.Print                 (printTree)
 import           Monomorphizer.MonomorphizerIr
 
@@ -179,7 +180,7 @@ compileScs (DBind bind : xs) = do
         BindC cxt (name, _) args exp -> (name, args, exp, Just cxt)
 
 
-    insertArg (x, t) = snoc (x, LocalElem { val = VIdent x t, typ = t })
+    insertArg (x, t) = Map.insert x (t , VIdent x t)
 
 compileScs (DData (Data typ ts) : xs) = do
     let (Ident outer_id) = extractTypeName typ
@@ -398,10 +399,12 @@ emitApp rt e1 e2 = do
                     <|> Global <$ Map.lookup (name, t) funcs
         -- this piece of code could probably be improved, i.e remove the double `const Global`
     call <- do
-            let closure_call LocalElem { typ = Ptr, val } = (mkDerefName name, (Ptr, val) : args)
+            let closure_call (Ptr, val) = (mkDerefName name, (Ptr, val) : args)
+
+            -- n <- Ident . show <$> getVarCount
 
             (name, args) <- gets $ maybe (name, (Ptr, VNull) : args) closure_call
-                                 . lookup name
+                                 . Map.lookup name
                                  . locals
 
             pure $ Call FastCC (type2LlvmType rt) visibility name args
@@ -461,7 +464,7 @@ emitAdd t e1 e2 = do
 --   which can either be a literal or a variable,
 --   to be used in other expressions.
 exprToValue :: T Exp -> CompilerState LLVMValue
-exprToValue et@(e, t) = case e of
+exprToValue et@(e, t) = get >>= \cxt -> case e of
     ELit (LInt i) -> pure $ VInteger i
     ELit (LChar c) -> pure . VChar $ ord c
 
@@ -469,42 +472,35 @@ exprToValue et@(e, t) = case e of
     EVar "False$Bool" -> pure $ VInteger 0
     EVar "Unit$Unit" -> pure $ VInteger 0
 
-    EVar name -> gets (Map.lookup name . globals) >>= \case
-        Just (typ@(Function _ ts), val) | length ts > 1 -> do
+    EVar name
+        | Just (_, v) <- Map.lookup name cxt.locals  -> pure v
+        | Just (typ@(Function _ ts), val) <- Map.lookup name cxt.globals
+        , length ts > 1 -> do
             type_struct <- addStructType (mkClosureName name) [typ]
             emit $ Comment "Allocating structure"
             emit . SetVariable name $ Alloca type_struct
             emit $ Store typ val Ptr name
             pure $ VIdent name Ptr
-
-        Just _ | name == "main" -> do
+        | Just _  <- Map.lookup name cxt.globals
+        , name == "main" -> do
             vc <- getNewVar
             emit $ SetVariable vc (Call FastCC I64 Global name [])
             pure $ VIdent vc I64
 
-
-        Just (Function t_return [_], _) -> do
+        | Just (Function t_return [_], _) <- Map.lookup name cxt.locals -> do
             vc <- getNewVar
             emit $ SetVariable vc (Call FastCC t_return Global name [(Ptr, VNull)])
             pure $ VIdent vc t_return
 
-        Just _ -> error "Bad"
+        | Just ConstructorInfo {numArgsCI = 0} <- Map.lookup name cxt.constructors -> do
+            vc <- getNewVar
+            let call = Call FastCC (type2LlvmType t) Global name [(Ptr, VNull)]
+            emit $ SetVariable vc call
+            pure $ VIdent vc (type2LlvmType t)
 
-        Nothing -> gets (Map.lookup name . constructors) >>= \case
+        | Just _ <- Map.lookup name cxt.constructors -> pure $ VFunction name Global (type2LlvmType t)
 
-            Just ConstructorInfo {numArgsCI}
-                | numArgsCI == 0 -> do
-                    vc <- getNewVar
-                    emit $ SetVariable vc call
-                    pure $ VIdent vc (type2LlvmType t)
-                | otherwise -> pure $ VFunction name Global (type2LlvmType t)
-                  where
-                    call = Call FastCC (type2LlvmType t) Global name [(Ptr, VNull)]
-
-            Nothing -> gets $ val
-                            . fromJust
-                            . lookup name
-                            . locals
+        | otherwise -> error $ "Can't find " ++ printTree name
 
     EVarC cxt name -> do
         let cxt' = flip map cxt $ \(x, t) -> let t' = type2LlvmType t

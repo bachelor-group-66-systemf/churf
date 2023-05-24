@@ -21,70 +21,20 @@ import           Data.Foldable                 (foldr')
 import           Data.Foldable.Extra           (find, notNull)
 import           Data.Function                 (on)
 import           Data.List                     (intercalate, intersect,
-                                                intersperse, nub)
+                                                intersperse, mapAccumL,
+                                                mapAccumR, nub, partition)
 import           Data.Map                      (Map)
 import qualified Data.Map                      as Map
-import           Data.Maybe                    (catMaybes, fromJust, fromMaybe)
+import           Data.Maybe                    (catMaybes, fromJust, fromMaybe,
+                                                listToMaybe)
 import           Data.Set                      (Set)
 import qualified Data.Set                      as Set
-import           Debug.Trace                   (trace)
+import           Data.Tuple.Extra              (both, dupe)
 import           Grammar.ErrM                  (Err)
 import           Grammar.Print                 (Print (..), concatD, doc,
                                                 printTree)
 import           LambdaLifterIr
 import qualified Monomorphizer.MonomorphizerIr as M
-
---  PROGRAM
---
---  .+ : Int -> Int -> Int
---  .+ x y = 0
---
---  const : a -> b -> a
---  const x y = x
---
---  applyId : (forall a. a -> a) -> b -> b
---  applyId f x = const (f x) (f 'B')
---
---  id : a -> a
---  id x = x
---
---  main = applyId id 5 + const 10 (applyId id 'A')
---
---  LAMBDA LIFTER
---
---  ($plus$ : Int -> Int -> Int) ($5x : Int) ($6y : Int) = (0 : Int);
---  (const : forall $0a . forall $1b . $0a -> $1b -> $0a) ($7x : $0a) ($8y : $1b) = ($7x : $0a);
---  (id : forall $4a . $4a -> $4a) ($11x : $4a) = ($11x : $4a);
---  (applyId : forall $2b . (forall $3a . $3a -> $3a) -> $2b -> $2b) ($9f : forall $3a . $3a -> $3a) ($10x : $2b) = (((const : $2b -> Char -> $2b) ((($9f : $2b -> $2b) ($10x : $2b)) : $2b) : Char -> $2b) ((($9f : Char -> Char) ('B' : Char)) : Char) : $2b);
---  (main : Int) = ((($plus$ : Int -> Int -> Int) ((((applyId : ($3a -> $3a) -> Int -> Int) (id : $3a -> $3a) : Int -> Int) (5 : Int)) : Int) : Int -> Int) ((((const : Int -> Char -> Int) (10 : Int) : Char -> Int) ((((applyId : ($3a -> $3a) -> Char -> Char) (id : $3a -> $3a) : Char -> Char) ('A' : Char)) : Char)) : Int) : Int)
---
---  AFTER
---
---  .+ : Int -> Int -> Int
---  .+ x y = 0
---
---  const$CharCharChar : Char -> Char -> Char
---  const$CharCharChar x y = x
---
---  const$IntCharInt : Int -> Char -> Int
---  const$IntCharInt x y = x
---
---  const : a -> Char -> a
---  const x y = x
---
---  applyId$IntIntCharCharIntInt : (Int -> Int) -> (Char -> Char) -> Int -> Int
---  applyId$IntIntCharCharIntInt f$IntInt f$CharChar x = const (f$IntInt x) (f$CharChar 'B')
---
---  applyId$CharCharIntInt : (Char -> Char) -> Char -> Char
---  applyId$CharCharIntInt f$IntInt x = const (f$CharChar x) (f$CharChar 'B')
---
---  id$CharChar : Char -> Char
---  id$CharChar x = x
---
---  id$IntInt : Int -> Int
---  id$IntInt x = x
---
---  main = applyId$IntIntCharCharIntInt id$IntInt id$CharChar 5 + const$CharCharChar 10 (applyId$CharCharIntInt id$CharChar 'A')
 
 monomorphize :: Program ->  Err M.Program
 monomorphize p@(Program ds) = monomorphize' p <$> main where
@@ -100,13 +50,6 @@ monomorphize' (Program ds) main = M.Program $ map M.DBind $ nub copies
     unsolved = [ a | TVar a <- concatMap (Map.elems . constraint) individually_solved]
     unsolved_solved = Map.filterWithKey (const . (`elem` unsolved)) $ solveConstraints all_constraints
     copies = concatMap (uncurry $ generateMonomophic unsolved_solved) needCopies
-
-    log = unlines
-        [ "\nCONSTRAINTS: \n" ++ printTree constraints
-        , "\nCONSTRAINT SOLVED: \n" ++ printTree individually_solved
-        , "\nSOLVED: \n" ++ printTree unsolved_solved
-        , "\nNEED COPIES: \n" ++ printTree needCopies
-        ]
 
     initCxt = Cxt
         { binds       = foldr (\b@(Bind (x, _) _ _) -> Map.insert x b) mempty bs
@@ -127,7 +70,7 @@ generateMonomophic solutions b t
     | otherwise = map (gen solutions) bs where
         -- bind type alternatives
         bs = for cp
-           $ \xs -> up (Map.fromList xs)
+           $ \xs -> up (\x -> Map.lookup x $ Map.fromList xs)
            $ newType (mkt xs) b
 
         mkt = dupHigherRank solutions
@@ -154,7 +97,7 @@ dupHigherRank solutions typ = go typ where
         | Just ts <- Map.lookup a solutions =
             let (t1', t2') = on (,) go t1 t2 in
             foldr (\t -> TFun (substitute a t t1')) t2' ts
-        | otherwise = error "Impossible!"
+        | otherwise = error ("Impossible! " ++ printTree a ++ "\nTYP: " ++ printTree typ)
     go t = case t of
         TVar _     -> t
         TLit _     -> t
@@ -169,7 +112,6 @@ gen solutions b@(Bind (n,t) xs e) = b' where
     genTX :: T Ident -> M.T Ident
     genTX (x, t) = let t' = genT t in (newName x t', t')
 
-    -- TODO maybe needs fix for rank > 2
     genVars (x, TAll a t)
         | Just ts <- Map.lookup a solutions =
             for (Set.toList ts) $ \t' -> genTX (x, substitute a t' t)
@@ -183,7 +125,6 @@ gen solutions b@(Bind (n,t) xs e) = b' where
         TData _ _         -> undefined
         _                 -> error $ "no this " ++ printTree t ++ "\n BIND \n " ++ printTree b
 
-    -- TODO maybe needs fix for rank > 2
     genTE (EApp e1 (e2, TAll a t2), _)
         | Just ts <- Map.lookup a solutions =
             let e1'@(_, typ) = genTE e1
@@ -236,6 +177,7 @@ unsolved = go . skipForalls where
         TLit _       -> []
         TAll a t     -> filter (/=a) (go t)
 
+skipForalls :: Type -> Type
 skipForalls (TAll _ t) = skipForalls t
 skipForalls t          = t
 
@@ -269,10 +211,11 @@ insertNeedCopy :: Bind -> Constraint Type -> Mz ()
 insertNeedCopy b c@(_ :~ t) =
     modify $ \cxt -> cxt{needCopies=Set.insert (b',t) cxt.needCopies}
   where
-    b' = up (solveConstraint c) b
+    b' = up (\x -> Map.lookup x $ solveConstraint c) b
 
-up :: Map TVar Type -> Bind -> Bind
-up solutions b@(Bind x xs e) = Bind x xs' (goTE e) where
+up :: (TVar -> Maybe Type) -> Bind -> Bind
+up f b@(Bind x xs e) = Bind x' xs' (goTE e) where
+    x'  = second goT x
     xs' = map (second goT) xs
     goTE :: T Exp -> T Exp
     goTE = bimap goE goT
@@ -280,9 +223,12 @@ up solutions b@(Bind x xs e) = Bind x xs' (goTE e) where
     goT t = case t of
         TFun t1 t2 -> on TFun goT t1 t2
         TData t ts -> TData t $ map goT ts
-        TVar a     -> fromMaybe (TVar a) $ Map.lookup a solutions
+        TVar a     -> fromMaybe (TVar a) $ f a
         TLit _     -> t
-        TAll a t   -> TAll a $ goT t
+        TAll a t
+            | Just (TVar b) <- f a -> TAll b $ goT t
+            | Just _ <- f a        -> goT t
+            | Nothing <- f a       -> TAll a $ goT t
 
     goE e = case e of
         EVar _       -> e
@@ -349,6 +295,62 @@ data Constraint a = a :~ Type deriving (Show, Eq, Ord)
 newtype Mz a = Mz { runMz :: ExceptT String (State Cxt) a }
     deriving (Functor, Applicative, Monad, MonadState Cxt, MonadError String)
 
+solveConstraints :: [Constraint Type] -> Map TVar (Set Type)
+solveConstraints cs =
+  let adjs = adjacencyDict $ foldr (Set.union . decompose) mempty cs
+  in  foldr (\k -> Map.insert k (dfs adjs k)) mempty $ Map.keys adjs
+
+solveConstraint :: Constraint Type -> Map TVar Type
+solveConstraint c = go where
+    go = foldr ins mempty $ Map.keys adjs
+    adjs = adjacencyDict $ dec c
+    ins x m  = maybe m (\t -> Map.insert x t m) $ dfs' x
+    dfs' = listToMaybe . Set.toList . dfs adjs
+
+    -- decompose that does not produce cycles
+    dec :: Constraint Type -> Set (Constraint TVar)
+    dec (TFun a1 a2 :~ TFun b1 b2) = on (<>) dec (a1 :~ b1) (a2 :~ b2)
+    dec (TAll _ a :~ b)            = dec (a :~ b)
+    dec (a :~ TAll _ b)            = dec (a :~ b)
+    dec (TVar a :~ b)
+        | TVar a == b              = mempty
+        | otherwise                = Set.singleton (a :~ b)
+
+data DfsCxt = DfsCxt
+    { visited :: Set Type
+    , leafs   :: Set Type
+    , next    :: [Type]
+    }
+
+dfs :: Map TVar [Type] -> TVar -> Set Type
+dfs adjs start = go mempty mempty [TVar start] where
+    go leafs _ []
+        -- return the first neighbor if cycle
+        | null leafs = Set.singleton $ head $ fromJust $ Map.lookup start adjs
+        | otherwise  = leafs
+    go leafs visited (n@(TVar x):ns) | Just neighbors <- Map.lookup x adjs =
+      let visited'   = Set.insert n visited
+          neighbors' = filter (`notElem` visited') neighbors
+      in  go leafs (foldr Set.insert visited' neighbors') (neighbors' ++ ns)
+    go leafs visited (n:ns) = go (Set.insert n leafs) (Set.insert n visited) ns
+
+adjacencyDict :: Set (Constraint TVar) -> Map TVar [Type]
+adjacencyDict = Set.foldr go mempty
+  where
+    go (a :~ t) adjs = Map.insert a (t:ts) adjs
+      where
+        ts = fromMaybe [] $ Map.lookup a adjs
+
+decompose :: Constraint Type -> Set (Constraint TVar)
+decompose (TFun a1 a2 :~ TFun b1 b2) = on (<>) decompose (a1 :~ b1) (a2 :~ b2)
+decompose (TAll a t1 :~ TAll b t2)
+   | a == b    = decompose (t1 :~ t2)
+   | otherwise = foldr Set.insert (decompose $ t1 :~ t2) [a :~ TVar b, b :~ TVar a]
+decompose (TAll _ a :~ b)            = decompose (a :~ b)
+decompose (a :~ TAll _ b)            = error "impossible"
+decompose (TVar a :~ b)
+    | TVar a == b                    = mempty
+    | otherwise                      = Set.singleton (a :~ b)
 
 instance Print a => Print [ConstraintCxt a] where
     prt i = doc . showString . intercalate "\n" . map printTree
@@ -370,60 +372,54 @@ instance Print (Set (Bind, Type)) where
 
 toStrBind (Bind (Ident s,_) _ _) = s
 
-solveConstraints :: [Constraint Type] -> Map TVar (Set Type)
-solveConstraints cs =
-  let adjs = adjacencyDict $ foldr (Set.union . decompose) mempty cs
-  in  foldr (\k -> Map.insert k (dfs adjs k)) mempty $ Map.keys adjs
-
-solveConstraint :: Constraint Type -> Map TVar Type
-solveConstraint c = go where
-    go = foldr (\k -> Map.insert k (dfs' adjs k)) mempty $ Map.keys adjs
-    adjs = adjacencyDict $ decompose c
-
-data DfsEnv = DfsEnv
-    { visited :: Set TVar
-    , leafs   :: Set Type
-    , next    :: [Type]
-    }
-
-dfs' :: Map TVar [Type] -> TVar -> Type
-dfs' ajds = go . dfs ajds where
-    go set
-        | [t] <- Set.toList set = t
-        | otherwise             = error "bad"
-
-
-dfs :: Map TVar [Type] -> TVar -> Set Type
-dfs adjs start = go DfsEnv {visited=Set.singleton start
-                           ,leafs=mempty
-                           ,next= fromMaybe [] $ Map.lookup start adjs
-                           }
-  where
-    go :: DfsEnv -> Set Type
-    go env@DfsEnv{..}
-        | [] <- next = leafs
-        | n@TLit{}:ns <- next = go env{leafs=Set.insert n leafs, next=ns}
-        | TVar a:ns   <- next
-        , Just ns' <- Map.lookup a adjs = go env{visited=Set.insert a visited
-                                                ,next=ns' ++ ns
-                                                }
-        | TVar a:ns   <- next
-        , Nothing <- Map.lookup a adjs = go env{visited=Set.insert a visited
-                                               ,leafs=Set.insert (TVar a) leafs
-                                               ,next=ns
-                                               }
-
-adjacencyDict :: Set (Constraint TVar) -> Map TVar [Type]
-adjacencyDict = Set.foldr go mempty
-  where
-    go (a :~ t) adjs = Map.insert a (t:ts) adjs
-      where
-        ts = fromMaybe [] $ Map.lookup a adjs
-
-decompose :: Constraint Type -> Set (Constraint TVar)
-decompose (TFun a1 a2 :~ TFun b1 b2) = on (<>) decompose (a1 :~ b1) (a2 :~ b2)
-decompose (TAll _ a :~ b)            = decompose (a :~ b)
-decompose (a :~ TAll _ b)            = decompose (a :~ b)
-decompose (TVar a :~ b)
-    | TVar a == b                    = mempty
-    | otherwise                      = Set.singleton (a :~ b)
+--  PROGRAM
+--
+--  .+ : Int -> Int -> Int
+--  .+ x y = 0
+--
+--  const : a -> b -> a
+--  const x y = x
+--
+--  applyId : (forall a. a -> a) -> b -> b
+--  applyId f x = const (f x) (f 'B')
+--
+--  id : a -> a
+--  id x = x
+--
+--  main = applyId id 5 + const 10 (applyId id 'A')
+--
+--  LAMBDA LIFTER
+--
+--  ($plus$ : Int -> Int -> Int) ($5x : Int) ($6y : Int) = (0 : Int);
+--  (const : forall $0a . forall $1b . $0a -> $1b -> $0a) ($7x : $0a) ($8y : $1b) = ($7x : $0a);
+--  (id : forall $4a . $4a -> $4a) ($11x : $4a) = ($11x : $4a);
+--  (applyId : forall $2b . (forall $3a . $3a -> $3a) -> $2b -> $2b) ($9f : forall $3a . $3a -> $3a) ($10x : $2b) = (((const : $2b -> Char -> $2b) ((($9f : $2b -> $2b) ($10x : $2b)) : $2b) : Char -> $2b) ((($9f : Char -> Char) ('B' : Char)) : Char) : $2b);
+--  (main : Int) = ((($plus$ : Int -> Int -> Int) ((((applyId : ($3a -> $3a) -> Int -> Int) (id : $3a -> $3a) : Int -> Int) (5 : Int)) : Int) : Int -> Int) ((((const : Int -> Char -> Int) (10 : Int) : Char -> Int) ((((applyId : ($3a -> $3a) -> Char -> Char) (id : $3a -> $3a) : Char -> Char) ('A' : Char)) : Char)) : Int) : Int)
+--
+--  AFTER
+--
+--  .+ : Int -> Int -> Int
+--  .+ x y = 0
+--
+--  const$CharCharChar : Char -> Char -> Char
+--  const$CharCharChar x y = x
+--
+--  const$IntCharInt : Int -> Char -> Int
+--  const$IntCharInt x y = x
+--
+--  const : a -> Char -> a
+--  const x y = x
+--
+--  applyId$IntIntCharCharIntInt : (Int -> Int) -> (Char -> Char) -> Int -> Int
+--  applyId$IntIntCharCharIntInt f$IntInt f$CharChar x = const (f$IntInt x) (f$CharChar 'B')
+--
+--  applyId$CharCharIntInt : (Char -> Char) -> Char -> Char
+--  applyId$CharCharIntInt f$IntInt x = const (f$CharChar x) (f$CharChar 'B')
+--
+--  id$CharChar : Char -> Char
+--  id$CharChar x = x
+--
+--  id$IntInt : Int -> Int
+--  id$IntInt x = x
+--
+--  main = applyId$IntIntCharCharIntInt id$IntInt id$CharChar 5 + const$CharCharChar 10 (applyId$CharCharIntInt id$CharChar 'A')

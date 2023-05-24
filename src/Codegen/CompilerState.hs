@@ -32,7 +32,7 @@ data CodeGenerator = CodeGenerator
     , gcEnabled     :: Bool
     , structTypes   :: Map Ident StructType
     -- ^ Custom stucture types
-    , locals        :: [(Ident, LocalElem)]
+    , locals        :: Map Ident (LLVMType, LLVMValue)
     -- ^ Arguments and variables in local environment
     , globals       :: Map Ident (LLVMType, LLVMValue)
     }
@@ -42,12 +42,6 @@ data StructType = StructType
     , typs :: [LLVMType]
     , inst :: LLVMIr
     }
-
-data LocalElem = LocalElem
-    { typ :: LLVMType
-    , val :: LLVMValue
-    }
-
 
 -- | A state type synonym
 type CompilerState a = StateT CodeGenerator Err a
@@ -87,13 +81,11 @@ emit :: LLVMIr -> CompilerState ()
 -- Add variable to environment
 emit l@(SetVariable x _) = modify $ \t ->
     t { instructions = Auxiliary.snoc l t.instructions
-      , locals       = snoc (x, local)
+      , locals       = Map.insert x (tl, VIdent x tl)
                        t.locals
       }
   where
-    local = LocalElem { typ = typeOf l
-                      , val = VIdent x (typeOf l)
-                      }
+    tl = typeOf l
 
 emit l = modify $ \t -> t { instructions = Auxiliary.snoc l t.instructions }
 

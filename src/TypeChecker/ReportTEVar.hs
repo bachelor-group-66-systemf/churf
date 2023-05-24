@@ -10,15 +10,8 @@ import           Data.Tuple.Extra          (secondM)
 import qualified Grammar.Abs               as G
 import           Grammar.ErrM              (Err)
 import           Grammar.Print             (printTree)
-import           TypeChecker.TypeCheckerIr hiding (Type (..))
+import           TypeChecker.TypeCheckerIr
 
-data Type
-    = TLit Ident
-    | TVar TVar
-    | TData Ident [Type]
-    | TFun Type Type
-    | TAll TVar Type
-    deriving (Eq, Ord, Show)
 
 class ReportTEVar a b where
     reportTEVar :: a -> Err b

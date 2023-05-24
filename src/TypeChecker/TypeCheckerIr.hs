@@ -1,4 +1,4 @@
-{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE LambdaCase      #-}
 {-# LANGUAGE PatternSynonyms #-}
 
 module TypeChecker.TypeCheckerIr (
@@ -6,10 +6,10 @@ module TypeChecker.TypeCheckerIr (
     module TypeChecker.TypeCheckerIr,
 ) where
 
-import Data.String (IsString)
-import Grammar.Abs (Lit (..))
-import Grammar.Print
-import Prelude
+import           Data.String   (IsString)
+import           Grammar.Abs   (Lit (..))
+import           Grammar.Print
+import           Prelude
 
 newtype Program' t = Program [Def' t]
     deriving (Eq, Ord, Show, Functor)
@@ -24,6 +24,7 @@ data Type
     | TVar TVar
     | TData Ident [Type]
     | TFun Type Type
+    | TAll TVar Type
     deriving (Eq, Ord, Show)
 
 data Data' t = Data t [Inj' t]
@@ -90,7 +91,7 @@ prtSig (x, t) =
         ]
 
 instance (Print a, Print t) => Print (T a t) where
-    prt i (x, t) = noT
+    prt i (x, t) = withT
       where
         noT = prt i x
         withT =
@@ -103,8 +104,8 @@ instance (Print a, Print t) => Print (T a t) where
                 ]
 
 instance Print t => Print [Bind' t] where
-    prt _ [] = concatD []
-    prt i [x] = concatD [prt i x]
+    prt _ []       = concatD []
+    prt i [x]      = concatD [prt i x]
     prt i (x : xs) = concatD [prt i x, doc (showString ";"), prt i xs]
 
 instance Print t => Print (Exp' t) where
@@ -122,13 +123,13 @@ instance Print t => Print (Branch' t) where
     prt i (Branch (pattern_, t) exp) = prPrec i 0 (concatD [doc (showString "("), prt 0 pattern_, doc (showString " : "), prt 0 t, doc (showString ")"), doc (showString "=>"), prt 0 exp])
 
 instance Print t => Print [Branch' t] where
-    prt _ [] = concatD []
-    prt _ [x] = concatD [prt 0 x]
+    prt _ []       = concatD []
+    prt _ [x]      = concatD [prt 0 x]
     prt _ (x : xs) = concatD [prt 0 x, doc (showString ";"), prt 0 xs]
 
 instance Print t => Print (Def' t) where
     prt i = \case
-        DBind bind -> prPrec i 0 (concatD [prt 0 bind])
+        DBind bind  -> prPrec i 0 (concatD [prt 0 bind])
         DData data_ -> prPrec i 0 (concatD [prt 0 data_])
 
 instance Print t => Print (Data' t) where
@@ -153,12 +154,12 @@ instance Print t => Print (Pattern' t) where
         PInj uident patterns -> prPrec i 0 (concatD [prt 0 uident, prt 1 patterns])
 
 instance Print t => Print [Def' t] where
-    prt _ [] = concatD []
-    prt _ [x] = concatD [prt 0 x]
+    prt _ []       = concatD []
+    prt _ [x]      = concatD [prt 0 x]
     prt _ (x : xs) = concatD [prt 0 x, doc (showString ";"), prt 0 xs]
 
 instance Print [Type] where
-    prt _ [] = concatD []
+    prt _ []       = concatD []
     prt _ (x : xs) = concatD [prt 0 x, doc (showString " "), prt 0 xs]
 
 instance Print Type where
@@ -167,6 +168,8 @@ instance Print Type where
         TVar tvar -> prPrec i 1 (concatD [prt 0 tvar])
         TData uident types -> prPrec i 1 (concatD [prt 0 uident, doc (showString "("), prt 0 types, doc (showString ")")])
         TFun type_1 type_2 -> prPrec i 0 (concatD [prt 1 type_1, doc (showString "->"), prt 0 type_2])
+        TAll tvar type_ -> prPrec i 0 (concatD [doc (showString "forall"), prt 0 tvar, doc (showString "."), prt 0 type_])
+
 
 instance Print TVar where
     prt i (MkTVar ident) = prt i ident

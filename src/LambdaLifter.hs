@@ -69,8 +69,7 @@ freeVarsExp localVars (ae, t) = case ae of
                     , term = (AAbs x annae, t) }
       where
         annae = freeVarsExp (localVars <| (x,t_x)) e
-        t_x = case t of TFun t _ -> t
-                        _        -> error "Impossible"
+        t_x = case skipForalls t of TFun t _ -> t
 
     -- Sum free variables present in bind and the expression
     -- let f x = x + y in f 5 + z  → frees: y, z
@@ -169,7 +168,8 @@ abstractAnnBind Ann { term = ABind name vars annae } =
     (annae', vars') = go [] annae
       where
         go acc = \case
-            Ann { term = (AAbs x ae, TFun t _) } -> go (snoc (x, t) acc) ae
+            Ann { term = (AAbs x ae, typ) }
+                | TFun t _ <- skipForalls typ -> go (snoc (x, t) acc) ae
             ae                                   -> (ae, acc)
 
 abstractAnnExp :: Ann (T AExp) -> State Int (T BExp)
@@ -193,8 +193,7 @@ abstractAnnExp Ann {frees, term = (annae, typ) } = case annae of
 
       where
         vars = [(x, t_x)] <|| ys
-        t_x = case typ of TFun t _ -> t
-                          _        -> error "Impossible"
+        t_x = case skipForalls typ of TFun t _ -> t
 
         (annae'', ys) = go [] annae'
           where
@@ -297,3 +296,6 @@ toLirPattern = \case
     PCatch    -> L.PCatch
     PEnum k   -> L.PEnum k
     PInj k ps -> L.PInj k (map (first toLirPattern) ps)
+
+skipForalls (TAll _ t) = skipForalls t
+skipForalls t          = t

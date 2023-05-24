@@ -17,6 +17,18 @@ import           Prelude                   hiding ((>>), (>>=))
 snoc :: a -> [a] -> [a]
 snoc x xs = xs ++ [x]
 
+for :: [a] -> (a -> b) -> [b]
+for = flip map
+
+
+iterate' :: Integral i => i -> (a -> a) -> a -> a
+iterate' 0 _ x             = x
+iterate' n f x | n > 0     = iterate' (n - 1) f $! f x
+               | otherwise = error "iterate': Negative input."
+
+caseMaybe :: Maybe a -> b -> (a -> b) -> b
+caseMaybe m d f = maybe d f m
+
 maybeToRightM :: MonadError l m => l -> Maybe r -> m r
 maybeToRightM err = liftEither . maybeToRight err
 
@@ -51,8 +63,8 @@ liftMM2 f m1 m2 = do
     f x1 x2
 
 typeof :: Lit -> Type
-typeof (LInt _)  = int
-typeof (LChar _) = char
+typeof (LInt _)    = int
+typeof (LChar _)   = char
 typeof (LString _) = string
 
 string = TLit "String"

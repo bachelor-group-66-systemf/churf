@@ -11,7 +11,7 @@ import           Grammar.ErrM              (Err)
 import qualified TypeChecker.ReportTEVar   as R
 import           TypeChecker.TypeCheckerIr
 
-removeForall :: Program' R.Type -> Program
+removeForall :: Program -> Program
 removeForall (Program defs) = Program $ map (DData . rfData) ds
                                      ++ map (DBind . rfBind) bs
   where
@@ -39,11 +39,11 @@ removeForall (Program defs) = Program $ map (DData . rfData) ds
         PEnum name   -> PEnum name
         PInj name ps -> PInj name (map rfPatternT ps)
 
-rfType :: R.Type -> Type
+rfType :: Type -> Type
 rfType = \case
-  R.TAll _ t      -> rfType t
-  R.TFun t1 t2    -> on TFun rfType t1 t2
-  R.TData name ts -> TData name (map rfType ts)
-  R.TLit lit      -> TLit lit
-  R.TVar tvar     -> TVar tvar
+  TAll _ t      -> rfType t
+  TFun t1 t2    -> on TFun rfType t1 t2
+  TData name ts -> TData name (map rfType ts)
+  TLit lit      -> TLit lit
+  TVar tvar     -> TVar tvar
 

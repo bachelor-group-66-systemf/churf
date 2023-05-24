@@ -64,7 +64,6 @@ instance Print Bind where
         prPrec i 0 $
             concatD
                 [ prt 0 sig
-                , prt 0 name
                 , prt 0 parms
                 , doc $ showString "="
                 , prt 0 rhs
