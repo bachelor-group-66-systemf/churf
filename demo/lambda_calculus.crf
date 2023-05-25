@@ -26,10 +26,9 @@ insert x v cxt = case cxt of
 
 eval : Cxt -> Exp -> Val
 eval cxt exp = case exp of
-    EVar x => case lookup x cxt of
-        VInt i             => VInt i
-        VClosure delta x e => eval delta e
     EAbs x e => VClosure cxt x e
+    EVar x => case lookup x cxt of
+        VClosure delta x e => eval delta e
     EApp e1 e2 => case eval cxt e1 of
         VClosure delta x f => 
             let v = VClosure cxt x e2 in
