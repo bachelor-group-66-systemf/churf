@@ -46,8 +46,8 @@ A program is a list of defs separated by semicolons, which in turn is either a b
 `Program ::= [Def]`
 
 ```hs
-data Test () where 
-    Test : Test ()
+data Test where 
+    Test : Test 
 test : Int
 test = 0
 ```
@@ -84,12 +84,12 @@ The type can be any type for parsing, but only `TData` will type check.
 The list of Inj is separated by white space. Using new lines is recommended for ones own sanity.
 
 ```hs
-data Maybe (a) where
-    Nothing : Maybe (a)
-    Just    : a -> Maybe (a)
+data Maybe a where
+    Nothing : Maybe a
+    Just    : a -> Maybe a
 ```
 The parens are necessary for every data type to make the grammar unambiguous.
-Thus in `data Bool () where ...` the parens *do* *not* represent Unit
+Thus in `data Bool where ...` the parens *do* *not* represent Unit
 
 ### Inj
 An inj is a constructor for the data type
@@ -110,7 +110,7 @@ and foralls take one type variable followed by a type.
 
 `TVar ::= LIdent`
 
-`TData ::= UIdent "(" [Type] ")"`
+`TData ::= UIdent [Type]`
 
 `TFun ::= Type "->" Type`
 
@@ -119,7 +119,7 @@ and foralls take one type variable followed by a type.
 ```hs
 exampleLit : Int
 exampleVar : a
-exampleData : Maybe (a)
+exampleData : Maybe a
 exampleFun : Int -> a
 exampleAll : forall a. forall b. a -> b
 ```
