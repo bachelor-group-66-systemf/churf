@@ -23,6 +23,110 @@ filter p xs = case xs of
         True => Cons x (filter p xs)
         False => filter p xs
 
+.++ : List a -> List a -> List a
 .++ list1 list2 = case list1 of
     Nil => list2
     Cons x xs => Cons x (xs ++ list2)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+printListH : List Int -> Unit
+printListH xs = case xs of
+    Cons a as => flipConst (printInt a) (printListHH as)
+    Nil => Unit
+
+printListHH : List Int -> Unit
+printListHH xs = case xs of
+    Nil => Unit
+    Cons a as => flipConst (printChar ',') (flipConst (printInt a) (printListHH as))
+
+printList : List Int -> Unit
+printList xs = case Cons (printChar '[') (Cons (printListH xs) (Cons (printChar ']') Nil)) of
+        _ => Unit
+
+flipConst x y = y
+
+
+printInt : Int -> Unit
+printInt xs = Unit
+
+printChar : Char -> Unit
+printChar = \x. Unit
+
+data Unit where
+    Unit : Unit
