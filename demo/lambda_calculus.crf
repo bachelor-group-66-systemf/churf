@@ -24,6 +24,15 @@ insert : Char -> Val -> Cxt -> Cxt
 insert x v cxt = case cxt of
     Cxt ps => Cxt (Cons (Pair x v) ps)
 
+
+-- (λx. x + x) 200
+exp = EApp 
+        (EAbs 'x' 
+            (EAdd 
+                (EVar 'x') 
+                (EVar 'x'))) 
+        (EInt 200)
+
 eval : Cxt -> Exp -> Val
 eval cxt exp = case exp of
     EAbs x e => VClosure cxt x e
@@ -38,14 +47,6 @@ eval cxt exp = case exp of
         let i1 = case eval cxt e1 of { VInt i => i } in 
         let i2 = case eval cxt e2 of { VInt i => i } in 
         VInt (i1 + i2)
-
--- (λx. x + x) 200
-exp = EApp 
-        (EAbs 'x' 
-            (EAdd 
-                (EVar 'x') 
-                (EVar 'x'))) 
-        (EInt 200)
 
 main : Int
 main = case eval (Cxt Nil) exp of
