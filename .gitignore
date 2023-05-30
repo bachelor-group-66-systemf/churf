@@ -5,7 +5,7 @@ dist-newstyle
 Grammar.tex
 src/Grammar
 
-language
+churf
 llvm.ll
 /language
 .vscode/
