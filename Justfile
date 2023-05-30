@@ -6,7 +6,7 @@ build:
 # clean the generated directories
 clean:
     rm -r src/Grammar
-    rm language
+    rm churf
     rm -r dist-newstyle/
 
 # run all tests
@@ -14,46 +14,46 @@ test:
     cabal test
 
 debug FILE:
-    cabal run language -- -d {{FILE}}
+    cabal run churf -- -d {{FILE}}
 
 hm FILE:
-    cabal run language -- -t hm {{FILE}}
+    cabal run churf -- -t hm {{FILE}}
 
 bi FILE:
-    cabal run language -- -t bi {{FILE}}
+    cabal run churf -- -t bi {{FILE}}
 
 hml FILE:
-    cabal run language -- -l -t hm {{FILE}}
+    cabal run churf -- -l -t hm {{FILE}}
 
 bil FILE:
-    cabal run language -- -l -t bi {{FILE}}
+    cabal run churf -- -l -t bi {{FILE}}
 
 hmd FILE:
-    cabal run language -- -d -t hm {{FILE}}
+    cabal run churf -- -d -t hm {{FILE}}
 
 bid FILE:
-    cabal run language -- -d -t bi {{FILE}}
+    cabal run churf -- -d -t bi {{FILE}}
 
 hmdm FILE:
-    cabal run language -- -d -t hm -m {{FILE}}
+    cabal run churf -- -d -t hm -m {{FILE}}
 
 bidm FILE:
-    cabal run language -- -d -t bi -m {{FILE}}
+    cabal run churf -- -d -t bi -m {{FILE}}
 
 hmp FILE:
-    cabal run language -- -t hm -p {{FILE}}
+    cabal run churf -- -t hm -p {{FILE}}
 
 bip FILE:
-    cabal run language -- -t bi -p {{FILE}}
+    cabal run churf -- -t bi -p {{FILE}}
 
 hmdp FILE:
-    cabal run language -- -t hm -d -p {{FILE}}
+    cabal run churf -- -t hm -d -p {{FILE}}
 
 bidp FILE:
-    cabal run language -- -t bi -d -p {{FILE}}
+    cabal run churf -- -t bi -d -p {{FILE}}
 
 quicksort:
-    cabal run language -- -t bi sample-programs/working/quicksort.crf
+    cabal run churf -- -t bi sample-programs/working/quicksort.crf
 
 lc:
-    cabal run language -- -t bi sample-programs/working/lambda_calculus-2.crf
+    cabal run churf -- -t bi sample-programs/working/lambda_calculus-2.crf

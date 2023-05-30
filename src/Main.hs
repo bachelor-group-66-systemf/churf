@@ -8,6 +8,7 @@ import           Compiler                    (compile)
 import           Control.Monad               (when, (<=<))
 import           Data.List.Extra             (isSuffixOf)
 import           Data.Maybe                  (fromJust, isNothing)
+import           Data.Tuple.Extra            (uncurry3)
 import           Desugar.Desugar             (desugar)
 -- import           Expander                    (expand)
 import           GHC.IO.Handle.Text          (hPutStrLn)
@@ -32,27 +33,30 @@ import           System.Environment          (getArgs)
 import           System.Exit                 (ExitCode (ExitFailure),
                                               exitFailure, exitSuccess,
                                               exitWith)
+import           System.FilePath.Posix       (takeFileName, dropExtensions)
 import           System.IO                   (stderr)
 import           System.Process              (spawnCommand, waitForProcess)
 import           TypeChecker.TypeChecker     (TypeChecker (Bi, Hm), typecheck)
 
 main :: IO ()
-main = getArgs >>= parseArgs >>= uncurry main'
+main = getArgs >>= parseArgs >>= uncurry3 main'
 
-parseArgs :: [String] -> IO (Options, String)
+parseArgs :: [String] -> IO (Options, String, String)
 parseArgs argv = case getOpt RequireOrder flags argv of
-    (os, f : _, [])
+    (os, f : xs, [])
         | opts.help || isNothing opts.typechecker -> do
             hPutStrLn stderr (usageInfo header flags)
             exitSuccess
-        | otherwise -> pure (opts, f)
+        | otherwise -> do
+            let name = dropExtensions $ takeFileName f
+            pure (opts, name, f)
       where
         opts = foldr ($) initOpts os
     (_, _, errs) -> do
         hPutStrLn stderr (concat errs ++ usageInfo header flags)
         exitWith (ExitFailure 1)
   where
-    header = "Usage: language [--help] [-l|--log-intermediate] [-d|--debug] [-m|--disable-gc] [-t|--type-checker bi/hm] [-p|--disable-prelude] <FILE> \n"
+    header = "Usage: churf [--help] [-l|--log-intermediate] [-d|--debug] [-m|--disable-gc] [-t|--type-checker bi/hm] [-p|--disable-prelude] <FILE> \n"
 
 flags :: [OptDescr (Options -> Options)]
 flags =
@@ -108,8 +112,8 @@ data Options = Options
     , logIL       :: Bool
     }
 
-main' :: Options -> String -> IO ()
-main' opts s =
+main' :: Options -> String -> String -> IO ()
+main' opts name s =
     let
         log :: (Print a, Show a) => a -> IO ()
         log = printToErr . if opts.debug then show else printTree
@@ -149,7 +153,6 @@ main' opts s =
 
 
             generatedCode <- fromErr $ generateCode monomorphized (gc opts)
-            -- generatedCode <- fromErr $ generateCode monomorphized False
 
             check <- doesPathExist "output"
             when check (removeDirectoryRecursive "output")
@@ -159,13 +162,11 @@ main' opts s =
             when opts.debug $ do
                 printToErr "\n -- Compiler --"
                 writeFile "output/llvm.ll" generatedCode
-                --debugDotViz
 
-            compile generatedCode (gc opts)
-            -- compile generatedCode False
+            compile name generatedCode (gc opts)
             printToErr "Compilation done!"
             printToErr "\n-- Program output --"
-            print =<< spawnWait "./output/hello_world"
+            print =<< spawnWait ("./output/" <> name)
 
             exitSuccess
 

@@ -29,7 +29,7 @@ pdf : Grammar.pdf
 
 clean :
 	rm -r src/Grammar
-	rm language
+	rm churf
 	rm -rf dist-newstyles
 	rm Grammar.aux Grammar.fdb_latexmk Grammar.fls Grammar.log Grammar.synctex.gz Grammar.tex
 

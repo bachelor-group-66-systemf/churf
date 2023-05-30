@@ -7,8 +7,8 @@ import           System.Process.Extra (readCreateProcess, shell)
 optimize :: String -> IO String
 optimize = readCreateProcess (shell "opt --O3 --tailcallopt -S")
 
-compileClang :: Bool -> String -> IO String
-compileClang False =
+compileClang :: String -> Bool -> String -> IO String
+compileClang name False =
     readCreateProcess . shell $
         unwords
             [ "clang++" -- , "-Lsrc/GC/lib/", "-l:libgcoll.a"
@@ -16,10 +16,10 @@ compileClang False =
             , "-x"
             , "ir" -- , "-Lsrc/GC/lib -l:gcoll.a"
             , "-o"
-            , "output/hello_world"
+            , "output/" <> name
             , "-"
             ]
-compileClang True =
+compileClang name True =
     readCreateProcess . shell $
         unwords
             [ "clang++" -- , "-Lsrc/GC/lib/", "-l:libgcoll.a"
@@ -36,9 +36,9 @@ compileClang True =
             , "-x"
             , "ir" -- , "-Lsrc/GC/lib -l:gcoll.a"
             , "-o"
-            , "output/hello_world"
+            , "output/" <> name
             , "-"
             ]
 
-compile :: String -> Bool -> IO String
-compile s addGc = optimize s >>= compileClang addGc
+compile :: String -> String -> Bool -> IO String
+compile name s addGc = optimize s >>= compileClang name addGc
